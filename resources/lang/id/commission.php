@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'action' => '操作',
+    'agent_commission' => '代理佣金',
+    'are_you_sure_to_delete_the_commission' => '您确定要删除此佣金吗？',
+    'cancel' => '取消',
+    'close' => '关闭',
+    'commission' => '佣金',
+    'commission_group_not_found' => '未找到佣金组',
+    'commission_type' => '佣金类型',
+    'create' => '创建',
+    'create_commission' => '创建佣金',
+    'customer_group_deleted_successfully' => '客户组删除成功',
+    'customer_group_saved_successfully' => '客户组保存成功',
+    'customer_group_updated_successfully' => '客户组更新成功',
+    'detail' => '详情',
+    'driver_commission' => '司机佣金',
+    'edit' => '编辑',
+    'edit_commission' => '编辑佣金',
+    'ice' => '冰',
+    'kelindan_commission' => 'Kelindan佣金',
+    'operation_commission' => '运营佣金',
+    'product_type' => '产品类型',
+    'save' => '保存',
+    'status' => '状态',
+    'value' => '值',
+];

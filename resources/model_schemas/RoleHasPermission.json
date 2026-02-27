@@ -1,0 +1,46 @@
+[
+    {
+        "name": "permission_id",
+        "dbType": "bigInteger,false,true",
+        "htmlType": "selectTable:permissions:name,id",
+        "validations": "required",
+        "searchable": true,
+        "fillable": true,
+        "primary": false,
+        "inForm": true,
+        "inIndex": true,
+        "inView": true
+    },
+    {
+        "name": "role_id",
+        "dbType": "bigInteger,false,true",
+        "htmlType": "selectTable:roles:name,id",
+        "validations": "required",
+        "searchable": true,
+        "fillable": true,
+        "primary": false,
+        "inForm": true,
+        "inIndex": true,
+        "inView": true
+    },
+    {
+        "name": "id",
+        "dbType": "bigInteger,true",
+        "htmlType": "",
+        "validations": "",
+        "searchable": false,
+        "fillable": false,
+        "primary": true,
+        "inForm": false,
+        "inIndex": false,
+        "inView": false
+    },
+    {
+        "type": "relation",
+        "relation": "mt1,Permission,permission_id"
+    },
+    {
+        "type": "relation",
+        "relation": "mt1,Role,role_id"
+    }
+]

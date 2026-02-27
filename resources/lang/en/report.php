@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'action' => 'Action',
+    'active' => 'Active',
+    'are_you_sure' => 'Are you sure',
+    'cancel' => 'Cancel',
+    'close' => 'Close',
+    'create' => 'Create',
+    'create_report' => 'Create report',
+    'detail' => 'Detail',
+    'edit' => 'Edit',
+    'edit_report' => 'Edit report',
+    'name' => 'Name',
+    'report_deleted_successfully' => 'Report deleted successfully',
+    'report_not_found' => 'Report not found',
+    'report_saved_successfully' => 'Report saved successfully',
+    'report_updated_successfully' => 'Report updated successfully',
+    'reports' => 'Reports',
+    'run' => 'Run',
+    'save' => 'Save',
+    'sql' => 'Sql',
+    'status' => 'Status',
+    'unactive' => 'Unactive',
+];

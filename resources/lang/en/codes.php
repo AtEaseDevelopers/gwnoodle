@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'action' => 'Action',
+    'are_you_sure_to_delete_the_assign' => 'Are you sure to delete the assign',
+    'cancel' => 'Cancel',
+    'close' => 'Close',
+    'code' => 'Code',
+    'code_deleted_successfully' => 'Code deleted successfully',
+    'code_not_found' => 'Code not found',
+    'code_saved_successfully' => 'Code saved successfully',
+    'code_updated_successfully' => 'Code updated successfully',
+    'codes' => 'Codes',
+    'create' => 'Create',
+    'create_codes' => 'Create code',
+    'created_at' => 'Created at',
+    'description' => 'Description',
+    'detail' => 'Detail',
+    'edit' => 'Edit',
+    'edit_codes' => 'Edit code',
+    'save' => 'Save',
+    'sequence' => 'Sequence',
+    'status' => 'Status',
+    'updated_at' => 'Updated at',
+    'value' => 'Value',
+];

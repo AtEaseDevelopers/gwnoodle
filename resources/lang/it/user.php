@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'action' => '操作',
+    'are_you_sure_to_delete_the_user' => '您确定要删除此用户吗？',
+    'cancel' => '取消',
+    'close' => '关闭',
+    'create' => '创建',
+    'create_user' => '创建用户',
+    'created_at' => '创建时间',
+    'detail' => '详情',
+    'edit' => '编辑',
+    'edit_user' => '编辑用户',
+    'email' => '电子邮件',
+    'name' => '姓名',
+    'password' => '密码',
+    'password_confirmation' => '密码确认',
+    'role' => '角色',
+    'save' => '保存',
+    'status' => '状态',
+    'updated_at' => '更新时间',
+    'user_deleted_successfully' => '用户删除成功',
+    'user_not_found' => '未找到用户',
+    'user_saved_successfully' => '用户保存成功',
+    'user_updated_successfully' => '用户更新成功',
+    'users' => '用户',
+    'you_have_exceeded_your_user_limit_please_contact_your_vendor' => '您已超过用户限制，请联系您的供应商',
+];

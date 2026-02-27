@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'action' => '操作',
+    'active' => '活跃',
+    'are_you_sure' => '您确定吗？',
+    'cancel' => '取消',
+    'close' => '关闭',
+    'create' => '创建',
+    'create_report' => '创建报告',
+    'detail' => '详情',
+    'edit' => '编辑',
+    'edit_report' => '编辑报告',
+    'name' => '名称',
+    'report_deleted_successfully' => '报告删除成功',
+    'report_not_found' => '未找到报告',
+    'report_saved_successfully' => '报告保存成功',
+    'report_updated_successfully' => '报告更新成功',
+    'reports' => '报告',
+    'run' => '运行',
+    'save' => '保存',
+    'sql' => 'SQL',
+    'status' => '状态',
+    'unactive' => '未激活',
+];

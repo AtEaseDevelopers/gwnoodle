@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'action' => 'Action',
+    'are_you_sure_to_delete_the_user' => 'Are you sure to delete the user',
+    'cancel' => 'Cancel',
+    'close' => 'Close',
+    'create' => 'Create',
+    'create_user' => 'Create user',
+    'created_at' => 'Created at',
+    'detail' => 'Detail',
+    'edit' => 'Edit',
+    'edit_user' => 'Edit user',
+    'email' => 'Email',
+    'name' => 'Name',
+    'password' => 'Password',
+    'password_confirmation' => 'Password confirmation',
+    'role' => 'Role',
+    'save' => 'Save',
+    'status' => 'Status',
+    'updated_at' => 'Updated at',
+    'user_deleted_successfully' => 'User deleted successfully',
+    'user_not_found' => 'User not found',
+    'user_saved_successfully' => 'User saved successfully',
+    'user_updated_successfully' => 'User updated successfully',
+    'users' => 'Users',
+    'you_have_exceeded_your_user_limit_please_contact_your_vendor' => 'You have exceeded your user limit, please contact your vendor',
+];

@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'active' => '活跃',
+    'are_you_sure_to_delete_the_kelindan' => '您确定要删除此Kelindan吗？',
+    'bank_details_1' => '银行详情1',
+    'bank_details_2' => '银行详情2',
+    'cancel' => '取消',
+    'create' => '创建',
+    'create_kelindan' => '创建Kelindan',
+    'deleted_successfully' => '删除成功',
+    'detail' => '详情',
+    'edit' => '编辑',
+    'edit_kelindan' => '编辑Kelindan',
+    'employee_id' => '员工编号',
+    'ic' => '身份证号码',
+    'kelindan_not_found' => '未找到Kelindan',
+    'kelindans' => 'Kelindans',
+    'name' => '姓名',
+    'permit_date' => '许可日期',
+    'phone' => '电话',
+    'remark' => '备注',
+    'save' => '保存',
+    'saved_successfully' => '保存成功',
+    'status' => '状态',
+    'unactive' => '未激活',
+    'updated_successfully' => '更新成功',
+];

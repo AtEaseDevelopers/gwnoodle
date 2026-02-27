@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'are_you_sure_to_delete_the_lorry' => '您确定要删除此货车吗？',
+    'cancel' => '取消',
+    'create' => '创建',
+    'create_lorry' => '创建货车',
+    'deleted_successfully' => '删除成功',
+    'detail' => '详情',
+    'edit' => '编辑',
+    'edit_lorry' => '编辑货车',
+    'fire_extinguisher' => '灭火器',
+    'inspection_next_date' => '下次检查日期',
+    'insurance_next_date' => '下次保险日期',
+    'lorries' => '货车',
+    'lorry' => '货车',
+    'lorry_no' => '货车编号',
+    'lorry_not_found' => '未找到货车',
+    'other_next_date' => '其他下次日期',
+    'permit_next_date' => '下次许可日期',
+    'remark' => '备注',
+    'road_tax_next_date' => '下次路税日期',
+    'save' => '保存',
+    'saved_successfully' => '保存成功',
+    'status' => '状态',
+    'tyre_next_date' => '下次轮胎日期',
+    'updated_successfully' => '更新成功',
+];

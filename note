@@ -1,0 +1,9 @@
+Changes (CJ)
+1) add invoice# in api
+2) add foc indicator in add invoice detail
+3) get task will return invoice detail & foc & price list (OK)
+4) End trip fill in wastage quantity (OK)
+
+Pending confirmation
+1) pull task or push task
+2) allow trasnfer stock to driver?

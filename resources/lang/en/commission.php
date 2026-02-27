@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'action' => 'Action',
+    'agent_commission' => 'Agent commission',
+    'are_you_sure_to_delete_the_commission' => 'Are you sure to delete the commission',
+    'cancel' => 'Cancel',
+    'close' => 'Close',
+    'commission' => 'Commission',
+    'commission_group_not_found' => 'Commission group not found',
+    'commission_type' => 'Commission type',
+    'create' => 'Create',
+    'create_commission' => 'Create commission',
+    'customer_group_deleted_successfully' => 'Customer group deleted successfully',
+    'customer_group_saved_successfully' => 'Customer group saved successfully',
+    'customer_group_updated_successfully' => 'Customer group updated successfully',
+    'detail' => 'Detail',
+    'driver_commission' => 'Driver commission',
+    'edit' => 'Edit',
+    'edit_commission' => 'Edit commission',
+    'ice' => 'Ice',
+    'kelindan_commission' => 'Kelindan commission',
+    'operation_commission' => 'Operation commission',
+    'product_type' => 'Product type',
+    'save' => 'Save',
+    'status' => 'Status',
+    'value' => 'Value',
+];

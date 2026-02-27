@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'action' => '操作',
+    'are_you_sure_to_delete_the_assign' => '您确定要删除此代码吗？',
+    'cancel' => '取消',
+    'close' => '关闭',
+    'code' => '代码',
+    'code_deleted_successfully' => '代码删除成功',
+    'code_not_found' => '未找到代码',
+    'code_saved_successfully' => '代码保存成功',
+    'code_updated_successfully' => '代码更新成功',
+    'codes' => '代码',
+    'create' => '创建',
+    'create_codes' => '创建代码',
+    'created_at' => '创建时间',
+    'description' => '描述',
+    'detail' => '详情',
+    'edit' => '编辑',
+    'edit_codes' => '编辑代码',
+    'save' => '保存',
+    'sequence' => '序列',
+    'status' => '状态',
+    'updated_at' => '更新时间',
+    'value' => '值',
+];

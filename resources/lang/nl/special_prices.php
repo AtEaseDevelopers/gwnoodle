@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'action' => '操作',
+    'active' => '活跃',
+    'are_you_sure_to_delete_the_special_price' => '您确定要删除此特价吗？',
+    'cancel' => '取消',
+    'close' => '关闭',
+    'create' => '创建',
+    'create_special_price' => '创建特价',
+    'customer' => '客户',
+    'detail' => '详情',
+    'edit' => '编辑',
+    'edit_special_price' => '编辑特价',
+    'price' => '价格',
+    'product' => '产品',
+    'save' => '保存',
+    'special_price' => '特价',
+    'special_price_deleted_successfully' => '特价删除成功',
+    'special_price_not_found' => '未找到特价',
+    'special_price_saved_successfully' => '特价保存成功',
+    'special_price_updated_successfully' => '特价更新成功',
+    'status' => '状态',
+    'unactive' => '未激活',
+];

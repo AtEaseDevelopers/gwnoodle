@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'are_you_sure_to_delete_the_lorry' => 'Are you sure to delete the lorry',
+    'cancel' => 'Cancel',
+    'create' => 'Create',
+    'create_lorry' => 'Create Lorry',
+    'deleted_successfully' => 'Deleted successfully',
+    'detail' => 'Detail',
+    'edit' => 'Edit',
+    'edit_lorry' => 'Edit lorry',
+    'fire_extinguisher' => 'Fire extinguisher',
+    'inspection_next_date' => 'Inspection next date',
+    'insurance_next_date' => 'Insurance next date',
+    'lorries' => 'Lorries',
+    'lorry' => 'Lorry',
+    'lorry_no' => 'Lorry#',
+    'lorry_not_found' => 'Lorry not found',
+    'other_next_date' => 'Other next date',
+    'permit_next_date' => 'Permit next date',
+    'remark' => 'Remark',
+    'road_tax_next_date' => 'Road tax next date',
+    'save' => 'Save',
+    'saved_successfully' => 'Saved successfully',
+    'status' => 'Status',
+    'tyre_next_date' => 'Tyre next date',
+    'updated_successfully' => 'Updated successfully',
+];
