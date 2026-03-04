@@ -362,11 +362,29 @@ Route::group(['middleware' => ['auth']], function() {
     });
 
     Route::group(['middleware' => ['permission:product_batch']], function() {
-        Route::get('/products/sync-xero', [App\Http\Controllers\ProductBatchController::class, 'syncXero']);
-        Route::resource('productBatches', App\Http\Controllers\ProductBatchController::class);
-        Route::post('/productBatches/massdestroy', [App\Http\Controllers\ProductBatchController::class, 'massdestroy']);
-        Route::post('/productBatches/massupdatestatus', [App\Http\Controllers\ProductBatchController::class, 'massupdatestatus']);
-
+        
+        // Override resource parameter to use 'id' instead of 'productBatch'
+        Route::resource('productBatches', App\Http\Controllers\ProductBatchController::class)->parameters([
+            'productBatches' => 'id'
+        ]);
+        
+        // Custom routes for stock management - using 'id' consistently
+        Route::get('/productBatches/{id}/stock-in', [App\Http\Controllers\ProductBatchController::class, 'showStockInForm'])->name('productBatches.stock-in-form');
+        Route::post('/productBatches/{id}/stock-in', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
+        Route::get('/productBatches/{id}/stock-out', [App\Http\Controllers\ProductBatchController::class, 'showStockOutForm'])->name('productBatches.stock-out-form');
+        Route::post('/productBatches/{id}/stock-out', [App\Http\Controllers\ProductBatchController::class, 'stockOut'])->name('productBatches.stock-out');
+        
+        // Mass actions
+        Route::post('/productBatches/massdestroy', [App\Http\Controllers\ProductBatchController::class, 'massdestroy'])->name('productBatches.massdestroy');
+        
+        // Utility routes
+        Route::get('/productBatches/check-expiry', [App\Http\Controllers\ProductBatchController::class, 'checkExpiry'])->name('productBatches.check-expiry');
+        Route::get('/productBatches/{id}/print-label', [App\Http\Controllers\ProductBatchController::class, 'printLabel'])->name('productBatches.print-label');
+        Route::get('/productBatches/by-product/{productId}', [App\Http\Controllers\ProductBatchController::class, 'getBatchesByProduct'])->name('productBatches.by-product');
+        
+        // Barcode generation routes
+        Route::post('/productBatches/generate-barcode-preview', [App\Http\Controllers\ProductBatchController::class, 'generateBarcodePreview'])->name('productBatches.generate-barcode-preview');
+        Route::get('/productBatches/download-barcode', [App\Http\Controllers\ProductBatchController::class, 'downloadBarcode'])->name('productBatches.download-barcode');
     });
 
     Route::group(['middleware' => ['permission:stockcount']], function() {

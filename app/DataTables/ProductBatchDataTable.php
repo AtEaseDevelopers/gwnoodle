@@ -33,14 +33,11 @@ class ProductBatchDataTable extends DataTable
             ->editColumn('expiry_date', function($batch) {
                 return $batch->expiry_date->format('d-m-Y');
             })
-            ->editColumn('manufacturing_date', function($batch) {
-                return $batch->manufacturing_date ? $batch->manufacturing_date->format('d-m-Y') : '-';
-            })
             ->editColumn('status', function($batch) {
                 $statusLabels = [
                     1 => 'Active',
-                    2 => 'Expired',
-                    3 => 'Depleted'
+                    2 => 'Inactive',
+                    3 => 'Expired'
                 ];
                 $statusClasses = [
                     1 => 'success',
@@ -156,8 +153,8 @@ class ProductBatchDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == "Status"){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Active</option><option value="2">Expired</option><option value="3">Depleted</option></select>\';
-                            } else if(columns[index].title == "Expiry Date" || columns[index].title == "Manufacturing Date") {
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Active</option><option value="2">Inactive</option><option value="3">Expired</option></select>\';
+                            } else if(columns[index].title == "Expiry Date") {
                                 var input = \'<input type="date" placeholder="Search">\';
                             } else {
                                 var input = \'<input type="text" placeholder="Search">\';
@@ -190,7 +187,6 @@ class ProductBatchDataTable extends DataTable
             ]),
             'product_id' => ['title' => 'Product', 'data' => 'product_id', 'name' => 'product_id'],
             'batch_code' => ['title' => 'Batch Code', 'data' => 'batch_code', 'name' => 'batch_code'],
-            'manufacturing_date' => ['title' => 'Mfg Date', 'data' => 'manufacturing_date', 'name' => 'manufacturing_date'],
             'expiry_date' => ['title' => 'Expiry Date', 'data' => 'expiry_date', 'name' => 'expiry_date'],
             'initial_quantity' => ['title' => 'Initial Qty', 'data' => 'initial_quantity', 'name' => 'initial_quantity'],
             'quantity' => ['title' => 'Current Qty', 'data' => 'quantity', 'name' => 'quantity'],

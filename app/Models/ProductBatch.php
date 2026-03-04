@@ -14,18 +14,14 @@ class ProductBatch extends Model
     protected $fillable = [
         'product_id',
         'batch_code',
-        'manufacturing_date',
         'expiry_date',
         'quantity',
         'initial_quantity',   
-        'qr_code',
-        'barcode_data',
         'status', // 1=active, 2=expired, 3=depleted
     ];
 
     protected $casts = [
         'product_id' => 'integer',
-        'manufacturing_date' => 'date',
         'expiry_date' => 'date',
         'quantity' => 'integer',
         'status' => 'integer',
@@ -55,5 +51,75 @@ class ProductBatch extends Model
     public function hasStock()
     {
         return $this->quantity > 0;
+    }
+    
+    /**
+     * Generate batch code based on format
+     */
+    public static function generateBatchCode($groupId, $userId, $productCode)
+    {
+        $year = date('y');
+        $fixedDigit = '8';
+        $day = date('d');
+        $month = date('m');
+        
+        return strtoupper($groupId) . 
+               str_pad($userId, 2, '0', STR_PAD_LEFT) . 
+               $year . 
+               $fixedDigit . 
+               $day . 
+               $month . 
+               strtoupper($productCode);
+    }
+    
+    /**
+     * Parse batch code into components
+     */
+    public static function parseBatchCode($batchCode)
+    {
+        if (strlen($batchCode) < 10) {
+            return null;
+        }
+        
+        return [
+            'group' => substr($batchCode, 0, 1),
+            'user_id' => substr($batchCode, 1, 2),
+            'year' => substr($batchCode, 3, 2),
+            'fixed' => substr($batchCode, 5, 1),
+            'day' => substr($batchCode, 6, 2),
+            'month' => substr($batchCode, 8, 2),
+            'product_code' => substr($batchCode, 10)
+        ];
+    }
+    
+    /**
+     * Find product by batch code
+     */
+    public static function findProductByBatchCode($batchCode)
+    {
+        // First check if batch exists
+        $existingBatch = self::where('batch_code', $batchCode)->first();
+        if ($existingBatch) {
+            return [
+                'exists' => true,
+                'product' => $existingBatch->product,
+                'batch' => $existingBatch
+            ];
+        }
+
+        // Try to parse the batch code to find product by product_code
+        $parsed = self::parseBatchCode($batchCode);
+        if ($parsed && isset($parsed['product_code'])) {
+            $product = Product::where('unit_code', $parsed['product_code'])->first();
+            if ($product) {
+                return [
+                    'exists' => false,
+                    'product' => $product,
+                    'batch' => null
+                ];
+            }
+        }
+
+        return null;
     }
 }

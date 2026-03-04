@@ -4,210 +4,321 @@
 <div class="container-fluid">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">{{ isset($productBatch) ? 'Edit' : 'Create' }} Product Batch</h3>
+            <h3 class="card-title">Create Product Batch</h3>
         </div>
         <div class="card-body">
-            {!! Form::open(['route' => isset($productBatch) ? ['productBatches.update', Crypt::encrypt($productBatch->id)] : 'productBatches.store', 'method' => isset($productBatch) ? 'PUT' : 'POST']) !!}
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+            {!! Form::open([
+                'route' => 'productBatches.store',
+                'method' => 'POST',
+                'id' => 'productBatchForm'
+            ]) !!}
 
             <div class="row">
-                <!-- Product Field (Select) -->
-                <div class="form-group col-sm-6">
-                    {!! Form::label('product_id', 'Product') !!}<span class="asterisk"> *</span>
-                    <div class="input-group">
-                        {!! Form::select('product_id', $products ?? [], isset($productBatch) ? $productBatch->product_id : null, [
-                            'class' => 'form-control select2-product',
-                            'id' => 'product_id',
-                            'placeholder' => __('Select product...'),
-                            'style' => 'width: 100%;',
-                            'required'
-                        ]) !!}
-                    </div>
-                    <small class="form-text text-muted">Select the product for this batch</small>
-                </div>
+                <!-- Left Column - Generate Barcode -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fa fa-qrcode"></i> Step 1: Generate Barcode
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Product Selection -->
+                            <div class="form-group">
+                                <label for="barcode_product_id">Select Product <span class="text-danger">*</span></label>
+                                <select class="form-control select2-barcode" id="barcode_product_id" style="width: 100%;" required>
+                                    <option value="">-- Select Product --</option>
+                                    @foreach(App\Models\Product::where('status', 1)->orderBy('name')->get() as $product)
+                                        <option value="{{ $product->id }}" data-unitcode="{{ $product->unit_code }}">
+                                            {{ $product->name }} ({{ $product->unit_code }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
 
-                <!-- Batch Code Field -->
-                <div class="form-group col-sm-6">
-                    {!! Form::label('batch_code', 'Batch Code') !!}<span class="asterisk"> *</span>
-                    {!! Form::text('batch_code', null, ['class' => 'form-control', 'maxlength' => 255, 'required', 'placeholder' => 'e.g. BATCH-2024-001']) !!}
-                    <small class="form-text text-muted">Unique identifier for this batch</small>
-                </div>
+                            <!-- Group -->
+                            <div class="form-group">
+                                <label for="barcode_group">Group <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="barcode_group" 
+                                       placeholder="Enter group letter (e.g. A, B, C, D)" 
+                                       maxlength="1" style="text-transform: uppercase;" required>
+                                <small class="text-muted">Single letter group identifier</small>
+                            </div>
 
-                <!-- Manufacturing Date Field -->
-                <div class="form-group col-sm-6">
-                    {!! Form::label('manufacturing_date', 'Manufacturing Date') !!}
-                    {!! Form::date('manufacturing_date', null, ['class' => 'form-control', 'id' => 'manufacturing_date']) !!}
-                    <small class="form-text text-muted">When this batch was produced</small>
-                </div>
+                            <!-- Unit Code (Auto-filled) -->
+                            <div class="form-group">
+                                <label for="barcode_product_code">Unit Code</label>
+                                <input type="text" class="form-control" id="barcode_product_code" readonly 
+                                       placeholder="Will auto-fill from selected product">
+                            </div>
 
-                <!-- Expiry Date Field -->
-                <div class="form-group col-sm-6">
-                    {!! Form::label('expiry_date', 'Expiry Date') !!}<span class="asterisk"> *</span>
-                    {!! Form::date('expiry_date', null, ['class' => 'form-control', 'id' => 'expiry_date', 'required']) !!}
-                    <small class="form-text text-muted">When this batch expires</small>
-                </div>
+                            <!-- Auto Info Display -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>User ID</label>
+                                        <input type="text" class="form-control" value="{{ str_pad(Auth::id(), 2, '0', STR_PAD_LEFT) }}" readonly disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Date Info</label>
+                                        <input type="text" class="form-control" 
+                                               value="{{ date('y') . '8' . date('d') . date('m') }}" readonly disabled>
+                                    </div>
+                                </div>
+                            </div>
 
-                <!-- Quantity Field (Initial Stock) -->
-                <div class="form-group col-sm-6">
-                    {!! Form::label('quantity', 'Initial Quantity') !!}<span class="asterisk"> *</span>
-                    {!! Form::number('quantity', null, ['class' => 'form-control', 'min' => 1, 'step' => 1, 'id' => 'quantity', 'required']) !!}
-                    <small class="form-text text-muted">Number of units in this batch</small>
-                </div>
+                            <!-- Generate Button -->
+                            <div class="form-group text-center">
+                                <button type="button" class="btn btn-primary btn-lg" id="generate_barcode_btn" disabled>
+                                    <i class="fa fa-qrcode"></i> Generate Barcode
+                                </button>
+                            </div>
 
-                <!-- QR Code Field -->
-                <div class="form-group col-sm-6">
-                    {!! Form::label('qr_code', 'QR Code') !!}
-                    <div class="input-group">
-                        {!! Form::text('qr_code', null, ['class' => 'form-control', 'id' => 'qr_code', 'placeholder' => 'Scan or enter QR code']) !!}
-                        <div class="input-group-append">
-                            <button type="button" class="btn btn-info" id="generate_qr">
-                                <i class="fa fa-qrcode"></i> Generate
-                            </button>
+                            <!-- Generated Barcode Preview -->
+                            <div id="barcode_preview_section" style="display: none;" class="mt-3">
+                                <hr>
+                                <h6>Generated Barcode Preview:</h6>
+                                <div class="text-center" id="barcode_preview_container">
+                                    <div id="barcode_image_placeholder" class="text-muted py-3">
+                                        <i class="fa fa-barcode fa-3x"></i>
+                                    </div>
+                                    <div id="barcode_image_result" style="display: none;"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <small class="form-text text-muted">Optional: QR code for this batch</small>
                 </div>
 
-                <!-- Barcode Data Field -->
-                <div class="form-group col-sm-12">
-                    {!! Form::label('barcode_data', 'Barcode Data') !!}
-                    {!! Form::textarea('barcode_data', null, ['class' => 'form-control', 'rows' => 2, 'id' => 'barcode_data', 'placeholder' => 'Raw barcode scan data if available']) !!}
-                    <small class="form-text text-muted">Optional: Store raw barcode data from scanner</small>
-                </div>
+                <!-- Right Column - Batch Details -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fa fa-cube"></i> Step 2: Batch Details
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Generated Batch Code -->
+                            <div class="form-group">
+                                <label>Generated Batch Code</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="generated_batch_code_display" readonly 
+                                           placeholder="Generate barcode first">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" type="button" id="copy_batch_code" title="Copy to clipboard">
+                                            <i class="fa fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
 
-                <!-- Status Field (for edit only) -->
-                @if(isset($productBatch))
-                <div class="form-group col-sm-6">
-                    {!! Form::label('status', 'Status') !!}
-                    {{ Form::select('status', [
-                        1 => 'Active',
-                        2 => 'Expired',
-                        3 => 'Depleted',
-                    ], null, ['class' => 'form-control', 'id' => 'status']) }}
-                </div>
-                @endif
+                            <!-- Hidden Fields -->
+                            <input type="hidden" name="batch_code" id="batch_code_hidden">
+                            <input type="hidden" name="product_id" id="product_id_hidden">
 
-                <!-- Expiry Warning Display (read-only) -->
-                <div class="form-group col-sm-6" id="expiry_warning" style="display: none;">
-                    <label>Expiry Status</label>
-                    <div class="alert alert-warning" id="expiry_message"></div>
+                            <!-- Product Display -->
+                            <div class="form-group">
+                                <label>Product</label>
+                                <input type="text" class="form-control" id="product_display" readonly 
+                                       placeholder="Product will appear here" style="background-color: #f8f9fa;">
+                            </div>
+
+                            <!-- Expiry Date -->
+                            <div class="form-group">
+                                <label for="expiry_date">Expiry Date <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" name="expiry_date" id="expiry_date" required disabled>
+                            </div>
+
+                            <!-- Quantity -->
+                            <div class="form-group">
+                                <label for="quantity">Initial Quantity <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" name="quantity" id="quantity" 
+                                       min="1" required disabled>
+                            </div>
+
+                            <!-- Status (Hidden - set to active) -->
+                            <input type="hidden" name="status" value="1">
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Submit Field -->
-            <div class="form-group col-sm-12">
-                {!! Form::submit(isset($productBatch) ? 'Update' : 'Save', ['class' => 'btn btn-primary']) !!}
-                <a href="{{ route('productBatches.index') }}" class="btn btn-secondary">Cancel</a>
+            <!-- Submit Button -->
+            <div class="row mt-3">
+                <div class="col-md-12 text-center">
+                    <button type="submit" class="btn btn-success btn-lg" id="submitBtn" disabled>
+                        <i class="fa fa-save"></i> Create Product Batch
+                    </button>
+                    <a href="{{ route('productBatches.index') }}" class="btn btn-secondary btn-lg">
+                        <i class="fa fa-times"></i> Cancel
+                    </a>
+                </div>
             </div>
 
             {!! Form::close() !!}
         </div>
     </div>
 </div>
+
 @endsection
 
 @push('scripts')
-   <style>
-        /* Select2 custom styling */
-        .select2-container--default .select2-selection--single {
-            height: 38px;
-            border: 1px solid #ced4da;
-            border-radius: 0.25rem;
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+
+<style>
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    .card-header {
+        font-weight: bold;
+    }
+    #barcode_preview_container {
+        min-height: 100px;
+        border: 1px dashed #ccc;
+        border-radius: 4px;
+        padding: 10px;
+    }
+    #barcode_image_result img {
+        max-width: 100%;
+        height: auto;
+    }
+</style>
+
+<script>
+$(function () {
+    HideLoad();
+
+    // Initialize Select2
+    $('.select2-barcode').select2({
+        placeholder: '-- Select Product --',
+        width: '100%'
+    });
+
+    // Auto-fill unit code when product is selected
+    $('#barcode_product_id').on('change', function() {
+        var selectedOption = $(this).find('option:selected');
+        var unitCode = selectedOption.data('unitcode') || '';
+        $('#barcode_product_code').val(unitCode);
+        checkGenerateButton();
+    });
+
+    // Validate group input
+    $('#barcode_group').on('input', function() {
+        $(this).val($(this).val().toUpperCase().replace(/[^A-Z]/g, ''));
+        checkGenerateButton();
+    });
+
+    // Check if generate button should be enabled
+    function checkGenerateButton() {
+        var productId = $('#barcode_product_id').val();
+        var group = $('#barcode_group').val();
+        var productCode = $('#barcode_product_code').val();
+        
+        if (productId && group && group.length === 1 && productCode) {
+            $('#generate_barcode_btn').prop('disabled', false);
+        } else {
+            $('#generate_barcode_btn').prop('disabled', true);
         }
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            line-height: 36px;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 36px;
+    }
+
+    // Generate barcode
+    $('#generate_barcode_btn').click(function() {
+        var productId = $('#barcode_product_id').val();
+        var group = $('#barcode_group').val();
+        var productCode = $('#barcode_product_code').val();
+        
+        if (!productId || !group || group.length !== 1 || !productCode) {
+            alert('Please select a product and enter a group letter');
+            return;
         }
         
-        /* Expiry warning styling */
-        #expiry_warning {
-            transition: all 0.3s ease;
+        ShowLoad();
+        
+        $.ajax({
+            url: "{{ route('productBatches.generate-barcode-preview') }}",
+            type: "POST",
+            data: {
+                product_id: productId,
+                group: group,
+                product_code: productCode,
+                _token: "{{ csrf_token() }}"
+            },
+            success: function(response) {
+                HideLoad();
+                
+                if (response.success) {
+                    // Show preview section
+                    $('#barcode_preview_section').show();
+                    
+                    // Display barcode image
+                    $('#barcode_image_placeholder').hide();
+                    $('#barcode_image_result').html(
+                        '<img src="data:image/png;base64,' + response.barcode_image + 
+                        '" class="img-fluid">'
+                    ).show();
+                    
+                    // Set generated batch code
+                    $('#generated_batch_code_display').val(response.batch_code);
+                    $('#batch_code_hidden').val(response.batch_code);
+                    
+                    // Set product info
+                    $('#product_id_hidden').val(productId);
+                    $('#product_display').val(response.product_name + ' (' + productCode + ')');
+                    
+                    // Enable batch details fields
+                    $('#expiry_date, #quantity').prop('disabled', false);
+                    $('#submitBtn').prop('disabled', false);
+                    
+                    // Show success message
+                    toastr.success('Barcode generated successfully!', 'Success');
+                }
+            },
+            error: function(error) {
+                HideLoad();
+                var errorMessage = 'Error generating barcode';
+                if (error.responseJSON?.errors) {
+                    errorMessage = Object.values(error.responseJSON.errors).join('\n');
+                } else if (error.responseJSON?.message) {
+                    errorMessage = error.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    });
+
+    // Copy batch code to clipboard
+    $('#copy_batch_code').click(function() {
+        var batchCode = $('#generated_batch_code_display').val();
+        if (!batchCode || batchCode === 'Generate barcode first') {
+            alert('No batch code to copy');
+            return;
         }
-    </style>
-
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
-
-    <script>
-        $(document).ready(function () {
-            // Initialize Select2 for product
-            $('.select2-product').select2({
-                placeholder: '{{ __("Select product...") }}',
-                allowClear: true,
-                width: '100%'
-            });
-
-            // Calculate days until expiry
-            function checkExpiry() {
-                var expiryDate = $('#expiry_date').val();
-                if (expiryDate) {
-                    var today = new Date();
-                    var expiry = new Date(expiryDate);
-                    var diffTime = expiry - today;
-                    var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
-                    if (diffDays < 0) {
-                        $('#expiry_message').text('⚠️ This batch is already expired!');
-                        $('#expiry_warning').show().removeClass('alert-warning').addClass('alert-danger');
-                    } else if (diffDays <= 30) {
-                        $('#expiry_message').text('⚠️ Warning: This batch expires in ' + diffDays + ' days');
-                        $('#expiry_warning').show().removeClass('alert-danger').addClass('alert-warning');
-                    } else {
-                        $('#expiry_warning').hide();
-                    }
-                }
-            }
-
-            // Check expiry on date change
-            $('#expiry_date').on('change', function() {
-                checkExpiry();
-            });
-
-            // Generate random QR code
-            $('#generate_qr').on('click', function() {
-                var productId = $('#product_id').val();
-                var batchCode = $('#batch_code').val();
-                var timestamp = Date.now();
-                var random = Math.floor(Math.random() * 1000);
-                
-                if (batchCode) {
-                    var qrCode = 'QR-' + batchCode + '-' + random;
-                } else if (productId) {
-                    var qrCode = 'QR-PROD-' + productId + '-' + timestamp;
-                } else {
-                    var qrCode = 'QR-' + timestamp + '-' + random;
-                }
-                
-                $('#qr_code').val(qrCode);
-            });
-
-            // Auto-generate batch code suggestion (optional)
-            $('#product_id').on('change', function() {
-                var productId = $(this).val();
-                if (productId && !$('#batch_code').val()) {
-                    var productText = $(this).select2('data')[0].text;
-                    var productCode = productText.substring(0, 3).toUpperCase();
-                    var date = new Date();
-                    var year = date.getFullYear();
-                    var month = String(date.getMonth() + 1).padStart(2, '0');
-                    var day = String(date.getDate()).padStart(2, '0');
-                    
-                    $('#batch_code').val(productCode + '-' + year + month + day + '-001');
-                }
-            });
-
-            // Initial check if editing
-            checkExpiry();
-
-            // Handle escape key
-            HideLoad();
+        
+        navigator.clipboard.writeText(batchCode).then(function() {
+            var $btn = $('#copy_batch_code');
+            var originalHtml = $btn.html();
+            $btn.html('<i class="fa fa-check"></i>');
+            setTimeout(function() {
+                $btn.html(originalHtml);
+            }, 1000);
+            toastr.success('Batch code copied to clipboard!');
         });
+    });
 
-        $(document).keyup(function(e) {
-            if (e.key === "Escape") {
-                $('form a.btn-secondary')[0].click();
-            }
-        });
-    </script>
+});
+</script>
 @endpush

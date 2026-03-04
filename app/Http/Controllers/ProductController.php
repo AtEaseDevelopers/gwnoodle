@@ -142,26 +142,24 @@ class ProductController extends AppBaseController
 
         if (empty($product)) {
             Flash::error(__('products.product_not_found'));
-
             return redirect(route('products.index'));
         }
 
         $data = ['product' => $product];
         
-        // Add unit code options
-        $data['unitCodeOptions'] = $this->getUnitCodeOptions();
-        
-        // Add classification data if e-invoice is enabled
-        if ($this->eInvoiceService->isEnabled()) {
-            $data['classificationOptions'] = $this->getClassificationOptions();
-            $data['currentClassification'] = $product->classification_code ?? null;
-        }
-
-        // NEW: Get cost history for this product
+        // Get cost history
         $data['costHistory'] = ProductCost::where('product_id', $product->id)
             ->with('changer')
             ->orderBy('created_at', 'desc')
             ->get();
+
+        // Other data as needed
+        $data['unitCodeOptions'] = $this->getUnitCodeOptions();
+        
+        if ($this->eInvoiceService->isEnabled()) {
+            $data['classificationOptions'] = $this->getClassificationOptions();
+            $data['currentClassification'] = $product->classification_code ?? null;
+        }
 
         return view('products.show', $data);
     }

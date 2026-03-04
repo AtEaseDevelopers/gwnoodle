@@ -18,7 +18,52 @@ class ProductDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
-        return $dataTable->addColumn('action', 'products.datatables_actions');
+        return $dataTable
+            ->addColumn('action', 'products.datatables_actions')
+            // Add total quantity column
+            ->addColumn('total_quantity', function($product) {
+                return $product->total_quantity;
+            })
+            // Add active batches count
+            ->addColumn('active_batches', function($product) {
+                return $product->active_batches_count;
+            })
+            // Add total batches
+            ->addColumn('total_batches', function($product) {
+                return $product->total_batches_count;
+            })
+            // Add stock value
+            ->addColumn('stock_value', function($product) {
+                return number_format($product->current_stock_value, 2);
+            })
+            // Add expiring soon count
+            ->addColumn('expiring_soon', function($product) {
+                $expiringSoon = $product->expiring_soon_quantity;
+                if ($expiringSoon > 0) {
+                    return '<span class="badge badge-warning">' . number_format($expiringSoon) . '</span>';
+                }
+                return '-';
+            })
+            // Add carton display
+            ->addColumn('carton_display', function($product) {
+                if ($product->carton_enabled && $product->units_per_carton && $product->units_per_carton > 0) {
+                    $cartons = floor($product->total_quantity / $product->units_per_carton);
+                    $loose = $product->total_quantity % $product->units_per_carton;
+                    
+                    $display = [];
+                    if ($cartons > 0) {
+                        $display[] = $cartons . 'C';
+                    }
+                    if ($loose > 0) {
+                        $display[] = $loose . 'U';
+                    }
+                    
+                    return !empty($display) ? implode(' + ', $display) : '0U';
+                }
+                return '-';
+            })
+            // Raw columns for HTML rendering
+            ->rawColumns(['action', 'expiring_soon', 'status', 'carton_enabled']);
     }
 
     /**
@@ -29,7 +74,7 @@ class ProductDataTable extends DataTable
      */
     public function query(Product $model)
     {
-        return $model->newQuery();
+        return $model->newQuery()->with('batches');
     }
 
     /**
@@ -42,14 +87,15 @@ class ProductDataTable extends DataTable
         return $this->builder()
             ->columns($this->getColumns())
             ->minifiedAjax()
-            ->addAction(['title' => trans('products.action'), 'printable' => false])
+            ->addAction(['title' => trans('products.action'), 'printable' => false, 'width' => '120px'])
             ->parameters([
-                'dom'       => '<"row"B><"row"<"dataTableBuilderDiv"t>><"row"ip>',
+                'dom'       => '<"row"B><"row"<"col-sm-12"tr>><"row"<"col-sm-5"i><"col-sm-7"p>>',
                 'stateSave' => true,
                 'stateDuration' => 0,
-                'processing' => false,
-                'order'     => [[1, 'desc']],
-                'lengthMenu' => [[ 10, 50, 100, 300 ],[ '10 rows', '50 rows', '100 rows', '300 rows' ]],
+                'processing' => true,
+                'serverSide' => true,
+                'order'     => [[2, 'asc']], // Order by name
+                'lengthMenu' => [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
                 'buttons' => [
                     [
                         'extend' => 'create',
@@ -60,6 +106,7 @@ class ProductDataTable extends DataTable
                         'extend' => 'print',
                         'className' => 'btn btn-default btn-sm no-corner',
                         'text' => '<i class="fa fa-print"></i> ' . trans('table_buttons.print'),
+                        'exportOptions' => ['columns' => ':visible']
                     ],
                     [
                         'extend' => 'reset',
@@ -74,20 +121,20 @@ class ProductDataTable extends DataTable
                     [
                         'extend' => 'excelHtml5',
                         'text' => '<i class="fa fa-file-excel-o"></i> ' . trans('table_buttons.excel'),
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => ['columns' => ':visible'],
                         'className' => 'btn btn-default btn-sm no-corner',
-                        'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'title' => 'Products_' . date('dmYHis'),
+                        'filename' => 'products_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'pdfHtml5',
                         'orientation' => 'landscape',
-                        'pageSize' => 'LEGAL',
+                        'pageSize' => 'A4',
                         'text' => '<i class="fa fa-file-pdf-o"></i> ' . trans('table_buttons.pdf'),
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => ['columns' => ':visible'],
                         'className' => 'btn btn-default btn-sm no-corner',
-                        'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'title' => 'Products_' . date('dmYHis'),
+                        'filename' => 'products_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'colvis',
@@ -100,48 +147,108 @@ class ProductDataTable extends DataTable
                         'text' => trans('table_buttons.show_10_rows')
                     ],
                 ],
+
                 'columnDefs' => [
                     [
-                        'targets' => -1,
-                        'visible' => true
+                        'targets' => 0, // checkbox column
+                        'orderable' => false,
+                        'searchable' => false,
+                        'width' => '30px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type, row, meta){
+                            return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";
+                        }'
                     ],
                     [
-                        'targets' => 0,
-                        'visible' => true,
-                        'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
+                        'targets' => 1, // unit_code
+                        'width' => '80px',
                     ],
                     [
-                        'targets' => 4, // type field
+                        'targets' => 2, // name
+                        'width' => '200px',
+                    ],
+                    [
+                        'targets' => 3, // price
+                        'className' => 'text-right',
+                        'width' => '100px',
                         'render' => 'function(data, type){
-                                if (data == 1) {
-                                    return "Coffee";
-                                } else if (data == 2) {
-                                    return "Tea";
-                                } else if (data == 3) {
-                                    return "Cocoa";
-                                } else if (data == 0) {
-                                    return "Ice";
-                                }
-                            }'
+                            return type === "export" ? data : "RM " + parseFloat(data).toFixed(2);
+                        }'
                     ],
                     [
-                        'targets' => 5, // status field
-                        'render' => 'function(data, type){return data == 1 ? "Active" : "Unactive";}'
+                        'targets' => 4, // status
+                        'width' => '80px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type){
+                            if (type === "export") {
+                                return data == 1 ? "Active" : "Inactive";
+                            }
+                            if (data == 1) {
+                                return "<span class=\'badge badge-success\' style=\'padding: 5px 10px; min-width: 60px; display: inline-block; text-align: center;\'>Active</span>";
+                            } else {
+                                return "<span class=\'badge badge-danger\' style=\'padding: 5px 10px; min-width: 60px; display: inline-block; text-align: center;\'>Inactive</span>";
+                            }
+                        }'
                     ],
                     [
-                        'targets' => 7, // carton_enabled field
-                        'render' => 'function(data, type){return data == 1 ? "Yes" : "No";}'
-                    ],
-                    [
-                        'targets' => 8, // units_per_carton field
+                        'targets' => 5, // total_quantity
+                        'className' => 'text-right',
+                        'width' => '100px',
                         'render' => 'function(data, type, row){
-                                if (row[7] == 1) { // if carton_enabled is true
-                                    return data ? data : "-";
-                                } else {
-                                    return "-";
-                                }
-                            }'
+                            if (type === "export") return data;
+                            if (row[11] == 1) { // if carton_enabled is true
+                                return data + " (" + row[12] + ")";
+                            }
+                            return data;
+                        }'
                     ],
+                    [
+                        'targets' => 6, // active_batches
+                        'className' => 'text-center',
+                        'width' => '80px',
+                        'render' => 'function(data, type, row){
+                            if (type === "export") return data + "/" + row[8];
+                            return "<span class=\'badge badge-info\'>" + data + "</span>/" + row[8];
+                        }'
+                    ],
+                    [
+                        'targets' => 7, // total_batches
+                        'visible' => false, // Hide from view but keep in export
+                    ],
+                    [
+                        'targets' => 8, // stock_value
+                        'className' => 'text-right',
+                        'width' => '120px',
+                        'render' => 'function(data, type){
+                            return type === "export" ? data : "RM " + data;
+                        }'
+                    ],
+                    [
+                        'targets' => 9, // expiring_soon
+                        'className' => 'text-center',
+                        'width' => '100px',
+                        'render' => 'function(data, type){
+                            if (type === "export") {    
+                                return $(data).text();
+                            }
+                            return data;
+                        }'
+                    ],
+                    [
+                        'targets' => 10, // carton_enabled
+                        'visible' => false, // Hide but keep for calculations
+                    ],
+                    [
+                        'targets' => 11, // carton_display
+                        'visible' => false, // Hide but keep for calculations
+                    ],
+                    [
+                        'targets' => 12, // action column
+                        'width' => '120px',
+                        'orderable' => false,
+                        'searchable' => false,
+                        'className' => 'text-center'
+                    ]
                 ],
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
@@ -149,24 +256,35 @@ class ProductDataTable extends DataTable
                     .columns()
                     .every(function (index) {
                         var column = this;
-                        if(columns[index].searchable){
-                            if(columns[index].title == \'Status\'){
+                        var title = $(this.header()).text();
+                        
+                        if(columns[index].searchable && title !== "Actions" && title !== "") {
+                            if(title == "Status"){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Unactive</option></select>\';
-                            }else if(columns[index].title == \'Type\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="0">Ice</option><option value="1">Coffee</option><option value="2">Tea</option><option value="3">Cocoa</option></select>\';
-                            }else if(columns[index].title == \'Carton Enabled\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Yes</option><option value="0">No</option></select>\';
-                            }else if(columns[index].title == \'1st Vaccine Date\'){
-                                var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
-                            }else if(columns[index].title == \'2nd Vaccine Date\'){
-                                var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
-                            }else{
+                            } else if(title == "Carton Enabled"){
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Yes</option><option value="0">No</option></select>\';
+                            } else if(title == "Total Qty" || title == "Active Batches" || title == "Stock Value") {
+                                var input = \'<input type="text"  class="border-0" style="width: 100%;" placeholder="Min - Max" title="Enter min-max (e.g. 10-100)">\';
+                            } else {
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }
-                            $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
-                                column.search($(this).val(),true,false).draw();
-                                ShowLoad();
-                            })
+                            
+                            $(input).appendTo($(column.footer()).empty())
+                                .on(\'keyup change\', function(){
+                                    var val = $(this).val();
+                                    if (title == "Total Qty" || title == "Active Batches" || title == "Stock Value") {
+                                        if (val.includes("-")) {
+                                            var range = val.split("-");
+                                            var min = range[0] ? parseInt(range[0]) : 0;
+                                            var max = range[1] ? parseInt(range[1]) : 999999;
+                                            column.draw();
+                                        } else {
+                                            column.search(val).draw();
+                                        }
+                                    } else {
+                                        column.search(val).draw();
+                                    }
+                                });
                         }
                     });
                 }'
@@ -181,19 +299,93 @@ class ProductDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            'checkbox'=> new \Yajra\DataTables\Html\Column(['title' => '<input type="checkbox" id="selectallcheckbox">',
-            'data' => 'id',
-            'name' => 'id',
-            'orderable' => false,
-            'searchable' => false]),
+            'checkbox' => new \Yajra\DataTables\Html\Column([
+                'title' => '<input type="checkbox" id="selectallcheckbox">',
+                'data' => 'id',
+                'name' => 'id',
+                'orderable' => false,
+                'searchable' => false,
+                'exportable' => false,
+                'printable' => false
+            ]),
 
-            'unit_code',
-            'name',
-            'price',
-            'type',
-            'status',
-            'carton_enabled',
-            'units_per_carton'
+            'unit_code' => [
+                'title' => 'Unit Code',
+                'data' => 'unit_code',
+                'name' => 'unit_code'
+            ],
+            
+            'name' => [
+                'title' => 'Product Name',
+                'data' => 'name',
+                'name' => 'name'
+            ],
+            
+            'price' => [
+                'title' => 'Price (RM)',
+                'data' => 'price',
+                'name' => 'price'
+            ],
+            
+            'status' => [
+                'title' => 'Status',
+                'data' => 'status',
+                'name' => 'status'
+            ],
+            
+            'total_quantity' => [
+                'title' => 'Total Qty',
+                'data' => 'total_quantity',
+                'name' => 'total_quantity',
+                'searchable' => true,
+                'orderable' => true
+            ],
+            
+            'active_batches' => [
+                'title' => 'Active Batches',
+                'data' => 'active_batches',
+                'name' => 'active_batches',
+                'searchable' => true,
+                'orderable' => true
+            ],
+            
+            'total_batches' => [
+                'title' => 'Total Batches',
+                'data' => 'total_batches',
+                'name' => 'total_batches',
+                'searchable' => false,
+                'visible' => false
+            ],
+            
+            'stock_value' => [
+                'title' => 'Stock Value (RM)',
+                'data' => 'stock_value',
+                'name' => 'stock_value',
+                'searchable' => true,
+                'orderable' => true
+            ],
+            
+            'expiring_soon' => [
+                'title' => 'Expiring Soon',
+                'data' => 'expiring_soon',
+                'name' => 'expiring_soon',
+                'searchable' => true,
+                'orderable' => true
+            ],
+            
+            'carton_enabled' => [
+                'title' => 'Carton Enabled',
+                'data' => 'carton_enabled',
+                'name' => 'carton_enabled',
+                'visible' => false
+            ],
+            
+            'carton_display' => [
+                'title' => 'Carton Display',
+                'data' => 'carton_display',
+                'name' => 'carton_display',
+                'visible' => false
+            ],
         ];
     }
 
@@ -204,6 +396,6 @@ class ProductDataTable extends DataTable
      */
     protected function filename()
     {
-        return 'products_datatable_' . time();
+        return 'products_' . date('Y-m-d_His');
     }
 }

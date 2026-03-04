@@ -6,21 +6,13 @@
         <div class="card-header">
             <h3 class="card-title">Batch Details: {{ $productBatch->batch_code }}</h3>
             <div class="card-tools">
-                <a href="{{ route('productBatches.edit', ['id' => Crypt::encrypt($productBatch->id)]) }}" 
+                <a href="{{ route('productBatches.edit', ['productBatch' => Crypt::encrypt($productBatch->id)]) }}" 
                    class="btn btn-info btn-sm">
                     <i class="fa fa-edit"></i> Edit
                 </a>
-                <a href="{{ route('productBatches.stock-in-form', ['id' => Crypt::encrypt($productBatch->id)]) }}" 
-                   class="btn btn-success btn-sm">
-                    <i class="fa fa-plus"></i> Stock In
-                </a>
-                <a href="{{ route('productBatches.stock-out-form', ['id' => Crypt::encrypt($productBatch->id)]) }}" 
-                   class="btn btn-warning btn-sm">
-                    <i class="fa fa-minus"></i> Stock Out
-                </a>
-                <a href="{{ route('productBatches.print-label', ['id' => Crypt::encrypt($productBatch->id)]) }}" 
-                   class="btn btn-primary btn-sm" target="_blank">
-                    <i class="fa fa-print"></i> Print Label
+                <a href="{{ route('productBatches.print-label', ['productBatch' => Crypt::encrypt($productBatch->id)]) }}" 
+                   class="btn btn-primary btn-sm">
+                    <i class="fa fa-print"></i> Download Barcode
                 </a>
             </div>
         </div>
@@ -28,7 +20,7 @@
             <!-- Summary Cards -->
             <div class="row">
                 <div class="col-md-3">
-                    <div class="info-box bg-info">
+                    <div class="info-box bg-info border border-dark">
                         <span class="info-box-icon"><i class="fa fa-cube"></i></span>
                         <div class="info-box-content">
                             <span class="info-box-text">Product</span>
@@ -38,7 +30,7 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="info-box bg-success">
+                    <div class="info-box bg-success border border-dark">
                         <span class="info-box-icon"><i class="fa fa-calendar"></i></span>
                         <div class="info-box-content">
                             <span class="info-box-text">Expiry Date</span>
@@ -57,7 +49,7 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="info-box bg-warning">
+                    <div class="info-box bg-warning border border-dark">
                         <span class="info-box-icon"><i class="fa fa-database"></i></span>
                         <div class="info-box-content">
                             <span class="info-box-text">Initial Stock</span>
@@ -66,7 +58,7 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="info-box bg-danger">
+                    <div class="info-box bg-danger border border-dark">
                         <span class="info-box-icon"><i class="fa fa-bar-chart"></i></span>
                         <div class="info-box-content">
                             <span class="info-box-text">Current Stock</span>
@@ -97,14 +89,8 @@
                                     <td>
                                         {{ $productBatch->product->name ?? 'N/A' }}
                                         <br>
-                                        <small>Code: {{ $productBatch->product->code ?? 'N/A' }}</small>
-                                        <br>
-                                        <small>Unit: {{ $productBatch->product->unit_code ?? 'N/A' }}</small>
+                                        <small>Unit Code : {{ $productBatch->product->unit_code ?? 'N/A' }}</small>
                                     </td>
-                                </tr>
-                                <tr>
-                                    <th>Manufacturing Date</th>
-                                    <td>{{ $productBatch->manufacturing_date ? $productBatch->manufacturing_date->format('d-m-Y') : '-' }}</td>
                                 </tr>
                                 <tr>
                                     <th>Expiry Date</th>
@@ -178,19 +164,7 @@
                                         @endif
                                     </td>
                                 </tr>
-                                <tr>
-                                    <th>QR Code</th>
-                                    <td>
-                                        @if($productBatch->qr_code)
-                                            <code>{{ $productBatch->qr_code }}</code>
-                                            <button class="btn btn-sm btn-link" onclick="copyToClipboard('{{ $productBatch->qr_code }}')">
-                                                <i class="fa fa-copy"></i>
-                                            </button>
-                                        @else
-                                            -
-                                        @endif
-                                    </td>
-                                </tr>
+                
                             </table>
                         </div>
                     </div>

@@ -42,7 +42,7 @@
 </div>
 
 <!-- Type Field -->
-<div class="form-group col-sm-6">
+<!-- <div class="form-group col-sm-6">
     {!! Form::label('type', __('products.type')) !!}
     {{ Form::select('type', [
         0 => __('products.type_ice'),
@@ -50,7 +50,7 @@
         2 => 'Tea',
         3 => 'Cocoa',
     ], null, ['class' => 'form-control']) }}
-</div>
+</div> -->
 
 <!-- Status Field -->
 <div class="form-group col-sm-6">

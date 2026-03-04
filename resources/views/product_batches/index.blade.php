@@ -13,22 +13,26 @@
                          <div class="card-header">
                              <i class="fa fa-align-justify"></i>
                              {{ __('Product Batches')}}
-                             <a class="pull-right" href="{{ route('productBatches.create') }}"><i class="fa fa-plus-square fa-lg"></i></a>
-                             <a class="pull-right text-danger pr-2" id="massdelete" href="#" alt="Mass delete"><i class="fa fa-trash fa-lg"></i></a>
-                             <a class="pull-right text-success pr-2" id="massactive" href="#" alt="Mass active"><i class="fa fa-check fa-lg"></i></a>
-                             <!--<a class="pull-right pr-2" id="masssyncxero" href="#" alt="Mass Sync to Xero"><i class="fa fa-refresh fa-lg"></i></a>-->
+                             
+                             <!-- Action Buttons -->
+                             <div class="pull-right">
+                           
+                                 <a href="{{ route('productBatches.create') }}" class="btn btn-primary btn-sm mr-2">
+                                     <i class="fa fa-plus-square"></i> New Batch
+                                 </a>
+                             
+                             </div>
                          </div>
+                         
                          <div class="card-body">
                              @include('product_batches.table')
-                              <div class="pull-right mr-3">
-                                     
-                              </div>
                          </div>
                      </div>
                   </div>
              </div>
          </div>
     </div>
+
 @endsection
 
 @push('scripts')
@@ -165,6 +169,7 @@
             });
             
         });
+        
         function massdelete(ids){
             ShowLoad();
             $.ajax({
@@ -185,6 +190,7 @@
                 }
             });
         }
+        
         function massupdatestatus(ids,status){
             ShowLoad();
             $.ajax({
@@ -208,4 +214,3 @@
         }
     </script>
 @endpush
-

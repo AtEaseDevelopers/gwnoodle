@@ -31,6 +31,7 @@ class Customer extends Model
         'paymentterm',
         'group',
         'agent_id',
+        'driver_id',
         'supervisor_id',
         'phone',
         'address',
@@ -80,6 +81,7 @@ class Customer extends Model
         'phone' => 'nullable|string|max:20|nullable|string|max:20',
         'address' => 'nullable|string|max:65535|nullable|string|max:65535',
         'status' => 'required',
+        'driver_id' => 'required',
         'sst' => 'nullable|string|max:255',
         'tin' => 'nullable|string|max:255',
     ];
@@ -92,6 +94,10 @@ class Customer extends Model
         return $this->belongsTo(\App\Models\Agent::class, 'agent_id', 'id');
     }
 
+    public function driver()
+    {
+        return $this->belongsTo(\App\Models\Driver::class, 'driver_id', 'id');
+    }
     /**
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      **/
