@@ -36,7 +36,7 @@
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
                 </div>
                 <div class="modal-body text-center">
-                    {!! Form::open(['route' => 'inventoryBalances.stockin', 'enctype' => 'multipart/form-data']) !!}
+                    {!! Form::open(['route' => 'inventoryBalances.stockin', 'enctype' => 'multipart/form-data', 'id' => 'stockinForm']) !!}
                     
                     <!-- Lorry Multi-Select Dropdown -->
                     <div class="form-group">
@@ -59,6 +59,7 @@
                                 </div>
                             </div>
                         </div>
+                        <small class="text-danger lorry-error" style="display: none;">Please select at least one lorry</small>
                     </div>
 
                     <!-- Product Single-Select Dropdown -->
@@ -80,6 +81,7 @@
                             </div>
                         </div>
                         <input type="hidden" name="product_id" id="selectedProductStockIn">
+                        <small class="text-danger product-error" style="display: none;">Please select a product</small>
                     </div>
 
                     <div class="form-group">
@@ -88,11 +90,15 @@
                             <div class="input-group-prepend">
                                 <span class="input-group-text" id="basic-addon1">+</span>
                             </div>
-                            <input type="number" min="0" class="form-control" placeholder="Transfer Quantity" name="quantity">
+                            <input type="number" min="0" class="form-control" placeholder="Transfer Quantity" name="quantity" id="stockin_quantity">
                         </div>
+                        <small class="text-danger quantity-error" style="display: none;">Please enter a quantity</small>
                     </div>
-                    <button type="button" class="btn btn-secondary rounded-0 mt-2" data-dismiss="modal">{{ __('inventory_balances.cancel') }}</button>
-                    <button type="submit" name="button" class="btn btn-primary rounded-0 mt-2">{{ __('inventory_balances.update') }}</button>
+                    
+                    <div class="form-group">
+                        <button type="button" class="btn btn-secondary rounded-0 mt-2" data-dismiss="modal">{{ __('inventory_balances.cancel') }}</button>
+                        <button type="submit" name="button" class="btn btn-primary rounded-0 mt-2" id="stockinSubmitBtn" disabled>{{ __('inventory_balances.update') }}</button>
+                    </div>
                     {!! Form::close() !!}
                 </div>
             </div>
@@ -108,7 +114,7 @@
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
                 </div>
                 <div class="modal-body text-center">
-                    {!! Form::open(['route' => 'inventoryBalances.stockout', 'enctype' => 'multipart/form-data']) !!}
+                    {!! Form::open(['route' => 'inventoryBalances.stockout', 'enctype' => 'multipart/form-data', 'id' => 'stockoutForm']) !!}
                     
                     <!-- Lorry Multi-Select Dropdown -->
                     <div class="form-group">
@@ -131,6 +137,7 @@
                                 </div>
                             </div>
                         </div>
+                        <small class="text-danger lorry-error" style="display: none;">Please select at least one lorry</small>
                     </div>
 
                     <!-- Product Single-Select Dropdown -->
@@ -152,6 +159,7 @@
                             </div>
                         </div>
                         <input type="hidden" name="product_id" id="selectedProductStockOut">
+                        <small class="text-danger product-error" style="display: none;">Please select a product</small>
                     </div>
 
                     <div class="form-group">
@@ -160,11 +168,15 @@
                             <div class="input-group-prepend">
                                 <span class="input-group-text" id="basic-addon1">-</span>
                             </div>
-                            <input type="number" min="0" class="form-control" placeholder="Transfer Quantity" name="quantity" id="quantity">
+                            <input type="number" min="0" class="form-control" placeholder="Transfer Quantity" name="quantity" id="stockout_quantity" disabled>
                         </div>
+                        <small class="text-danger quantity-error" style="display: none;">Please enter a valid quantity</small>
                     </div>
-                    <button type="button" class="btn btn-secondary rounded-0 mt-2" data-dismiss="modal">{{ __('inventory_balances.cancel') }}</button>
-                    <button type="submit" name="button" class="btn btn-primary rounded-0 mt-2">{{ __('inventory_balances.update') }}</button>
+                    
+                    <div class="form-group">
+                        <button type="button" class="btn btn-secondary rounded-0 mt-2" data-dismiss="modal">{{ __('inventory_balances.cancel') }}</button>
+                        <button type="submit" name="button" class="btn btn-primary rounded-0 mt-2" id="stockoutSubmitBtn" disabled>{{ __('inventory_balances.update') }}</button>
+                    </div>
                     {!! Form::close() !!}
                 </div>
             </div>
@@ -215,6 +227,13 @@
             border: 1px solid rgba(0,0,0,.125);
             margin-bottom: -1px;
         }
+        .text-danger {
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+        .modal-body {
+            padding-bottom: 1rem;
+        }
     </style>
 
     <script>
@@ -223,6 +242,7 @@
             $('.lorry-checkbox').change(function () {
                 var dropdownButton = $(this).closest('.dropdown-menu').prev('.dropdown-toggle');
                 var selected = [];
+                var modal = $(this).closest('.modal');
                 
                 $(this).closest('.dropdown-menu').find('.lorry-checkbox:checked').each(function () {
                     selected.push($(this).next('label').text());
@@ -230,8 +250,17 @@
 
                 if (selected.length > 0) {
                     dropdownButton.text(selected.join(', '));
+                    modal.find('.lorry-error').hide();
                 } else {
                     dropdownButton.text('Select Lorries');
+                    modal.find('.lorry-error').show();
+                }
+                
+                // Validate form after lorry selection changes
+                if (modal.attr('id') === 'stockin') {
+                    validateStockInForm();
+                } else {
+                    validateStockOutForm();
                 }
             });
 
@@ -256,6 +285,7 @@
                 var productName = $(this).text();
                 var productId = $(this).data('value');
                 var dropdown = $(this).closest('.dropdown-menu');
+                var modal = $(this).closest('.modal');
                 
                 // Update UI
                 $(this).siblings().removeClass('active');
@@ -263,12 +293,16 @@
                 dropdown.prev('.dropdown-toggle').text(productName);
                 
                 // Set hidden input value
-                var modalId = $(this).closest('.modal').attr('id');
+                var modalId = modal.attr('id');
                 if (modalId === 'stockin') {
                     $('#selectedProductStockIn').val(productId);
+                    modal.find('.product-error').hide();
+                    validateStockInForm();
                 } else {
                     $('#selectedProductStockOut').val(productId);
+                    modal.find('.product-error').hide();
                     getstock(); // Trigger stock calculation for stockout
+                    validateStockOutForm();
                 }
             });
 
@@ -287,6 +321,34 @@
                 });
             });
 
+            // Quantity input validation for stock in
+            $('#stockin_quantity').on('input', function() {
+                var quantity = $(this).val();
+                var modal = $(this).closest('.modal');
+                
+                if (quantity && parseFloat(quantity) > 0) {
+                    modal.find('.quantity-error').hide();
+                } else {
+                    modal.find('.quantity-error').show();
+                }
+                
+                validateStockInForm();
+            });
+
+            // Quantity input validation for stock out
+            $('#stockout_quantity').on('input', function() {
+                var quantity = $(this).val();
+                var modal = $(this).closest('.modal');
+                
+                if (quantity && parseFloat(quantity) > 0) {
+                    modal.find('.quantity-error').hide();
+                } else {
+                    modal.find('.quantity-error').show();
+                }
+                
+                validateStockOutForm();
+            });
+
             // Initialize dropdown buttons with default text
             $('.dropdown-toggle').each(function() {
                 if (!$(this).text().trim()) {
@@ -297,12 +359,25 @@
                     }
                 }
             });
-        });
 
-        $(document).keyup(function(e) {
-            if(e.altKey && e.keyCode == 78){
-                $('.card .card-header a')[0].click();
-            }
+            // Reset form when modal is closed
+            $('#stockin, #stockout').on('hidden.bs.modal', function () {
+                var modal = $(this);
+                modal.find('.lorry-checkbox').prop('checked', false);
+                modal.find('.dropdown-toggle').text('Select Lorries');
+                modal.find('.product-item.active').removeClass('active');
+                modal.find('.dropdown-toggle[data-toggle="dropdown"]').first().text('Select Product');
+                modal.find('input[type="number"]').val('');
+                modal.find('input[type="hidden"]').val('');
+                modal.find('.lorry-error, .product-error, .quantity-error').hide();
+                modal.find('#stockout_quantity').prop('disabled', true);
+                
+                if (modal.attr('id') === 'stockin') {
+                    $('#stockinSubmitBtn').prop('disabled', true);
+                } else {
+                    $('#stockoutSubmitBtn').prop('disabled', true);
+                }
+            });
         });
 
         // Stock out specific functionality
@@ -310,6 +385,7 @@
             if ($('#selectedProductStockOut').val()) {
                 getstock();
             }
+            validateStockOutForm();
         });
 
         function getstock() {
@@ -329,13 +405,16 @@
                     type: 'GET',
                     success: function(data) {
                         if (data.status) {
-                            $('#stockout').find('#quantity').prop('disabled', false);
-                            $('#stockout').find('#quantity').val(data.quantity);
+                            $('#stockout').find('#stockout_quantity').prop('disabled', false);
+                            $('#stockout').find('#stockout_quantity').val(data.quantity);
+                            $('#stockout').find('.quantity-error').hide();
                         } else {
-                            $('#stockout').find('#quantity').prop('disabled', true);
-                            $('#stockout').find('#quantity').val(data.quantity);
+                            $('#stockout').find('#stockout_quantity').prop('disabled', true);
+                            $('#stockout').find('#stockout_quantity').val(data.quantity);
+                            $('#stockout').find('.quantity-error').show();
                             noti('e', 'Warning', data.message);
                         }
+                        validateStockOutForm();
                         HideLoad();
                     },
                     error: function(error) {
@@ -343,7 +422,79 @@
                         HideLoad();
                     }
                 });
+            } else {
+                $('#stockout').find('#stockout_quantity').prop('disabled', true);
+                $('#stockout').find('#stockout_quantity').val('');
+                validateStockOutForm();
             }
         }
+
+        // Validation function for Stock In form
+        function validateStockInForm() {
+            var lorrySelected = $('#stockin').find('.lorry-checkbox:checked').length > 0;
+            var productSelected = $('#selectedProductStockIn').val() !== '';
+            var quantity = $('#stockin_quantity').val();
+            var quantityValid = quantity && parseFloat(quantity) > 0;
+            
+            var isValid = lorrySelected && productSelected && quantityValid;
+            
+            $('#stockinSubmitBtn').prop('disabled', !isValid);
+            
+            // Show/hide error messages
+            if (!lorrySelected) {
+                $('#stockin').find('.lorry-error').show();
+            } else {
+                $('#stockin').find('.lorry-error').hide();
+            }
+            
+            if (!productSelected) {
+                $('#stockin').find('.product-error').show();
+            } else {
+                $('#stockin').find('.product-error').hide();
+            }
+            
+            if (!quantityValid) {
+                $('#stockin').find('.quantity-error').show();
+            } else {
+                $('#stockin').find('.quantity-error').hide();
+            }
+        }
+
+        // Validation function for Stock Out form
+        function validateStockOutForm() {
+            var lorrySelected = $('#stockout').find('.lorry-checkbox:checked').length > 0;
+            var productSelected = $('#selectedProductStockOut').val() !== '';
+            var quantity = $('#stockout_quantity').val();
+            var quantityValid = quantity && parseFloat(quantity) > 0 && !$('#stockout_quantity').prop('disabled');
+            
+            var isValid = lorrySelected && productSelected && quantityValid;
+            
+            $('#stockoutSubmitBtn').prop('disabled', !isValid);
+            
+            // Show/hide error messages
+            if (!lorrySelected) {
+                $('#stockout').find('.lorry-error').show();
+            } else {
+                $('#stockout').find('.lorry-error').hide();
+            }
+            
+            if (!productSelected) {
+                $('#stockout').find('.product-error').show();
+            } else {
+                $('#stockout').find('.product-error').hide();
+            }
+            
+            if (!quantityValid) {
+                $('#stockout').find('.quantity-error').show();
+            } else {
+                $('#stockout').find('.quantity-error').hide();
+            }
+        }
+
+        $(document).keyup(function(e) {
+            if(e.altKey && e.keyCode == 78){
+                $('.card .card-header a')[0].click();
+            }
+        });
     </script>
 @endpush

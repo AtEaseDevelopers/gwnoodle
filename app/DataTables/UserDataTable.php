@@ -18,7 +18,14 @@ class UserDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
-        return $dataTable->addColumn('action', 'users.datatables_actions');
+        return $dataTable
+            ->addColumn('action', 'users.datatables_actions')
+            ->addColumn('user_id_formatted', function($user) {
+                // Format user ID to always be 2 digits with leading zeros
+                return str_pad($user->id, 2, '0', STR_PAD_LEFT);
+            })
+            // Reorder columns if needed (optional)
+            ->rawColumns(['action']);
     }
 
     /**
@@ -146,12 +153,23 @@ class UserDataTable extends DataTable
     protected function getColumns()
     {
         return [
+            'user_id' => new \Yajra\DataTables\Html\Column([
+                'title' => 'User ID',
+                'data'  => 'user_id_formatted', // Use the formatted column
+                'name'  => 'users.id',
+                'orderable' => true,
+                'searchable' => true
+            ]),
             'name' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('user.name'),
                 'data'  => 'name',
                 'name'  => 'users.name'
             ]),
-            'email',
+            'email' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('user.email'),
+                'data'  => 'email',
+                'name'  => 'users.email'
+            ]),
             'role' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('user.role'),
                 'data'  => 'role_name',

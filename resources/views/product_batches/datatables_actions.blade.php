@@ -6,6 +6,8 @@
     <a href="{{ route('productBatches.edit', encrypt($id)) }}" class='btn btn-ghost-info'>
        <i class="fa fa-edit"></i>
     </a>
-
+   <a href="{{ route('productBatches.print-label', encrypt($id)) }}" class='btn btn-ghost-warning'>
+       <i class="fa fa-print"></i>
+    </a>
 </div>
 {!! Form::close() !!}

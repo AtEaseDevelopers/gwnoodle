@@ -50,7 +50,7 @@
     <form action="{{ route('inventoryCounts.destroy', $request->id) }}" method="POST" style="display: inline;">
         @csrf
         @method('DELETE')
-        <button type="submit" class="btn btn-ghost-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this stock count request?')">
+        <button type="submit" class="btn btn-ghost-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this stock out request?')">
             <i class="fa fa-trash"></i>
         </button>
     </form>

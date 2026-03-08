@@ -20,44 +20,37 @@ class ActivityLogDataTable extends DataTable
         $dataTable = new EloquentDataTable($query);
 
         return $dataTable
-            ->addColumn('action', function ($row) {
-                return '<div class="btn-group">
-                    <a href="' . route('activity-logs.show', Crypt::encrypt($row->id)) . '" class="btn btn-ghost-success">
-                        <i class="fa fa-eye"></i>
-                    </a>
-                    <a href="#" onclick="viewChanges(' . $row->id . ')" class="btn btn-ghost-info" data-toggle="modal" data-target="#changesModal">
-                        <i class="fa fa-code-fork"></i>
-                    </a>
-                </div>';
+            ->addColumn('checkbox', function($row) {
+                return $row->id;
             })
-            ->editColumn('created_at', function ($row) {
+            ->editColumn('created_at', function($row) {
                 return $row->created_at->format('Y-m-d H:i:s');
             })
-            ->editColumn('action', function ($row) {
-                $badgeClass = match($row->action) {
-                    'create' => 'success',
-                    'update' => 'info',
-                    'delete' => 'danger',
-                    default => 'secondary'
-                };
-                return '<span class="badge badge-' . $badgeClass . '">' . ucfirst($row->action) . '</span>';
+            ->editColumn('user_name', function($row) {
+                return $row->user_name ?? ($row->user->name ?? 'System');
             })
-            
-            ->editColumn('old_data', function ($row) {
+            ->editColumn('action', function($row) {
+                return $row->action;
+            })
+            ->editColumn('module', function($row) {
+                return ucwords(str_replace('_', ' ', $row->module));
+            })
+            ->editColumn('old_data', function($row) {
                 if ($row->old_data) {
-                    $count = count((array)$row->old_data);
-                    return '<span class="badge badge-warning">' . $count . ' fields</span>';
+                    $count = is_array($row->old_data) ? count($row->old_data) : count((array)$row->old_data);
+                    return $count . ' fields';
                 }
                 return '-';
             })
-            ->editColumn('new_data', function ($row) {
+            ->editColumn('new_data', function($row) {
                 if ($row->new_data) {
-                    $count = count((array)$row->new_data);
-                    return '<span class="badge badge-success">' . $count . ' fields</span>';
+                    $count = is_array($row->new_data) ? count($row->new_data) : count((array)$row->new_data);
+                    return $count . ' fields';
                 }
                 return '-';
             })
-            ->rawColumns(['action', 'action_badge', 'old_data', 'new_data']);
+            ->addColumn('action_buttons', 'activity_logs.datatables_actions')
+            ->rawColumns(['action_buttons']);
     }
 
     /**
@@ -85,17 +78,19 @@ class ActivityLogDataTable extends DataTable
             ->columns($this->getColumns())
             ->minifiedAjax()
             ->parameters([
-                'dom'       => '<"row"B><"row"<"col-sm-12"tr>><"row"<"col-sm-4"l><"col-sm-4 text-center"i><"col-sm-4"p>>',
+                'dom'       => '<"row"B><"row"<"col-sm-12"tr>><"row"<"col-sm-5"i><"col-sm-7"p>>',
                 'stateSave' => true,
                 'stateDuration' => 0,
-                'processing' => true,
-                'order'     => [[0, 'desc']],
-                'lengthMenu' => [[10, 25, 50, 100, 300], ['10 rows', '25 rows', '50 rows', '100 rows', '300 rows']],
+                'processing' => false,
+                'serverSide' => true,
+                'order'     => [[1, 'desc']],
+                'lengthMenu' => [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
                 'buttons' => [
                     [
                         'extend' => 'print',
                         'className' => 'btn btn-default btn-sm no-corner',
                         'text' => '<i class="fa fa-print"></i> ' . trans('table_buttons.print'),
+                        'exportOptions' => ['columns' => ':visible']
                     ],
                     [
                         'extend' => 'reset',
@@ -110,20 +105,20 @@ class ActivityLogDataTable extends DataTable
                     [
                         'extend' => 'excelHtml5',
                         'text' => '<i class="fa fa-file-excel-o"></i> ' . trans('table_buttons.excel'),
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => ['columns' => ':visible'],
                         'className' => 'btn btn-default btn-sm no-corner',
-                        'title' => 'Activity_Logs_' . date('YmdHis'),
-                        'filename' => 'activity_logs_' . date('YmdHis')
+                        'title' => 'Activity_Logs_' . date('dmYHis'),
+                        'filename' => 'activity_logs_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'pdfHtml5',
                         'orientation' => 'landscape',
                         'pageSize' => 'A4',
                         'text' => '<i class="fa fa-file-pdf-o"></i> ' . trans('table_buttons.pdf'),
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => ['columns' => ':visible'],
                         'className' => 'btn btn-default btn-sm no-corner',
-                        'title' => 'Activity_Logs_' . date('YmdHis'),
-                        'filename' => 'activity_logs_' . date('YmdHis')
+                        'title' => 'Activity_Logs_' . date('dmYHis'),
+                        'filename' => 'activity_logs_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'colvis',
@@ -133,57 +128,134 @@ class ActivityLogDataTable extends DataTable
                     [
                         'extend' => 'pageLength',
                         'className' => 'btn btn-default btn-sm no-corner',
-                        'text' => trans('Show Rows')
+                        'text' => trans('table_buttons.show_10_rows')
                     ],
                 ],
-                'initComplete' => 'function(){
-                    var columns = this.api().init().columns;
-                    
-                    // Add search inputs to footer
-                    this.api().columns().every(function (index) {
-                        var column = this;
-                        var title = $(column.header()).text();
-                        
-                        if (column.searchable()) {
-                            var input = \'<input type="text" class="form-control form-control-sm" placeholder="Search \' + title + \'" />\';
+
+                'columnDefs' => [
+                    [
+                        'targets' => 0,
+                        'orderable' => false,
+                        'searchable' => false,
+                        'width' => '30px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type, row, meta){
+                            return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";
+                        }'
+                    ],
+                    [
+                        'targets' => 1,
+                        'width' => '160px',
+                    ],
+                    [
+                        'targets' => 2,
+                        'width' => '150px',
+                    ],
+                    [
+                        'targets' => 3,
+                        'width' => '100px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type){
+                            if (type === "export" || type === "filter") return data;
+                            var badgeClass = "secondary";
+                            if (data === "create") badgeClass = "success";
+                            else if (data === "update") badgeClass = "info";
+                            else if (data === "delete") badgeClass = "danger";
                             
-                            $(input).appendTo($(column.footer()).empty())
-                                .on(\'keyup change clear\', function() {
-                                    if (column.search() !== this.value) {
-                                        column.search(this.value).draw();
-                                        ShowLoad();
-                                    }
-                                });
+                            return "<span class=\'badge badge-" + badgeClass + "\' style=\'padding: 5px 10px; min-width: 60px; display: inline-block; text-align: center;\'>" + 
+                                   data.charAt(0).toUpperCase() + data.slice(1) + "</span>";
+                        }'
+                    ],
+                    [
+                        'targets' => 4,
+                        'width' => '120px',
+                        'className' => 'text-center',
+                    ],
+                    [
+                        'targets' => 5,
+                        'width' => '90px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type){
+                            if (type === "export" || type === "filter") return data;
+                            if (data && data !== "-") {
+                                return "<span class=\'badge badge-warning\'>" + data + "</span>";
+                            }
+                            return "-";
+                        }'
+                    ],
+                    [
+                        'targets' => 6,
+                        'width' => '90px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type){
+                            if (type === "export" || type === "filter") return data;
+                            if (data && data !== "-") {
+                                return "<span class=\'badge badge-success\'>" + data + "</span>";
+                            }
+                            return "-";
+                        }'
+                    ],
+                    [
+                        'targets' => 7,
+                        'width' => '100px',
+                        'orderable' => false,
+                        'searchable' => false,
+                        'className' => 'text-center'
+                    ]
+                ],
+                
+                'initComplete' => 'function(){
+                    var api = this.api();
+                    
+                    // Add individual column filters
+                    api.columns().every(function(index) {
+                        var column = this;
+                        var columnIndex = index;
+                        var $header = $(column.header());
+                        var title = $header.text().trim();
+                        
+                        // Skip checkbox and actions columns
+                        if(title === "" || title === "Actions") {
+                            return;
                         }
-                    });
-                    
-                    // Add filter dropdowns for specific columns
-                    var actionColumn = this.api().column(2); // Action column index
-                    var moduleColumn = this.api().column(3); // Module column index
-                    
-                    var actionSelect = \'<select class="form-control form-control-sm"><option value="">All Actions</option><option value="create">Create</option><option value="update">Update</option><option value="delete">Delete</option></select>\';
-                    $(actionSelect).appendTo($(actionColumn.footer()).empty())
-                        .on(\'change\', function() {
-                            actionColumn.search($(this).val()).draw();
-                            ShowLoad();
-                        });
-                    
-                    var moduleSelect = \'<select class="form-control form-control-sm"><option value="">All Modules</option>\';
-                    // Get unique modules from the table
-                    var modules = [];
-                    this.api().rows().data().each(function(row) {
-                        if (row.module && modules.indexOf(row.module) === -1) {
-                            modules.push(row.module);
-                            moduleSelect += \'<option value="\' + row.module + \'">\' + row.module.charAt(0).toUpperCase() + row.module.slice(1) + \'</option>\';
+                        
+                        // Create filter input based on column type
+                        var $filterInput;
+                        
+                        if(title === "Action") {
+                            $filterInput = $(\'<select class="form-control form-control-sm"><option value="">All</option><option value="create">Create</option><option value="update">Update</option><option value="delete">Delete</option></select>\');
+                        } 
+                        else if(title === "Module") {
+                            // Get unique modules from the data
+                            var modules = [];
+                            api.rows().data().each(function(row) {
+                                var module = row.module;
+                                if(module && modules.indexOf(module) === -1) {
+                                    modules.push(module);
+                                }
+                            });
+                            
+                            var selectHtml = \'<select class="form-control form-control-sm"><option value="">All</option>\';
+                            modules.sort().forEach(function(module) {
+                                selectHtml += \'<option value="\' + module + \'">\' + 
+                                              module.charAt(0).toUpperCase() + module.slice(1) + \'</option>\';
+                            });
+                            selectHtml += \'</select>\';
+                            $filterInput = $(selectHtml);
                         }
-                    });
-                    moduleSelect += \'</select>\';
-                    
-                    $(moduleSelect).appendTo($(moduleColumn.footer()).empty())
-                        .on(\'change\', function() {
-                            moduleColumn.search($(this).val()).draw();
-                            ShowLoad();
+                        else {
+                            $filterInput = $(\'<input type="text" class="form-control form-control-sm" placeholder="Search \' + title + \'">\');
+                        }
+                        
+                        // Append to footer
+                        $filterInput.appendTo($(column.footer()).empty());
+                        
+                        // Apply filter on change
+                        $filterInput.on(\'keyup change\', function() {
+                            var val = $(this).val();
+                            column.search(val).draw();
                         });
+                    });
                 }'
             ]);
     }
@@ -196,46 +268,75 @@ class ActivityLogDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            'created_at' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('Date Time'),
-                'data' => 'created_at',
-                'name' => 'created_at',
-                'width' => '180px'
-            ]),
-        
-            
-            'action' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('Action'),
-                'data' => 'action',
-                'name' => 'action',
-                'width' => '100px'
-            ]),
-            
-            'module' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('Module'),
-                'data' => 'module',
-                'name' => 'module',
-                'width' => '120px'
+            'checkbox' => new \Yajra\DataTables\Html\Column([
+                'title' => '<input type="checkbox" id="selectallcheckbox">',
+                'data' => 'id',
+                'name' => 'id',
+                'orderable' => false,
+                'searchable' => false,
+                'exportable' => false,
+                'printable' => false
             ]),
 
-            'old_data' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('Old Data'),
+            'created_at' => [
+                'title' => 'Date Time',
+                'data' => 'created_at',
+                'name' => 'created_at',
+                'searchable' => true,
+                'orderable' => true
+            ],
+            
+            'user_name' => [
+                'title' => 'User',
+                'data' => 'user_name',
+                'name' => 'user_name',
+                'searchable' => true,
+                'orderable' => true,
+                'defaultContent' => 'System'
+            ],
+            
+            'action' => [
+                'title' => 'Action',
+                'data' => 'action',
+                'name' => 'action',
+                'searchable' => true,
+                'orderable' => true
+            ],
+            
+            'module' => [
+                'title' => 'Module',
+                'data' => 'module',
+                'name' => 'module',
+                'searchable' => true,
+                'orderable' => true
+            ],
+            
+            'old_data' => [
+                'title' => 'Old Data',
                 'data' => 'old_data',
                 'name' => 'old_data',
-                'width' => '100px',
-                'searchable' => false,
+                'searchable' => true, // Changed to true to allow searching by field count
                 'orderable' => false
-            ]),
+            ],
             
-            'new_data' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('New Data'),
+            'new_data' => [
+                'title' => 'New Data',
                 'data' => 'new_data',
                 'name' => 'new_data',
-                'width' => '100px',
-                'searchable' => false,
+                'searchable' => true, // Changed to true to allow searching by field count
                 'orderable' => false
+            ],
+            
+            'action_buttons' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Actions',
+                'data' => 'action_buttons',
+                'name' => 'action_buttons',
+                'orderable' => false,
+                'searchable' => false,
+                'exportable' => false,
+                'printable' => false,
+                'width' => '100px'
             ]),
-              
         ];
     }
 
@@ -246,6 +347,6 @@ class ActivityLogDataTable extends DataTable
      */
     protected function filename()
     {
-        return 'activity_logs_' . time();
+        return 'activity_logs_' . date('Y-m-d_His');
     }
 }

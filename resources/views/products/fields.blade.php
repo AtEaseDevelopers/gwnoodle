@@ -31,16 +31,6 @@
     <small class="form-text text-muted">The purchase/cost price of this product</small>
 </div>
 
-<!-- Profit Display (shows real-time profit calculation) -->
-<div class="form-group col-sm-6" id="profit_display" style="display: none;">
-    <label>Estimated Profit</label>
-    <div class="input-group">
-        <span class="form-control bg-light" id="profit_amount" readonly>0.00</span>
-        <span class="input-group-text bg-info text-white" id="profit_percentage">0%</span>
-    </div>
-    <small class="form-text text-muted">Based on selling price - cost price</small>
-</div>
-
 <!-- Type Field -->
 <!-- <div class="form-group col-sm-6">
     {!! Form::label('type', __('products.type')) !!}
@@ -208,53 +198,16 @@
                     $('#units_per_carton').val(''); // Clear value when disabled
                 }
             }
-            
-            // NEW: Calculate and display profit in real-time
-            function calculateProfit() {
-                var price = parseFloat($('#price').val()) || 0;
-                var cost = parseFloat($('#cost').val()) || 0;
-                
-                if (price > 0 && cost > 0) {
-                    var profit = price - cost;
-                    var profitPercentage = (profit / price) * 100;
-                    
-                    $('#profit_amount').val(profit.toFixed(2));
-                    $('#profit_percentage').text(profitPercentage.toFixed(2) + '%');
-                    
-                    // Change color based on profit margin
-                    if (profitPercentage < 0) {
-                        $('#profit_percentage').removeClass('bg-info').addClass('bg-danger');
-                    } else if (profitPercentage < 10) {
-                        $('#profit_percentage').removeClass('bg-info').addClass('bg-warning');
-                    } else {
-                        $('#profit_percentage').removeClass('bg-danger bg-warning').addClass('bg-info');
-                    }
-                    
-                    $('#profit_display').show();
-                } else if (price > 0 && cost === 0) {
-                    // Cost is zero, profit = price
-                    $('#profit_amount').val(price.toFixed(2));
-                    $('#profit_percentage').text('100%');
-                    $('#profit_percentage').removeClass('bg-danger bg-warning').addClass('bg-info');
-                    $('#profit_display').show();
-                } else {
-                    $('#profit_display').hide();
-                }
-            }
-            
+         
             // Initial state
             toggleUnitsPerCarton();
-            calculateProfit(); // Calculate initial profit if values exist
             
             // On change events
             $('#carton_enabled').change(function() {
                 toggleUnitsPerCarton();
             });
             
-            // NEW: Listen to price and cost changes
-            $('#price, #cost').on('keyup change', function() {
-                calculateProfit();
-            });
+          
 
             // Handle escape key
             HideLoad();

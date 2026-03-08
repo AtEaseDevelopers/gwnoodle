@@ -32,18 +32,7 @@ class ProductDataTable extends DataTable
             ->addColumn('total_batches', function($product) {
                 return $product->total_batches_count;
             })
-            // Add stock value
-            ->addColumn('stock_value', function($product) {
-                return number_format($product->current_stock_value, 2);
-            })
-            // Add expiring soon count
-            ->addColumn('expiring_soon', function($product) {
-                $expiringSoon = $product->expiring_soon_quantity;
-                if ($expiringSoon > 0) {
-                    return '<span class="badge badge-warning">' . number_format($expiringSoon) . '</span>';
-                }
-                return '-';
-            })
+
             // Add carton display
             ->addColumn('carton_display', function($product) {
                 if ($product->carton_enabled && $product->units_per_carton && $product->units_per_carton > 0) {
@@ -63,7 +52,7 @@ class ProductDataTable extends DataTable
                 return '-';
             })
             // Raw columns for HTML rendering
-            ->rawColumns(['action', 'expiring_soon', 'status', 'carton_enabled']);
+            ->rawColumns(['action', 'status', 'carton_enabled']);
     }
 
     /**
@@ -207,43 +196,19 @@ class ProductDataTable extends DataTable
                         'className' => 'text-center',
                         'width' => '80px',
                         'render' => 'function(data, type, row){
-                            if (type === "export") return data + "/" + row[8];
-                            return "<span class=\'badge badge-info\'>" + data + "</span>/" + row[8];
+                            if (type === "export") {
+                                return data || 0;
+                            }
+                            return "<span class=\'badge badge-info\'>" + (data || 0) + "</span>";
                         }'
                     ],
                     [
                         'targets' => 7, // total_batches
                         'visible' => false, // Hide from view but keep in export
                     ],
+                    
                     [
-                        'targets' => 8, // stock_value
-                        'className' => 'text-right',
-                        'width' => '120px',
-                        'render' => 'function(data, type){
-                            return type === "export" ? data : "RM " + data;
-                        }'
-                    ],
-                    [
-                        'targets' => 9, // expiring_soon
-                        'className' => 'text-center',
-                        'width' => '100px',
-                        'render' => 'function(data, type){
-                            if (type === "export") {    
-                                return $(data).text();
-                            }
-                            return data;
-                        }'
-                    ],
-                    [
-                        'targets' => 10, // carton_enabled
-                        'visible' => false, // Hide but keep for calculations
-                    ],
-                    [
-                        'targets' => 11, // carton_display
-                        'visible' => false, // Hide but keep for calculations
-                    ],
-                    [
-                        'targets' => 12, // action column
+                        'targets' => 8, // action column
                         'width' => '120px',
                         'orderable' => false,
                         'searchable' => false,
@@ -354,36 +319,6 @@ class ProductDataTable extends DataTable
                 'data' => 'total_batches',
                 'name' => 'total_batches',
                 'searchable' => false,
-                'visible' => false
-            ],
-            
-            'stock_value' => [
-                'title' => 'Stock Value (RM)',
-                'data' => 'stock_value',
-                'name' => 'stock_value',
-                'searchable' => true,
-                'orderable' => true
-            ],
-            
-            'expiring_soon' => [
-                'title' => 'Expiring Soon',
-                'data' => 'expiring_soon',
-                'name' => 'expiring_soon',
-                'searchable' => true,
-                'orderable' => true
-            ],
-            
-            'carton_enabled' => [
-                'title' => 'Carton Enabled',
-                'data' => 'carton_enabled',
-                'name' => 'carton_enabled',
-                'visible' => false
-            ],
-            
-            'carton_display' => [
-                'title' => 'Carton Display',
-                'data' => 'carton_display',
-                'name' => 'carton_display',
                 'visible' => false
             ],
         ];

@@ -208,7 +208,7 @@
     <ul class="nav-dropdown-items">
         <li class="nav-item {{ Request::is('inventoryCounts*') ? 'active' : '' }}">
             <a class="nav-link {{ Request::is('inventoryCounts*') ? 'active' : '' }}" href="{{ route('inventoryCounts.index') }}">
-                <span>{{ trans('Stock Count') }}</span>
+                <span>{{ trans('Stock Out') }}</span>
                 <span id="stockCountBadge" class="badge badge-danger badge-pill ml-2" 
                     style="{{ $pendingStockCountsCount > 0 ? '' : 'display: none;' }}">
                     {{ $pendingStockCountsCount }}

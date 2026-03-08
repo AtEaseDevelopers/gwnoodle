@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Models;
+use App\Traits\LogsActivity;
 
 use Eloquent as Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -8,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Product extends Model
 {
     use HasFactory;
+    use LogsActivity;
 
     public $table = 'products';
     
@@ -28,7 +30,7 @@ class Product extends Model
 
     protected $casts = [
         'id' => 'integer',
-        'code' => 'string',
+        'unit_code' => 'string',
         'name' => 'string',
         'price' => 'float',
         'cost' => 'float',      

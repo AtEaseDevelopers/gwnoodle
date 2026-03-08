@@ -2,7 +2,7 @@
 
 @section('content')
     <ol class="breadcrumb">
-        <li class="breadcrumb-item">{{ __('Stock Count') }}</li>
+        <li class="breadcrumb-item">{{ __('Stock Out') }}</li>
     </ol>
     <div class="container-fluid">
         <div class="animated fadeIn">
@@ -12,7 +12,7 @@
                     <div class="card">
                         <div class="card-header">
                             <i class="fa fa-align-justify"></i>
-                            {{ __('Stock Count') }}
+                            {{ __('Stock Out') }}
                         </div>
                         <div class="card-body">
                             @include('inventory_counts.table')
@@ -30,7 +30,7 @@
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title h6">{{ __('Create Stock Count') }}</h4>
+                <h4 class="modal-title h6">{{ __('Create Stock Out') }}</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
             </div>
             <div class="modal-body">
@@ -115,7 +115,7 @@
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h4 class="modal-title h6">{{ __('Edit Stock Count') }}</h4>
+                    <h4 class="modal-title h6">{{ __('Edit Stock Out') }}</h4>
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
                 </div>
                 <div class="modal-body text-center">
@@ -216,7 +216,7 @@
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h4 class="modal-title h6">Stock Count Details <span id="viewRequestId"></span></h4>
+                    <h4 class="modal-title h6">Stock Out Details <span id="viewRequestId"></span></h4>
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
                 </div>
                 <div class="modal-body">
@@ -357,7 +357,7 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Reject Stock Count Reason</h5>
+                    <h5 class="modal-title">Reject Stock Out Reason</h5>
                     <button type="button" class="close" data-dismiss="modal">
                         <span>&times;</span>
                     </button>
@@ -967,7 +967,7 @@
                     HideLoad();
                     if (response.success) {
                         $('#editCountModal').modal('hide');
-                        showNotification('success', response.message || 'Stock count updated successfully.');
+                        showNotification('success', response.message || 'Stock out updated successfully.');
                         
                         // Refresh DataTable
                         if (table && typeof table.ajax !== 'undefined') {

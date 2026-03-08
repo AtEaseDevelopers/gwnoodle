@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\DB;
 use App\Models\Code;
+use App\Traits\LogsActivity;
 
 class Customer extends Model
 {
     // use SoftDeletes;
-
+    use LogsActivity;
     use HasFactory;
 
     public $table = 'customers';

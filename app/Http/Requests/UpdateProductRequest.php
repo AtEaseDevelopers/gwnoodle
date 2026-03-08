@@ -36,7 +36,7 @@ class UpdateProductRequest extends FormRequest
     {
         $id = $this->route('product');
         $rules = [
-            'code' => 'required|string|max:255|unique:products,code,'.Crypt::decrypt($id),
+            'unit_code' => 'required|string|max:255|unique:products,unit_code,'.Crypt::decrypt($id),
             'name' => 'required|string|max:255|string|max:255',
             'price' => 'required|numeric|numeric',
             'status' => 'required',

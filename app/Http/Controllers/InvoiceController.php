@@ -651,6 +651,7 @@ class InvoiceController extends AppBaseController
         $height = (count($invoice['invoicedetail']) * $each) + $min;
 
         $invoice->newcredit = round(DB::select('call ice_spGetCustomerCreditByDate("'.$invoice->updated_at.'",'.$invoice->customer_id.');')[0]->credit,2);
+
         $invoice->customer->groupcompany = DB::table('companies')
         ->where('companies.group_id',explode(',',$invoice->customer->group)[0])
         ->select('companies.*')
