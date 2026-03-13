@@ -27,6 +27,9 @@
                                 <i class="fa fa-files-o"></i> Submit Consolidated E-Invoice
                             </button>
                             @endeinvoice
+                            <button type="button" class="btn btn-primary btn-sm pull-right mr-2" onclick="submitAutocountInvoices()" title="Submit Autocount Invoices">
+                                <i class="fa fa-file-text-o"></i> Submit Autocount Invoices
+                            </button>
                          </div>
                          <div class="card-body">
                              @include('invoices.table')
@@ -186,6 +189,70 @@
                 error: function(error) {
                     noti('e','Please contact your administrator',error.responseJSON.message)
                     HideLoad();
+                }
+            });
+        }
+
+        function submitAutocountInvoices(){
+            if(window.checkboxid.length == 0){
+                noti('i','Info','Please select at least one invoice');
+                return;
+            }
+            
+            var invoices = [];
+            var currencyRate = null;
+            
+            $.confirm({
+                title: 'Submit Autocount Invoices',
+                content: `
+                    <p>Selected invoices: ` + window.checkboxid.length + `</p>
+                `,
+                buttons: {
+                    Submit: function() {
+                        window.checkboxid.forEach(function(id) {
+                            invoices.push({
+                                id: parseInt(id),
+                                with_sg_gst: false
+                            });
+                        });
+                        
+                        submitAutocountInvoicesRequest(invoices, currencyRate);
+                    },
+                    Cancel: function() {
+                        return;
+                    }
+                }
+            });
+        }
+
+        function submitAutocountInvoicesRequest(invoices, currencyRate){
+            ShowLoad();
+            $.ajax({
+                url: "{{ url('/autocount/submit-invoices') }}",
+                type: "POST",
+                data: {
+                    invoices: invoices,
+                    currencyRate: currencyRate,
+                    _token: "{{ csrf_token() }}"
+                },
+                success: function(response){
+                    HideLoad();
+                    window.checkboxid = [];
+                    $('.buttons-reload').click();
+                    if(response.success){
+                        var msg = 'Autocount Invoices submitted successfully!<br>';
+                        if(response.results.successful.length > 0){
+                            msg += 'Successful: ' + response.results.successful.length + '<br>';
+                        }
+                        if(response.results.failed.length > 0){
+                            msg += 'Failed: ' + response.results.failed.length + '<br>';
+                        }
+                        noti('s','Success', msg);
+                    }
+                },
+                error: function(error) {
+                    HideLoad();
+                    noti('e','Error', error.responseJSON?.message || 'Failed to submit autocount invoices');
                 }
             });
         }

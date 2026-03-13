@@ -762,4 +762,24 @@ class InvoiceController extends AppBaseController
             return redirect(route('invoices.index'));
         }
     }
+
+    public function submitAutocountInvoices()
+    {
+        try {
+            // Update only invoices where status = 1 and autocount_status = 'pending'
+            $updated = \App\Models\Invoice::where('status', 1)->update(['autocount_status' => '']);
+
+            if ($updated === 0) {
+                Flash::info('No invoices to sync.');
+            } else {
+                Flash::success("$updated invoice(s) updated successfully.");
+            }
+
+        } catch (\Throwable $th) {
+            report($th);
+            Flash::error('Something went wrong. Please contact administrator.');
+        }
+
+        return redirect(route('invoices.index'));
+    }
 }
