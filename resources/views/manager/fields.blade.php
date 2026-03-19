@@ -10,13 +10,7 @@
     {!! Form::email('email', null, ['class' => 'form-control']) !!}
 </div>
 
-<!-- Invoice Code Field -->
-<div class="form-group col-sm-6">
-    {!! Form::label('invoice_code', __('Invoice Code')) !!}<span class="asterisk"> *</span>
-    {!! Form::text('invoice_code', null, ['class' => 'form-control']) !!}
-</div>
-
-@if(Route::currentRouteName() == 'users.edit' || Route::currentRouteName() == 'users.update')
+@if(Route::currentRouteName() == 'Managerusers.edit' || Route::currentRouteName() == 'Managerusers.update')
     <!-- EDIT MODE: Show checkbox to update password -->
     
     <!-- Update Password Checkbox (Only for edit) -->

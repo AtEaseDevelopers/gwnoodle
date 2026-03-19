@@ -2,11 +2,11 @@
 
 namespace App\DataTables;
 
-use App\Models\Driver;
+use App\Models\User;
 use Yajra\DataTables\Services\DataTable;
 use Yajra\DataTables\EloquentDataTable;
 
-class DriverDataTable extends DataTable
+class ManagerUserDataTable extends DataTable
 {
     /**
      * Build DataTable class.
@@ -18,18 +18,31 @@ class DriverDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
-        return $dataTable->addColumn('action', 'drivers.datatables_actions');
+        return $dataTable->addColumn('action', 'manager.datatables_actions');
     }
 
     /**
      * Get query source of dataTable.
      *
-     * @param \App\Models\Driver $model
+     * @param \App\Models\User $model
      * @return \Illuminate\Database\Eloquent\Builder
      */
-    public function query(Driver $model)
+    public function query(User $model)
     {
-        return $model->newQuery();
+        return $model->newQuery()
+            ->join('model_has_roles', function ($join) {
+                $join->on('users.id', '=', 'model_has_roles.model_id');
+            })
+            ->join('roles', function ($join) {
+                $join->on('roles.id', '=', 'model_has_roles.role_id');
+            })
+            ->where('roles.name', '!=', 'admin')
+            ->select(
+                'users.id',
+                'users.name',
+                'users.email',
+                'roles.name as role_name'
+            );
     }
 
     /**
@@ -42,13 +55,13 @@ class DriverDataTable extends DataTable
         return $this->builder()
             ->columns($this->getColumns())
             ->minifiedAjax()
-            ->addAction(['title' => trans('drivers.action'), 'printable' => false])
+            ->addAction(['title' => trans('user.action'), 'printable' => false])
             ->parameters([
-                'dom'       => '<"row"B><"row"<"dataTableBuilderDiv"t>><"row"ip>',
+                'dom'       => 'Bfrtip',
                 'stateSave' => true,
                 'stateDuration' => 0,
                 'processing' => false,
-                'order'     => [[1, 'desc']],
+                'order'     => [[0, 'desc']],
                 'lengthMenu' => [[ 10, 50, 100, 300 ],[ '10 rows', '50 rows', '100 rows', '300 rows' ]],
                 'buttons' => [
                     [
@@ -77,7 +90,7 @@ class DriverDataTable extends DataTable
                         'exportOptions' => ['columns' => ':visible:not(:last-child)'],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'title' => null,
-                        'filename' => 'drivers_' . date('dmYHis')
+                        'filename' => 'invoice' . date('dmYHis')
                     ],
                     [
                         'extend' => 'pdfHtml5',
@@ -87,7 +100,7 @@ class DriverDataTable extends DataTable
                         'exportOptions' => ['columns' => ':visible:not(:last-child)'],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'title' => null,
-                        'filename' => 'drivers_' . date('dmYHis')
+                        'filename' => 'invoice' . date('dmYHis')
                     ],
                     [
                         'extend' => 'colvis',
@@ -101,19 +114,8 @@ class DriverDataTable extends DataTable
                     ],
                 ],
                 'columnDefs' => [
-                    [
-                        'targets' => -1,
-                        'visible' => true
-                    ],
-                    [
-                        'targets' => 0,
-                        'visible' => true,
-                        'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
-                    ],
-                    [
-                        'targets' => 4,
-                        'render' => 'function(data, type){return data == 1 ? "Active" : "Unactive";}'
-                    ],
+                    'targets' => -1,
+                    'visible' => false
                 ],
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
@@ -145,31 +147,17 @@ class DriverDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            'checkbox'=> new \Yajra\DataTables\Html\Column(['title' => '<input type="checkbox" id="selectallcheckbox">',
-            'data' => 'id',
-            'name' => 'id',
-            'orderable' => false,
-            'searchable' => false]),
-
-            'employeeid'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('drivers.employee_id'),
-            'data' => 'employeeid',
-            'name' => 'drivers.employeeid']),
-
-            'name'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('drivers.name'),
-            'data' => 'name',
-            'name' => 'drivers.name']),
-
-            'invoice_code'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('Invoice Code'),
-            'data' => 'invoice_code',
-            'name' => 'drivers.invoice_code']),
-
-            'status'=> new \Yajra\DataTables\Html\Column(['title' => trans('drivers.status'),
-            'data' => 'status',
-            'name' => 'drivers.status']),
-
-            'remark'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('drivers.remark'),
-            'data' => 'remark',
-            'name' => 'drivers.remark'])
+            'name' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('user.name'),
+                'data'  => 'name',
+                'name'  => 'users.name'
+            ]),
+            'email',
+            'role' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('user.role'),
+                'data'  => 'role_name',
+                'name'  => 'roles.name'
+            ]),
         ];
     }
 
@@ -180,6 +168,6 @@ class DriverDataTable extends DataTable
      */
     protected function filename()
     {
-        return 'drivers_datatable_' . time();
+        return 'users_datatable_' . time();
     }
 }

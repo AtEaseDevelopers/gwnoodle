@@ -1942,10 +1942,7 @@ class DriverController extends Controller
             $invoice->date = $data['date'] ?? date('Y-m-d H:i:s');
             $invoice->invoiceno = $invoiceno;
             $invoice->customer_id = $data['customer_id'];
-            $invoice->driver_id = $trip->driver_id;
-            $invoice->kelindan_id = $trip->kelindan_id;
-            $invoice->agent_id = $customer->agent_id;
-            $invoice->supervisor_id = $customer->supervisor_id;
+            $invoice->driver_id = $driver->id;
             $invoice->paymentterm = $data['paymentterm'];
             $invoice->status = 1;
             $invoice->chequeno = $data['cheque_no'] ?? null;
@@ -1983,7 +1980,7 @@ class DriverController extends Controller
                 $inventoryTransaction->batch_id = $item['product_batch_id'];
                 $inventoryTransaction->quantity = -$item['quantity'];
                 $inventoryTransaction->date = now();
-                $inventoryTransaction->user = $driver->employeeid . " (" . $driver->name . ")";
+                $inventoryTransaction->user = $driver->name;
                 $inventoryTransaction->remark = 'Invoice #' . $invoice->invoiceno . ' - Sale of product';
                 $inventoryTransaction->save();
                 

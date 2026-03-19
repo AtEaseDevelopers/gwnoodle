@@ -6,6 +6,7 @@ use Eloquent as Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class Invoice extends Model
 {
@@ -129,5 +130,66 @@ class Invoice extends Model
         return Carbon::parse($value)->format('d-m-Y H:i:s');
     }
 
+
+      public static function generateInvoiceNumber($driver_id = null)
+    {
+        // Get current year and month
+        $year = date('y'); // Last 2 digits of year
+        $month = date('m'); // Month with leading zeros
+        
+        if ($driver_id) {
+            $user = \App\Models\Driver::find($driver_id);
+        } else {
+            $user = Auth::user();
+        }
+
+        $userCode = $user->invoice_code ?? ''; // Default to R00 if not set
+        
+        // Get the latest invoice number for current month and user code
+        $prefix = "INV{$year}{$month}/{$userCode}/";
+        
+        // Find the latest invoice with this prefix
+        $latestInvoice = self::orderBy('id', 'desc')
+            ->first();
+        if ($latestInvoice) {
+            // Extract the numeric part
+            $invoiceNumber = $latestInvoice->invoiceno;
+            $numericPart = (int) substr($invoiceNumber, strlen($prefix));
+            $nextNumber = $numericPart + 1;
+        } else {
+            // Start from 1 for new month/user combination
+            $nextNumber = 1;
+        }
+        
+        // Format the number with leading zeros (minimum 4 digits, but can grow)
+        $formattedNumber = str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+        
+        return $prefix . $formattedNumber;
+    }
+
+    public static function getPaymentTypeOptions()
+    {
+        return [
+            self::PAYMENT_TYPE_CASH => 'Cash',
+            self::PAYMENT_TYPE_CREDIT => 'Credit',
+        ];
+    }
+
+
+    /**
+     * Get the next invoice number without saving
+     * This can be used to prefill the form
+     *
+     * @return string
+     */
+    public static function getNextInvoiceNumber($driver_id = null)
+    {
+        return self::generateInvoiceNumber($driver_id);
+    }
+
+    public static function invoiceNumberExists($invoiceNumber)
+    {
+        return self::where('invoiceno', $invoiceNumber)->exists();
+    }
 
 }

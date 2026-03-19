@@ -465,6 +465,13 @@
                 </a>
             </li>
         </ul>
+        <ul class="nav-dropdown-items">
+            <li class="nav-item {{ Request::is('Managerusers*') ? 'active' : '' }}">
+                <a class="nav-link {{ Request::is('Managerusers*') ? 'active' : '' }}" href="{!! route('Managerusers.index') !!}">
+                    <span>Inventory Manager</span>
+                </a>
+            </li>
+        </ul>
     @endcan
 
     @can('userrole')

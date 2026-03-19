@@ -22,6 +22,9 @@ use App\Models\InvoiceDetail;
 use App\Models\InvoicePayment;
 use App\Models\Trip;
 use App\Models\Product;
+use App\Models\Warehouse;
+use App\Models\InventoryBalance;
+use App\Models\WarehouseInventoryBalance;
 use App\Models\Task;
 use App\Models\Code;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -59,7 +62,9 @@ class InvoiceController extends AppBaseController
      */
     public function create()
     {
-        return view('invoices.create');
+        $nextInvoiceNumber = Invoice::getNextInvoiceNumber();
+
+        return view('invoices.create', compact('nextInvoiceNumber'));
     }
 
     /**
@@ -74,41 +79,22 @@ class InvoiceController extends AppBaseController
         $input = $request->all();
 
         $input['date'] = date_create($input['date']);
-        if($input['invoiceno'] == null){
-            Code::where('code','invoicerunningnumber')->first()->increment('value');
-            $input['invoiceno'] = 'INV'.sprintf('%07d',Code::where('code','invoicerunningnumber')->first()->value);
-        }
 
+        if(empty($input['invoiceno']) || $input['invoiceno'] == 'SYSTEM GENERATED IF BLANK') {
+            // Generate new invoice number using the new method
+            $input['invoiceno'] = Invoice::generateInvoiceNumber();
+        } else {
+            // Check if the provided invoice number already exists
+            if(Invoice::invoiceNumberExists($input['invoiceno'])) {
+                // If exists, generate a new one with incremented number
+                $input['invoiceno'] = Invoice::generateInvoiceNumber();
+            }
+        }
+        
         $invoice = $this->invoiceRepository->create($input);
 
-        if($input['driver_id'] != ''){
-            $trip = Trip::where('driver_id',$input['driver_id'])->orderBy('id','desc')->first();
-            if(!empty($trip)){
-                //check user start trip
-                if($trip->type == 1){
-                    $exttask = Task::where('driver_id',$input['driver_id'])->where('status',0);
-                    if($exttask->count() != 0){
-                        $sequence = $exttask->orderby('sequence','asc')->get()->first()->sequence;
-                        $exttask->increment('sequence');
-                    }else{
-                        $sequence = 1;
-                    }
-                    $task = new Task();
-                    $task->date = date("Y-m-d");
-                    $task->driver_id = $invoice->driver_id;
-                    $task->customer_id = $invoice->customer_id;
-                    $task->sequence = $sequence;
-                    $task->invoice_id = $invoice->id;
-                    $task->status = 0;
-                    $task->save();
-                    Flash::success('Invoice saved and assigned to driver successfully.');
-                }
-            }else{
-                Flash::success('Invoice saved successfully.');
-            }
-        }else{
-            Flash::success('Invoice saved successfully.');
-        }
+        Flash::success('Invoice created successfully.');
+        
 
         if($input['method'] == 1){
             return redirect(route('invoices.index'));
@@ -467,13 +453,17 @@ class InvoiceController extends AppBaseController
         $id = Crypt::decrypt($id);
         $invoice = $this->invoiceRepository->find($id);
 
+        $warehouseItems = Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
         if (empty($invoice)) {
             Flash::error('Invoice not found');
 
             return redirect(route('invoices.index'));
         }
 
-        return view('invoices.detail')->with('id', $id);
+        return view('invoices.detail',compact('id', 'warehouseItems'));
     }
 
     public function adddetail($id , Request $request)
@@ -482,12 +472,17 @@ class InvoiceController extends AppBaseController
 
         $input = $request->all();
 
-        $driver = $this->invoiceRepository->find($id);
+        $invoice = $this->invoiceRepository->find($id);
 
-        if (empty($driver)) {
+        if (empty($invoice)) {
             Flash::error('Invoice not found');
 
             return redirect(route('invoices.index'));
+        }
+
+        if (!isset($input['warehouse_id']) || empty($input['warehouse_id'])) {
+            Flash::error('Please select a warehouse');
+            return redirect()->back()->withInput();
         }
         
         $input['invoice_id'] = $id;
@@ -507,7 +502,7 @@ class InvoiceController extends AppBaseController
         if ($input == null) {
             return null;
         }
-        
+
         $invoice = Invoice::where('id', $input['invoice_id'])->first();
         
         if (empty($invoice)) {
@@ -515,9 +510,14 @@ class InvoiceController extends AppBaseController
             return redirect()->back();
         }
 
-        // Validate required fields
+        // Validate required fields including warehouse_id
         if (!isset($input['product_batch_id']) || empty($input['product_batch_id'])) {
             Flash::error('Please select a product batch');
+            return redirect()->back()->withInput();
+        }
+
+        if (!isset($input['warehouse_id']) || empty($input['warehouse_id'])) {
+            Flash::error('Please select a warehouse');
             return redirect()->back()->withInput();
         }
 
@@ -529,7 +529,6 @@ class InvoiceController extends AppBaseController
             if (isset($input['detail_id']) && !empty($input['detail_id'])) {
                 $existingDetail = InvoiceDetail::find($input['detail_id']);
             }
-
             // Get the product batch for the new item
             $newProductBatch = ProductBatch::find($input['product_batch_id']);
             
@@ -537,49 +536,57 @@ class InvoiceController extends AppBaseController
                 throw new \Exception('Product batch not found');
             }
 
+            // Check warehouse inventory instead of main batch quantity
+            $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $input['warehouse_id'])
+                ->where('batch_id', $input['product_batch_id'])
+                ->first();
+
+            if (!$warehouseInventory) {
+                throw new \Exception('This batch is not available in the selected warehouse');
+            }
+
+            if ($warehouseInventory->quantity < $input['quantity']) {
+                throw new \Exception('Insufficient quantity in warehouse. Available: ' . $warehouseInventory->quantity . ', Requested: ' . $input['quantity']);
+            }
+
             // Handle existing detail reversal if we're updating
             if ($existingDetail) {
-                // Get the original batch that was used
-                $oldProductBatch = ProductBatch::find($existingDetail->product_batch_id);
-                
-                if ($oldProductBatch) {
-                    // Add back the original quantity to the old batch
-                    $oldProductBatch->quantity = $oldProductBatch->quantity + $existingDetail->quantity;
-                    $oldProductBatch->save();
-
-                    // Create inventory transaction record for the reversal
-                    $reversalTransaction = new InventoryTransaction();
-                    $reversalTransaction->type = 1; // Stock In (Reversal)
-                    $reversalTransaction->product_id = $existingDetail->product_id;
-                    $reversalTransaction->batch_id = $existingDetail->product_batch_id;
-                    $reversalTransaction->quantity = $existingDetail->quantity;
-                    $reversalTransaction->date = now();
-                    $reversalTransaction->user = Auth::user()->name;
-                    $reversalTransaction->remark = 'Reversal for invoice #' . $invoice->invoiceno . ' - Detail ID: ' . $existingDetail->id;
-                    $reversalTransaction->save();
-
-                    // Update lorry inventory balance - add back the quantity to old batch
-                    $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
+                // Check if the existing detail has warehouse_id (for backward compatibility)
+                if ($existingDetail->warehouse_id && $existingDetail->product_batch_id) {
+                    // Get the original warehouse inventory that was used
+                    $oldWarehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $existingDetail->warehouse_id)
+                        ->where('batch_id', $existingDetail->product_batch_id)
+                        ->first();
                     
-                    if ($inventorybalance) {
-                        // Use helper function to add back quantity
-                        $inventorybalance->updateBatchQuantity(
-                            $existingDetail->product_batch_id,
-                            $existingDetail->quantity,
-                            'add'
-                        );
+                    if ($oldWarehouseInventory) {
+                        // Add back the original quantity to the old warehouse inventory
+                        $oldWarehouseInventory->increaseQuantity($existingDetail->quantity);
+
+                        // Create inventory transaction record for the reversal
+                        $reversalTransaction = new InventoryTransaction();
+                        $reversalTransaction->type = 1; // Stock In (Reversal)
+                        $reversalTransaction->warehouse_id = $existingDetail->warehouse_id;
+                        $reversalTransaction->product_id = $existingDetail->product_id;
+                        $reversalTransaction->batch_id = $existingDetail->product_batch_id;
+                        $reversalTransaction->quantity = $existingDetail->quantity;
+                        $reversalTransaction->date = now();
+                        $reversalTransaction->user = Auth::user()->name;
+                        $reversalTransaction->remark = 'Reversal for invoice #' . $invoice->invoiceno . ' - Detail ID: ' . $existingDetail->id;
+                        $reversalTransaction->save();
+
+                        // Note: No need to update lorry inventory balance anymore since we're using warehouse
+                        // The old code for lorry inventory balance has been removed
                     }
                 }
             }
 
-            // Check if new batch has enough quantity
-            if ($newProductBatch->quantity < $input['quantity']) {
-                throw new \Exception('Insufficient batch quantity. Available: ' . $newProductBatch->quantity . ', Requested: ' . $input['quantity']);
-            }
+            // Deduct quantity from warehouse inventory
+            $warehouseInventory->decreaseQuantity($input['quantity']);
 
             // Create or update invoice detail
             if ($existingDetail) {
                 // Update existing detail
+                $existingDetail->warehouse_id = $input['warehouse_id']; // Add warehouse_id
                 $existingDetail->product_id = $input['product_id'];
                 $existingDetail->product_batch_id = $input['product_batch_id'];
                 $existingDetail->quantity = $input['quantity'];
@@ -593,6 +600,7 @@ class InvoiceController extends AppBaseController
                 // Create new detail
                 $invoicedetail = new InvoiceDetail();
                 $invoicedetail->invoice_id = $input['invoice_id'];
+                $invoicedetail->warehouse_id = $input['warehouse_id']; // Add warehouse_id
                 $invoicedetail->product_id = $input['product_id'];
                 $invoicedetail->product_batch_id = $input['product_batch_id'];
                 $invoicedetail->quantity = $input['quantity'];
@@ -602,45 +610,20 @@ class InvoiceController extends AppBaseController
                 $invoicedetail->save();
             }
 
-            // Deduct quantity from new product batch
-            $newProductBatch->quantity = $newProductBatch->quantity - $input['quantity'];
-            $newProductBatch->save();
-
-            // Create inventory transaction record for the new sale
+            // Create inventory transaction record for the new sale (using warehouse)
             $inventoryTransaction = new InventoryTransaction();
             $inventoryTransaction->type = 2; // Stock Out (Sale)
+            $inventoryTransaction->warehouse_id = $input['warehouse_id'];
             $inventoryTransaction->product_id = $input['product_id'];
             $inventoryTransaction->batch_id = $input['product_batch_id']; 
             $inventoryTransaction->quantity = -$input['quantity']; 
             $inventoryTransaction->date = now();
             $inventoryTransaction->user = Auth::user()->name;
-            $inventoryTransaction->remark = 'Invoice #' . ($invoice->invoiceno ?? '') . ' - Sale of product';
+            $inventoryTransaction->remark = 'Invoice- [' . ($invoice->invoiceno ?? '') . '] - Sale of product from warehouse -['.$invoicedetail->warehouse->name.']';
             $inventoryTransaction->save();
 
-            // Update lorry inventory balance for the new batch
-            $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
-            
-            if (empty($inventorybalance)) {
-                // Create new inventory balance record
-                $newinventorybalance = new InventoryBalance();
-                $newinventorybalance->lorry_id = $invoice->driver->trip->lorry_id ?? null;
-                
-                // Initialize batches array with the current batch and quantity
-                $batches = [
-                    $input['product_batch_id'] => $input['quantity']
-                ];
-                $newinventorybalance->batches = $batches;
-                $newinventorybalance->save();
-            } else {
-                // Use helper function to subtract quantity from the batch
-                $inventorybalance->updateBatchQuantity(
-                    $input['product_batch_id'],
-                    $input['quantity'],
-                    'subtract'
-                );
-            }
 
-            // Handle invoice payment if cash term
+            // Handle invoice payment if cash term (keep this as is)
             if ($invoice->paymentterm == 1) {
                 $id = $input['invoice_id'];
                 $invoicePayment = InvoicePayment::where('invoice_id', $id)->first();
@@ -668,18 +651,19 @@ class InvoiceController extends AppBaseController
             DB::commit();
             
             $action = $existingDetail ? 'updated' : 'saved';
-            Flash::success('Invoice Detail ' . $action . ' successfully. Stock deducted: ' . $input['quantity'] . ' units from batch ' . $newProductBatch->batch_code);
+            Flash::success('Invoice Detail ' . $action . ' successfully. Stock deducted: ' . $input['quantity'] . ' units from batch [' . $newProductBatch->batch_code . '] in warehouse [' . $warehouseInventory->warehouse->name . ']');
             
             Session::forget('invoice_detail_data');
             
         } catch (\Exception $e) {
+            dd($e->getMessage());
             DB::rollBack();
             Flash::error('Error saving invoice detail: ' . $e->getMessage());
             return redirect()->back()->withInput();
         }
     }
-   public function deletedetail($id)
-    {
+
+   public function deletedetail($id){
         $id = Crypt::decrypt($id);
 
         $invoicedetail = InvoiceDetail::with('invoice')->where('id', $id)->first();

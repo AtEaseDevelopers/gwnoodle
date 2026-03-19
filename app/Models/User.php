@@ -23,7 +23,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'session'
+        'session',
+        'invoice_code',
 
     ];
 

@@ -10,6 +10,7 @@ use App\Repositories\InventoryTransactionRepository;
 use Flash;
 use App\Http\Controllers\AppBaseController;
 use Response;
+use Illuminate\Http\Request;
 
 class InventoryTransactionController extends AppBaseController
 {
@@ -65,17 +66,32 @@ class InventoryTransactionController extends AppBaseController
      * Display the specified InventoryTransaction.
      *
      * @param int $id
+     * @param Request $request
      *
      * @return Response
      */
-    public function show($id)
+    public function show($id, Request $request)
     {
         $inventoryTransaction = $this->inventoryTransactionRepository->find($id);
 
         if (empty($inventoryTransaction)) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Inventory Transaction not found'], 404);
+            }
+            
             Flash::error('Inventory Transaction not found');
-
             return redirect(route('inventoryTransactions.index'));
+        }
+
+        // Load relationships
+        $inventoryTransaction->load(['lorry', 'product', 'batch', 'warehouse', 'customer']);
+
+        // Add formatted date
+        $inventoryTransaction->date_formatted = $inventoryTransaction->date ? 
+            $inventoryTransaction->date->format('d-m-Y H:i:s') : null;
+
+        if ($request->wantsJson()) {
+            return response()->json($inventoryTransaction);
         }
 
         return view('inventory_transactions.show')->with('inventoryTransaction', $inventoryTransaction);

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\DataTables\UserDataTable;
+use App\DataTables\ManagerUserDataTable;
 use App\Http\Requests;
 use App\Http\Requests\CreateUserRequest;
 use App\Http\Requests\UpdateUserRequest;
@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
-class UserController extends AppBaseController
+class ManagerUserController extends AppBaseController
 {
     /** @var UserRepository $userRepository*/
     private $userRepository;
@@ -31,13 +31,13 @@ class UserController extends AppBaseController
     /**
      * Display a listing of the User.
      *
-     * @param UserDataTable $userDataTable
+     * @param ManagerUserDataTable $userDataTable
      *
      * @return Response
      */
-    public function index(UserDataTable $userDataTable)
+    public function index(ManagerUserDataTable $manageruserDataTable)
     {
-        return $userDataTable->render('users.index');
+        return $manageruserDataTable->render('manager.index');
     }
 
     /**
@@ -47,7 +47,7 @@ class UserController extends AppBaseController
      */
     public function create()
     {
-        return view('users.create');
+        return view('manager.create');
     }
 
     /**
@@ -74,7 +74,7 @@ class UserController extends AppBaseController
 
         Flash::success('User saved successfully.');
 
-        return redirect(route('users.index'));
+        return redirect(route('Managerusers.index'));
     }
 
     /**
@@ -99,7 +99,7 @@ class UserController extends AppBaseController
 
         $user->role_name = $userHasRole->role->name ?? "";
 
-        return view('users.show')->with('user', $user);
+        return view('manager.show')->with('user', $user);
     }
 
     /**
@@ -117,14 +117,14 @@ class UserController extends AppBaseController
         if (empty($user)) {
             Flash::error('User not found');
 
-            return redirect(route('users.index'));
+            return redirect(route('Managerusers.index'));
         }
         
         $userHasRole = $this->userHasRoleRepository->where('model_id', $id)->first();  // Use Eloquent 'where' and 'first'
 
         $user->role_id = $userHasRole->role_id ?? "";
 
-        return view('users.edit')->with('user', $user);
+        return view('manager.edit')->with('user', $user);
     }
 
     /**
@@ -137,43 +137,56 @@ class UserController extends AppBaseController
      */
     public function update($id, Request $request)
     {
+        // Decrypt the ID first
         $id = Crypt::decrypt($id);
-        $user = $this->userRepository->find($id);
-
-        if (empty($user)) {
-            Flash::error('User not found');
-
-            return redirect(route('users.index'));
-        }
-
+        
+        // Define validation rules
         $rules = [
             'name'     => 'required',
             'email'    => 'required|email|unique:users,email,' . $id,
             'password' => 'confirmed',
             'role_id'  => 'required'
         ];
+        
+        // Validate the request
         $validator = Validator::make($request->all(), $rules);
-        $input = $request->all();
-
+        
         if ($validator->fails()) {
             return redirect()
                 ->back()
                 ->withErrors($validator)
                 ->withInput();
         }
-
-        $input['password'] = Hash::make($input['password']);
+        
+        $input = $request->all();
+        $user = $this->userRepository->find($id);
+        
+        if (empty($user)) {
+            Flash::error('User not found');
+            return redirect(route('Managerusers.index'));
+        }
+        
+        // Only hash and update password if update_password is checked
+        if (isset($input['update_password']) && $input['update_password'] == 1) {
+            $input['password'] = Hash::make($input['password']);
+        } else {
+            // Remove password from input to prevent updating with empty value
+            unset($input['password']);
+        }
+        
+        // Remove the update_password checkbox value from input
+        unset($input['update_password']);
+        
         $user = $this->userRepository->update($input, $id);
         
-
-        $userHasRole = $this->userHasRoleRepository->where('model_id', $id)->first();  // Use Eloquent 'where' and 'first'
-
+        $userHasRole = $this->userHasRoleRepository->where('model_id', $id)->first();
+        
         if($userHasRole)
         {
             $userRole = [
                 "role_id" => $input["role_id"]
             ];
-
+            
             $this->userHasRoleRepository->update($userRole, $userHasRole->id);
         }
         else
@@ -182,14 +195,13 @@ class UserController extends AppBaseController
                 "model_id" => $user["id"],
                 "role_id" => $input["role_id"]
             ];
-    
+            
             $userHasRole = $this->userHasRoleRepository->create($userRole);
         }
-       
-
+        
         Flash::success('User updated successfully.');
-
-        return redirect(route('users.index'));
+        
+        return redirect(route('Managerusers.index'));
     }
 
     /**
@@ -207,13 +219,13 @@ class UserController extends AppBaseController
         if (empty($user)) {
             Flash::error('User not found');
 
-            return redirect(route('users.index'));
+            return redirect(route('Managerusers.index'));
         }
 
         $this->userRepository->delete($id);
 
         Flash::success('User deleted successfully.');
 
-        return redirect(route('users.index'));
+        return redirect(route('Managerusers.index'));
     }
 }

@@ -20,6 +20,7 @@ class InvoiceDetail extends Model
         'invoice_id',
         'product_id',
         'product_batch_id', 
+        'warehouse_id',
         'quantity',
         'price',
         'totalprice',
@@ -70,7 +71,12 @@ class InvoiceDetail extends Model
     {
         return $this->belongsTo(\App\Models\Product::class, 'product_id', 'id');
     }
-    
+
+    public function warehouse()
+    {
+        return $this->belongsTo(\App\Models\Warehouse::class, 'warehouse_id', 'id');
+    }
+
     public function batch()
     {
         return $this->belongsTo(\App\Models\ProductBatch::class, 'product_batch_id', 'id');

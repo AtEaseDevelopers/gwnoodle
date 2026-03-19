@@ -19,10 +19,11 @@ use App\Models\SpecialPrice;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\Customer;
+use App\Models\WarehouseInventoryBalance;
+use App\Models\InventoryTransaction;
 use Illuminate\Support\Facades\Session;
 use Exception;
 use App\Models\ProductBatch;
-use App\Models\InventoryTransaction;
 use Illuminate\Support\Facades\Validator;
 
 
@@ -57,7 +58,11 @@ class InvoiceDetailController extends AppBaseController
      */
     public function create()
     {
-        return view('invoice_details.create');
+        $warehouseItems = \App\Models\Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
+        return view('invoice_details.create',compact('warehouseItems'));
     }
 
     /**
@@ -72,6 +77,7 @@ class InvoiceDetailController extends AppBaseController
         $validator = Validator::make($request->all(), [
             'invoice_id' => 'required|exists:invoices,id',
             'product_id' => 'required|exists:products,id',
+            'warehouse_id' => 'required|exists:warehouses,id', 
             'product_batch_id' => 'required|exists:product_batches,id',
             'quantity' => 'required|integer|min:1',
             'price' => 'required|numeric|min:0',
@@ -97,7 +103,6 @@ class InvoiceDetailController extends AppBaseController
         Session::put('invoice_detail_data', $input);
 
         $this->upsertDetail(true, $request);
-
         return redirect(route('invoiceDetails.index'));
     }
     
@@ -115,111 +120,100 @@ class InvoiceDetailController extends AppBaseController
         }
 
         DB::beginTransaction();
-
         try {
             if ($is_store == true) {
                 // CREATE MODE - Add new detail
                 $batch = ProductBatch::find($input['product_batch_id']);
                 
-                if ($batch->quantity < $input['quantity']) {
-                    throw new \Exception('Insufficient batch quantity. Available: ' . $batch->quantity);
+                // Check warehouse inventory instead of main batch quantity
+                $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $input['warehouse_id'])
+                    ->where('batch_id', $input['product_batch_id'])
+                    ->first();
+                
+                if (!$warehouseInventory || $warehouseInventory->quantity < $input['quantity']) {
+                    $available = $warehouseInventory ? $warehouseInventory->quantity : 0;
+                    throw new \Exception('Insufficient quantity in warehouse. Available: ' . $available);
                 }
 
                 $input['totalprice'] = $input['quantity'] * $input['price'];
                 $invoiceDetail = $this->invoiceDetailRepository->create($input);
                 
-                // Deduct quantity from batch
-                $batch->decrement('quantity', $input['quantity']);
+                // Deduct quantity from warehouse inventory
+                $warehouseInventory->decreaseQuantity($input['quantity']);
                 
-                // Create inventory transaction for stock out
+                // Create inventory transaction for stock out from warehouse
                 InventoryTransaction::create([
                     'type' => 2, // Stock Out
+                    'warehouse_id' => $input['warehouse_id'],
                     'product_id' => $input['product_id'],
                     'batch_id' => $input['product_batch_id'],
                     'quantity' => -$input['quantity'],
                     'date' => now(),
-                    'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
-                    'remark' => 'Invoice #' . $invoice->invoiceno . ' - New detail added'
+                    'user' => Auth::user()->name,
+                    'remark' => 'Invoice - [' . $invoice->invoiceno . '] - New detail added from warehouse'
                 ]);
                 
             } else {
-                // UPDATE MODE - Need to handle batch adjustments
+                // UPDATE MODE - Need to handle warehouse inventory adjustments
                 $existingDetail = $this->invoiceDetailRepository->find($input['edit_id']);
                 
                 if (empty($existingDetail)) {
                     throw new \Exception('Invoice detail not found');
                 }
 
-                // Check if batch or quantity changed
+                // Check if warehouse, batch or quantity changed
+                $warehouseChanged = ($existingDetail->warehouse_id != $input['warehouse_id']);
                 $batchChanged = ($existingDetail->product_batch_id != $input['product_batch_id']);
                 $quantityChanged = ($existingDetail->quantity != $input['quantity']);
                 
-                if ($batchChanged || $quantityChanged) {
-                    // CASE 1: Return stock to original batch
-                    $oldBatch = ProductBatch::find($existingDetail->product_batch_id);
-                    if ($oldBatch) {
-                        $oldBatch->increment('quantity', $existingDetail->quantity);
+                if ($warehouseChanged || $batchChanged || $quantityChanged) {
+                    // CASE 1: Return stock to original warehouse
+                    if ($existingDetail->warehouse_id && $existingDetail->product_batch_id) {
+                        $oldWarehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $existingDetail->warehouse_id)
+                            ->where('batch_id', $existingDetail->product_batch_id)
+                            ->first();
                         
-                        // Create inventory transaction for reversal
-                        InventoryTransaction::create([
-                            'type' => 1, // Stock In (Reversal)
-                            'product_id' => $existingDetail->product_id,
-                            'batch_id' => $existingDetail->product_batch_id,
-                            'quantity' => $existingDetail->quantity,
-                            'date' => now(),
-                            'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
-                            'remark' => 'Reversal - Updating invoice #' . $invoice->invoiceno
-                        ]);
+                        if ($oldWarehouseInventory) {
+                            $oldWarehouseInventory->increaseQuantity($existingDetail->quantity);
+                            
+                            // Create inventory transaction for reversal
+                            InventoryTransaction::create([
+                                'type' => 1, // Stock In (Reversal)
+                                'warehouse_id' => $existingDetail->warehouse_id,
+                                'product_id' => $existingDetail->product_id,
+                                'batch_id' => $existingDetail->product_batch_id,
+                                'quantity' => $existingDetail->quantity,
+                                'date' => now(),
+                                'user' => Auth::user()->name,
+                                'remark' => 'Reversal - Updating invoice -[' . $invoice->invoiceno.']'
+                            ]);
+                        }
                     }
 
-                    // CASE 2: Check new batch has enough stock
-                    $newBatch = ProductBatch::find($input['product_batch_id']);
-                    if ($newBatch->quantity < $input['quantity']) {
-                        throw new \Exception('Insufficient quantity in new batch. Available: ' . $newBatch->quantity);
+                    // CASE 2: Check new warehouse has enough stock
+                    $newWarehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $input['warehouse_id'])
+                        ->where('batch_id', $input['product_batch_id'])
+                        ->first();
+                    
+                    if (!$newWarehouseInventory || $newWarehouseInventory->quantity < $input['quantity']) {
+                        $available = $newWarehouseInventory ? $newWarehouseInventory->quantity : 0;
+                        throw new \Exception('Insufficient quantity in new warehouse. Available: ' . $available);
                     }
 
-                    // Deduct from new batch
-                    $newBatch->decrement('quantity', $input['quantity']);
+                    // Deduct from new warehouse
+                    $newWarehouseInventory->decreaseQuantity($input['quantity']);
                     
                     // Create inventory transaction for new stock out
                     InventoryTransaction::create([
                         'type' => 2, // Stock Out
+                        'warehouse_id' => $input['warehouse_id'],
                         'product_id' => $input['product_id'],
                         'batch_id' => $input['product_batch_id'],
                         'quantity' => -$input['quantity'],
                         'date' => now(),
                         'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
-                        'remark' => 'Updated invoice #' . $invoice->invoiceno
+                        'remark' => 'Updated invoice -[' . $invoice->invoiceno.']' 
                     ]);
-                } else {
-                    // No batch change, only quantity changed? This shouldn't happen with your UI
-                    // But just in case, handle quantity adjustment
-                    if ($input['quantity'] != $existingDetail->quantity) {
-                        $batch = ProductBatch::find($input['product_batch_id']);
-                        $quantityDiff = $input['quantity'] - $existingDetail->quantity;
-                        
-                        if ($quantityDiff > 0) {
-                            // Need more stock - check availability
-                            if ($batch->quantity < $quantityDiff) {
-                                throw new \Exception('Insufficient batch quantity. Available: ' . $batch->quantity . ', Need: ' . $quantityDiff);
-                            }
-                            $batch->decrement('quantity', $quantityDiff);
-                        } else {
-                            // Returning stock
-                            $batch->increment('quantity', abs($quantityDiff));
-                        }
-                        
-                        // Create inventory transaction for adjustment
-                        InventoryTransaction::create([
-                            'type' => ($quantityDiff > 0) ? 2 : 1, // Stock Out if positive, Stock In if negative
-                            'product_id' => $input['product_id'],
-                            'batch_id' => $input['product_batch_id'],
-                            'quantity' => -$quantityDiff,
-                            'date' => now(),
-                            'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
-                            'remark' => 'Quantity adjustment - Invoice #' . $invoice->invoiceno
-                        ]);
-                    }
                 }
 
                 // Update the invoice detail
@@ -230,9 +224,9 @@ class InvoiceDetailController extends AppBaseController
             DB::commit();
 
             if ($is_store == true) {
-                Flash::success(__('invoices_details.invoice_detail_saved_successfully'));
+                Flash::success(__('Invoices Detail saved successfully'));
             } else {
-                Flash::success(__('invoices_details.invoice_detail_updated_successfully'));
+                Flash::success(__('Invoices Detail updated successfully'));
             }
             
             Session::forget('invoice_detail_data');
@@ -276,6 +270,9 @@ class InvoiceDetailController extends AppBaseController
     {
         $id = Crypt::decrypt($id);
         $invoiceDetail = $this->invoiceDetailRepository->find($id);
+        $warehouseItems = \App\Models\Warehouse::where('status', 'active')
+                    ->orderBy('name')
+                    ->pluck('name', 'id');
 
         if (empty($invoiceDetail)) {
             Flash::error(__('invoices_details.invoice_detail_not_found'));
@@ -283,7 +280,7 @@ class InvoiceDetailController extends AppBaseController
             return redirect(route('invoiceDetails.index'));
         }
 
-        return view('invoice_details.edit')->with('invoiceDetail', $invoiceDetail);
+        return view('invoice_details.edit',compact('invoiceDetail', 'warehouseItems'));
     }
 
     /**

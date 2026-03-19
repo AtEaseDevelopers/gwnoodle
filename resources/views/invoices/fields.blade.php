@@ -1,7 +1,16 @@
 <!-- Invoiceno Field -->
 <div class="form-group col-sm-6">
-    {!! Form::label('invoiceno', __('invoices.invoice_no')) !!}<span class="asterisk"> *</span>
-    {!! Form::text('invoiceno', null, ['class' => 'form-control','maxlength' => 255,'maxlength' => 255,'autofocus', 'placeholder' => 'SYSTEM GENERATED IF BLANK']) !!}
+    {!! Form::label('invoiceno', 'Invoice No') !!}<span class="asterisk"> *</span>
+    {!! Form::text('invoiceno', $invoice->invoiceno ?? ($nextInvoiceNumber ?? \App\Models\Invoice::getNextInvoiceNumber()), [
+        'class' => 'form-control',
+        'maxlength' => 255, 
+        'id' => 'invoiceno',
+        'readonly' => false, 
+        'style' => 'background-color: #f8f9fa;'
+    ]) !!}
+    <small class="form-text text-muted">
+         (Invoice No is auto-generated, but you can change it if needed.)
+    </small>
 </div>
 
 <!-- Date Field -->

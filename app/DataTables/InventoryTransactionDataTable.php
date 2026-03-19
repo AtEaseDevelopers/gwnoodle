@@ -19,7 +19,9 @@ class InventoryTransactionDataTable extends DataTable
         $dataTable = new EloquentDataTable($query);
 
         return $dataTable
-            ->addColumn('action', 'inventory_transactions.datatables_actions')
+            ->addColumn('action', function($transaction) {
+                return view('inventory_transactions.datatables_actions', ['transaction' => $transaction])->render();
+            })
             ->editColumn('type', function($transaction) {
                 switch($transaction->type) {
                     case 1:
@@ -75,7 +77,7 @@ class InventoryTransactionDataTable extends DataTable
                 'lorry:id,lorryno', 
                 'product:id,name', 
                 'batch:id,batch_code',
-                'warehouse:id,name' // Add warehouse relationship
+                'warehouse:id,name',
             ])
             ->select('inventory_transactions.*');
     }
@@ -158,16 +160,22 @@ class InventoryTransactionDataTable extends DataTable
                         'className' => 'text-center',
                     ],
                     [
-                        'targets' => 4, // Batch code column index
+                        'targets' => 5, // Batch code column index
                         'className' => 'text-left',
                     ],
                     [
-                        'targets' => 5, // Quantity column index
+                        'targets' => 6, // Quantity column index
                         'className' => 'text-center',
                     ],
                     [
-                        'targets' => 6, // Warehouse column index (adjust based on your column order)
+                        'targets' => 7, // Warehouse column index
                         'className' => 'text-center',
+                    ],
+                    [
+                        'targets' => -1, // Action column
+                        'className' => 'text-center',
+                        'orderable' => false,
+                        'searchable' => false,
                     ],
                 ],
                 'initComplete' => 'function(){
@@ -176,7 +184,7 @@ class InventoryTransactionDataTable extends DataTable
                     .columns()
                     .every(function (index) {
                         var column = this;
-                        if(columns[index].searchable){
+                        if(columns[index].searchable && columns[index].title != "Action"){
                             if(columns[index].title == \'Type\'){
                                 var input = \'<select class="border-0 form-control-sm" style="width: 100%;"><option value=""></option><option value="1">Stock In</option><option value="2">Stock Out</option><option value="3">Stock Return</option><option value="4">Stock Transfer</option></select>\';
                             }else if(columns[index].title == \'Date\'){
@@ -245,23 +253,23 @@ class InventoryTransactionDataTable extends DataTable
                 'className' => 'text-left'
             ]),
 
-            'warehouse_id' => new \Yajra\DataTables\Html\Column([
-                'title' => 'Warehouse',
-                'data' => 'warehouse_name', // Use the added column
-                'name' => 'warehouse.name',
-                'defaultContent' => '-',
-                'width' => '150px',
-                'className' => 'text-center',
-                'searchable' => true,
-                'orderable' => true
-            ]),
-
             'quantity' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('inventory_transactions.quantity'),
                 'data' => 'quantity',
                 'name' => 'quantity',
                 'width' => '100px',
                 'className' => 'text-center'
+            ]),
+
+            'warehouse_id' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Warehouse',
+                'data' => 'warehouse_name',
+                'name' => 'warehouse.name',
+                'defaultContent' => '-',
+                'width' => '150px',
+                'className' => 'text-center',
+                'searchable' => true,
+                'orderable' => true
             ]),
 
             'remark' => new \Yajra\DataTables\Html\Column([
@@ -273,14 +281,15 @@ class InventoryTransactionDataTable extends DataTable
                 'className' => 'text-left'
             ]),
 
-            'user' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('inventory_transactions.user'),
-                'data' => 'user',
-                'name' => 'user',
-                'defaultContent' => '-',
-                'width' => '150px',
-                'className' => 'text-left'
-            ]),
+            'action' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Actions',
+                'data' => 'action',
+                'name' => 'action',
+                'width' => '80px',
+                'className' => 'text-center',
+                'orderable' => false,
+                'searchable' => false
+            ])
         ];
     }
 

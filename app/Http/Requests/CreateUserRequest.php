@@ -28,6 +28,7 @@ class CreateUserRequest extends FormRequest
           'name'                  => 'required',
           'email'                 => 'required|email|unique:users,email',
           'password'              => 'required|confirmed',
+          'invoice_code'          => 'nullable|string|max:255|unique:users,invoice_code',
           'role_id'               => 'required',
        ];
 

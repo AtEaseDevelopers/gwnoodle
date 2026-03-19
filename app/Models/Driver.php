@@ -30,6 +30,7 @@ class Driver extends Model
         'employeeid',
         'password',
         'name',
+        'invoice_code',
         'ic',
         'phone',
         'commissionrate',
@@ -77,6 +78,7 @@ class Driver extends Model
      * @var array
      */
     public static $rules = [
+        'invoice_code' => 'required|string|max:10|unique:drivers,invoice_code',
         'employeeid' => 'required|string|max:20|unique:drivers,employeeid',
         'password' => 'required|string|max:65535',
         'name' => 'required|string|max:255',

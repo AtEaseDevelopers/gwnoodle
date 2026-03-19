@@ -18,14 +18,7 @@ class UserDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
-        return $dataTable
-            ->addColumn('action', 'users.datatables_actions')
-            ->addColumn('user_id_formatted', function($user) {
-                // Format user ID to always be 2 digits with leading zeros
-                return str_pad($user->id, 2, '0', STR_PAD_LEFT);
-            })
-            // Reorder columns if needed (optional)
-            ->rawColumns(['action']);
+        return $dataTable->addColumn('action', 'users.datatables_actions');
     }
 
     /**
@@ -43,9 +36,11 @@ class UserDataTable extends DataTable
             ->join('roles', function ($join) {
                 $join->on('roles.id', '=', 'model_has_roles.role_id');
             })
+            ->where('roles.name', '!=', 'Inventory Admin')
             ->select(
                 'users.id',
                 'users.name',
+                'users.invoice_code',
                 'users.email',
                 'roles.name as role_name'
             );
@@ -153,23 +148,13 @@ class UserDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            'user_id' => new \Yajra\DataTables\Html\Column([
-                'title' => 'User ID',
-                'data'  => 'user_id_formatted', // Use the formatted column
-                'name'  => 'users.id',
-                'orderable' => true,
-                'searchable' => true
-            ]),
             'name' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('user.name'),
                 'data'  => 'name',
                 'name'  => 'users.name'
             ]),
-            'email' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('user.email'),
-                'data'  => 'email',
-                'name'  => 'users.email'
-            ]),
+            'invoice_code',
+            'email',
             'role' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('user.role'),
                 'data'  => 'role_name',

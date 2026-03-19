@@ -112,6 +112,7 @@ class InventoryBalanceController extends AppBaseController
             $warehouseInventory->decreaseQuantity($totalNeeded);
 
             foreach ($request->lorry_ids as $lorryId) {
+                $lorry = Lorry::find($lorryId);
                 // Get or create inventory balance for this lorry
                 $inventoryBalance = InventoryBalance::firstOrCreate(
                     ['lorry_id' => $lorryId],
@@ -129,6 +130,7 @@ class InventoryBalanceController extends AppBaseController
                 InventoryTransaction::create([
                     'type' => InventoryTransaction::TYPE_STOCK_IN,
                     'lorry_id' => $lorryId,
+                    'warehouse_id' => $warehouseId,
                     'product_id' => $productBatch->product_id,
                     'batch_id' => $productBatch->id,
                     'quantity' => $request->quantity_per_lorry,
@@ -136,22 +138,27 @@ class InventoryBalanceController extends AppBaseController
                     'user' => Auth::user()->name,
                     'remark' => 'Received from warehouse'
                 ]);
+
+                 // Create inventory transaction for warehouse (stock out)
+                InventoryTransaction::create([
+                    'type' => InventoryTransaction::TYPE_STOCK_OUT,
+                    'warehouse_id' => $warehouseId,
+                    'lorry_id' => $lorryId,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => -$request->quantity_per_lorry,
+                    'date' => now(),
+                    'user' => Auth::user()->name,
+                    'remark' => "Distributed to van #{$lorry->lorryno}."
+                ]);
+                
             }
-                if ($productBatch->quantity <= 0) {
-                    $productBatch->status = 2; // Inactive
-                    $productBatch->save();
-                }
-            // Create inventory transaction for warehouse (stock out)
-            InventoryTransaction::create([
-                'type' => InventoryTransaction::TYPE_STOCK_OUT,
-                'warehouse_id' => $warehouseId,
-                'product_id' => $productBatch->product_id,
-                'batch_id' => $productBatch->id,
-                'quantity' => -$totalNeeded,
-                'date' => now(),
-                'user' => Auth::user()->name,
-                'remark' => 'Distributed to ' . count($request->lorry_ids) . ' lorry(s)'
-            ]);
+            if ($productBatch->quantity <= 0) {
+                $productBatch->status = 2; // Inactive
+                $productBatch->save();
+            }
+            
+           
             
             DB::commit();
 

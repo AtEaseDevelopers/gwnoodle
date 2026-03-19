@@ -596,12 +596,12 @@ Route::group(['middleware' => ['auth']], function() {
         // Transfer between warehouses
         Route::post('/warehouses/transfer', [App\Http\Controllers\WarehouseController::class, 'transferStock'])->name('warehouses.transfer');
         Route::get('/warehouses/transfer-form', [App\Http\Controllers\WarehouseController::class, 'showTransferForm'])->name('warehouses.transfer-form');
-        
+    
         // Get products and batches for dropdowns (AJAX)
         Route::get('/warehouses/get-products', [App\Http\Controllers\WarehouseController::class, 'getProducts'])->name('warehouses.get-products');
         Route::get('/warehouses/get-batches', [App\Http\Controllers\WarehouseController::class, 'getBatches'])->name('warehouses.get-batches');
         Route::get('/warehouses/get-warehouses-list', [App\Http\Controllers\WarehouseController::class, 'getWarehousesList'])->name('warehouses.get-list');
-        
+        Route::get('/warehouses/{warehouse_id}/products/{product_id}/batches', [App\Http\Controllers\WarehouseController::class, 'getWarehouseProductBatches'])->name('warehouses.get-warehouse-product-batches');
     });
 
     Route::group(['middleware' => ['permission:inventorybalance']], function() {
@@ -617,7 +617,9 @@ Route::group(['middleware' => ['auth']], function() {
         
     });
     Route::group(['middleware' => ['permission:inventorytransaction']], function() {
-        Route::get('/inventoryTransactions', [App\Http\Controllers\InventoryTransactionController::class, 'index'])->name('inventoryTransactions.index');
+        Route::get('/inventoryTransactions/index', [App\Http\Controllers\InventoryTransactionController::class, 'index'])->name('inventoryTransactions.index');
+        Route::get('/inventoryTransactions/show/{id}', [App\Http\Controllers\InventoryTransactionController::class, 'show'])->name('inventoryTransactions.show');
+
     });
     Route::group(['middleware' => ['permission:inventorytransfer']], function() {
         Route::get('/inventoryTransfers', [App\Http\Controllers\InventoryTransferController::class, 'index'])->name('inventoryTransfers.index');
@@ -666,7 +668,9 @@ Route::group(['middleware' => ['auth']], function() {
         Route::resource('commission_group', App\Http\Controllers\CommissionGroupController::class);
     });
     Route::group(['middleware' => ['permission:user']], function() {
-        Route::resource('users', UserController::class);
+        Route::resource('users', App\Http\Controllers\UserController::class);
+        Route::resource('Managerusers', App\Http\Controllers\ManagerUserController::class);
+
     });
     Route::group(['middleware' => ['permission:userrole']], function() {
         Route::resource('userHasRoles', App\Http\Controllers\UserHasRoleController::class);

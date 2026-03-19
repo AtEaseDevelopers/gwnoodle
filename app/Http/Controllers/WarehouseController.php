@@ -7,6 +7,7 @@ use App\Models\Warehouse;
 use App\Models\WarehouseInventoryBalance;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\InventoryTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -299,6 +300,58 @@ class WarehouseController extends Controller
     }
 
     /**
+     * Get product batches from a specific warehouse (AJAX)
+     */
+    public function getWarehouseProductBatches(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'product_id' => 'required|exists:products,id'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid parameters',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $warehouseId = $request->warehouse_id;
+            $productId = $request->product_id;
+            
+            $inventory = WarehouseInventoryBalance::with(['batch'])
+                ->where('warehouse_id', $warehouseId)
+                ->where('product_id', $productId)
+                ->where('quantity', '>', 0)
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'batch_id' => $item->batch_id,
+                        'batch_code' => $item->batch ? $item->batch->batch_code : 'Unknown',
+                        'quantity' => $item->quantity,
+                        'expiry_date' => $item->batch ? $item->batch->formatted_expiry_date : 'N/A',
+                        'is_expiring_soon' => $item->batch ? $item->batch->isExpiringSoon() : false,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'batches' => $inventory
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in getWarehouseProductBatches: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error loading batches: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get warehouse inventory (AJAX) - corresponds to warehouses.get-inventory
      */
     public function getWarehouseInventory($warehouseId)
@@ -462,8 +515,8 @@ class WarehouseController extends Controller
                 'product_id' => $batch->product_id,
                 'batch_id' => $request->batch_id,
                 'quantity' => -$request->quantity, // Negative for outgoing
-                'type' => 4, // Stock Out
-                'remark' => 'Stock transferred to warehouse: ' . $toWarehouse->name . ($request->remarks ? ' - ' . $request->remarks : ''),
+                'type' => InventoryTransaction::TYPE_TRANSFER,
+                'remark' => 'Stock transferred to warehouse: -[' . $toWarehouse->name. ']',
                 'date' => now(),
                 'user' => Auth::user()->name ?? 'System',
             ]);
@@ -474,8 +527,8 @@ class WarehouseController extends Controller
                 'product_id' => $batch->product_id,
                 'batch_id' => $request->batch_id,
                 'quantity' => $request->quantity, // Positive for incoming
-                'type' => 1, // Stock In
-                'remark' => 'Stock received from warehouse: ' . $fromWarehouse->name . ($request->remarks ? ' - ' . $request->remarks : ''),
+                'type' => InventoryTransaction::TYPE_TRANSFER, 
+                'remark' => 'Stock received from warehouse: -[' . $fromWarehouse->name.']  ',
                 'date' => now(),
                 'user' => Auth::user()->name ?? 'System',
             ]);

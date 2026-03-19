@@ -26,13 +26,19 @@
                                         {!! Form::select('invoice_id', $invoiceItems, $id, ['class' => 'form-control', 'placeholder' => 'Pick a Invoice...','disabled']) !!}
                                     </div>
 
+                                    <!-- Warehouse Selection Field (NEW) -->
+                                    <div class="form-group col-sm-6">
+                                        {!! Form::label('warehouse_id', 'Select Warehouse') !!}<span class="asterisk"> *</span>
+                                        {!! Form::select('warehouse_id', $warehouseItems, null, ['class' => 'form-control select2', 'placeholder' => 'Select Warehouse...', 'id' => 'warehouse_id']) !!}
+                                    </div>
+
                                     <!-- Product Id Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('product_id', __('invoice_details.product')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::select('product_id', $productItems, null, ['class' => 'form-control select2', 'placeholder' => 'Pick a Product...', 'id' => 'product_id']) !!}
+                                        {!! Form::select('product_id', $productItems, null, ['class' => 'form-control select2', 'placeholder' => 'Pick a Product...', 'id' => 'product_id', 'disabled']) !!}
                                     </div>
 
-                                    <!-- Batch Selection Field (NEW) -->
+                                    <!-- Batch Selection Field -->
                                     <div class="form-group col-sm-6" id="batch_selection_group" style="display: none;">
                                         {!! Form::label('product_batch_id', 'Select Batch') !!}<span class="asterisk"> *</span>
                                         {!! Form::select('product_batch_id', [], null, ['class' => 'form-control select2', 'placeholder' => 'First select product', 'id' => 'product_batch_id']) !!}
@@ -42,7 +48,7 @@
                                     <!-- Quantity Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('quantity', __('invoice_details.quantity')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::number('quantity', null, ['class' => 'form-control', 'min' => 1, 'step' => 1, 'id' => 'quantity']) !!}
+                                        {!! Form::number('quantity', null, ['class' => 'form-control', 'min' => 1, 'step' => 1, 'id' => 'quantity', 'disabled']) !!}
                                     </div>
 
                                     <!-- Price Field -->
@@ -67,7 +73,7 @@
 
                                     <!-- Submit Field -->
                                     <div class="form-group col-sm-12">
-                                        {!! Form::submit(__('invoice_details.save'), ['class' => 'btn btn-primary', 'id' => 'submitBtn']) !!}
+                                        {!! Form::submit(__('invoice_details.save'), ['class' => 'btn btn-primary', 'id' => 'submitBtn', 'disabled']) !!}
                                         <a href="{{ route('invoiceDetails.index') }}" class="btn btn-secondary">{{ __('invoice_details.cancel') }}</a>
                                     </div>
 
@@ -79,6 +85,7 @@
            </div>
     </div>
 @endsection
+
 @push('scripts')
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
@@ -92,10 +99,29 @@
                 width: '100%'
             });
 
-            // When product is selected, load available batches
-            $("#product_id").change(function(){
+            // When warehouse is selected, enable product dropdown
+            $("#warehouse_id").change(function() {
+                var warehouseId = $(this).val();
+                var productSelect = $('#product_id');
+                
+                if (warehouseId) {
+                    productSelect.prop('disabled', false);
+                    // Reset and disable dependent fields
+                    $('#batch_selection_group').hide();
+                    $('#product_batch_id').empty().append('<option value="">{{ __("First select product") }}</option>').trigger('change');
+                    $('#quantity').prop('disabled', true).val('');
+                    $('#price').val('');
+                    $('#stock_info').hide();
+                    $('#submitBtn').prop('disabled', true);
+                } else {
+                    productSelect.prop('disabled', true).val('').trigger('change');
+                }
+            });
+
+            // When product is selected, load available batches from selected warehouse
+            $("#product_id").change(function() {
                 getprice();
-                loadProductBatches();
+                loadWarehouseProductBatches();
             });
             
             $("#invoice_id").change(function(){
@@ -103,18 +129,19 @@
             });
             
             // When batch is selected, show available quantity
-            $("#product_batch_id").change(function(){
+            $("#product_batch_id").change(function() {
                 var selected = $(this).find('option:selected');
                 var quantity = selected.data('quantity') || 0;
                 var maxQty = selected.data('quantity') || 0;
                 
                 if (quantity > 0) {
                     $("#batch_quantity_info").text('Available: ' + quantity + ' units');
-                    $("#quantity").attr('max', maxQty);
-                    $("#stock_info_text").html('Selected batch has <strong>' + quantity + '</strong> units available');
-                    $("#stock_info").show();
+                    $("#quantity").prop('disabled', false).attr('max', maxQty);
+                    $("#stock_info_text").html('Selected batch has <strong>' + quantity + '</strong> units available in this warehouse');
+                    $("#stock_info").show().removeClass('alert-warning').addClass('alert-info');
                 } else {
                     $("#batch_quantity_info").text('');
+                    $("#quantity").prop('disabled', true);
                     $("#stock_info").hide();
                 }
                 
@@ -125,27 +152,31 @@
                 validateForm();
             });
             
-            // Load product batches via AJAX
-            function loadProductBatches() {
+            // Load product batches from selected warehouse via AJAX
+            function loadWarehouseProductBatches() {
+                var warehouseId = $('#warehouse_id').val();
                 var productId = $('#product_id').val();
                 var batchSelect = $('#product_batch_id');
                 
-                if (productId) {
+                if (warehouseId && productId) {
                     $.ajax({
-                        url: '{{ route("productBatches.by-product", "") }}/' + productId,
+                        url: '{{ url("warehouses") }}/' + warehouseId + '/products/' + productId + '/batches',
                         type: 'GET',
+                        data: {
+                            warehouse_id: warehouseId,
+                            product_id: productId
+                        },
                         success: function(response) {
                             batchSelect.empty().append('<option value="">{{ __("Select Batch") }}</option>');
                             
-                            // Check if response exists, is an array, and has items
-                            if (response && Array.isArray(response) && response.length > 0) {
+                            if (response.success && response.batches && response.batches.length > 0) {
                                 var hasAvailableBatches = false;
                                 
-                                $.each(response, function(index, batch) {
+                                $.each(response.batches, function(index, batch) {
                                     if (batch.quantity > 0) {
                                         hasAvailableBatches = true;
                                         batchSelect.append(
-                                            '<option value="' + batch.id + '" ' +
+                                            '<option value="' + batch.batch_id + '" ' +
                                             'data-quantity="' + batch.quantity + '" ' +
                                             'data-expiry="' + batch.expiry_date + '">' +
                                             batch.batch_code + ' (Exp: ' + batch.expiry_date + ') - ' + 
@@ -160,22 +191,18 @@
                                     batchSelect.prop('disabled', false);
                                     $("#stock_info").hide();
                                 } else {
-                                    // No batches with quantity > 0
-                                    batchSelect.empty().append('<option value="">{{ __("No batches with available stock") }}</option>');
+                                    batchSelect.empty().append('<option value="">{{ __("No batches with available stock in this warehouse") }}</option>');
                                     $('#batch_selection_group').show();
                                     batchSelect.prop('disabled', true);
-                                    $("#stock_info").show();
-                                    $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> No available stock for this product');
-                                    $('#stock_info').removeClass('alert-info').addClass('alert-warning');
+                                    $("#stock_info").show().removeClass('alert-info').addClass('alert-warning');
+                                    $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> No available stock for this product in selected warehouse');
                                 }
                             } else {
-                                // Empty array or invalid response - no batches at all
-                                batchSelect.empty().append('<option value="">{{ __("No batches found for this product") }}</option>');
+                                batchSelect.empty().append('<option value="">{{ __("No batches found for this product in selected warehouse") }}</option>');
                                 $('#batch_selection_group').show();
                                 batchSelect.prop('disabled', true);
-                                $("#stock_info").show();
-                                $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> This product has no batches configured');
-                                $('#stock_info').removeClass('alert-info').addClass('alert-warning');
+                                $("#stock_info").show().removeClass('alert-info').addClass('alert-warning');
+                                $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> This product has no batches in selected warehouse');
                             }
                             
                             batchSelect.trigger('change.select2');
@@ -185,25 +212,23 @@
                             batchSelect.empty().append('<option value="">{{ __("Error loading batches") }}</option>');
                             $('#batch_selection_group').show();
                             batchSelect.prop('disabled', true);
-                            $("#stock_info").show();
+                            $("#stock_info").show().removeClass('alert-info').addClass('alert-danger');
                             $("#stock_info_text").html('<i class="fa fa-exclamation-circle"></i> Error loading batch information');
-                            $('#stock_info').removeClass('alert-info').addClass('alert-danger');
                         }
                     });
                 } else {
                     $('#batch_selection_group').hide();
-                    batchSelect.empty().append('<option value="">{{ __("First select a product") }}</option>');
+                    batchSelect.empty().append('<option value="">{{ __("Select warehouse and product first") }}</option>');
                     $("#stock_info").hide();
                 }
             }
+
             // Get price (existing function)
-            function getprice(){
+            function getprice() {
                 var invoice_id = $('#invoice_id').val();
                 var product_id = $('#product_id').val();
                 if(invoice_id != '' && product_id != ''){
-                    ShowLoad();
                     
-                    // Use the API endpoint instead
                     var url = '{{ config("app.url") }}/invoiceDetails/getprice/'+invoice_id+'/'+product_id;
                     
                     console.log('Fetching price from:', url);
@@ -249,12 +274,14 @@
             
             // Validate form before submission
             function validateForm() {
+                var warehouseSelected = $('#warehouse_id').val() !== '';
+                var productSelected = $('#product_id').val() !== '';
                 var batchSelected = $('#product_batch_id').val() !== '';
                 var quantity = $('#quantity').val();
                 var maxQuantity = $('#quantity').attr('max') || 0;
                 var quantityValid = quantity && parseInt(quantity) > 0 && parseInt(quantity) <= parseInt(maxQuantity);
                 
-                var isValid = batchSelected && quantityValid;
+                var isValid = warehouseSelected && productSelected && batchSelected && quantityValid;
                 
                 $('#submitBtn').prop('disabled', !isValid);
                 

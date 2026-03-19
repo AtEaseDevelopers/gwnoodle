@@ -4,15 +4,10 @@ namespace App\Providers;
 
 use App\Models\Invoice;
 use App\Models\Kelindan;
-
-
-
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Supervisor;
 use App\Models\Agent;
-
-
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Code;
@@ -134,6 +129,7 @@ class ViewServiceProvider extends ServiceProvider
             $invoiceItems = Invoice::pluck('invoiceno','id')->toArray();
             $view->with('invoiceItems', $invoiceItems);
         });
+     
         View::composer(['invoice_details.fields','invoices.detail'], function ($view) {
             $productItems = Product::pluck('name','id')->toArray();
             $view->with('productItems', $productItems);
@@ -413,7 +409,10 @@ class ViewServiceProvider extends ServiceProvider
             $roleItems = Role::pluck('name','id')->toArray();
             $view->with('roleItems', $roleItems);
         });
-
+        View::composer(['manager.fields'], function ($view) {
+            $roleItems = Role::where('name', '!=', 'admin')->pluck('name', 'id')->toArray();
+            $view->with('roleItems', $roleItems);
+        });
         View::composer(['role_has_permissions.fields'], function ($view) {
             $roleItems = Role::pluck('name','id')->toArray();
             $view->with('roleItems', $roleItems);
