@@ -137,43 +137,56 @@ class UserController extends AppBaseController
      */
     public function update($id, Request $request)
     {
+        // Decrypt the ID first
         $id = Crypt::decrypt($id);
-        $user = $this->userRepository->find($id);
-
-        if (empty($user)) {
-            Flash::error('User not found');
-
-            return redirect(route('users.index'));
-        }
-
+        
+        // Define validation rules
         $rules = [
             'name'     => 'required',
             'email'    => 'required|email|unique:users,email,' . $id,
             'password' => 'confirmed',
             'role_id'  => 'required'
         ];
+        
+        // Validate the request
         $validator = Validator::make($request->all(), $rules);
-        $input = $request->all();
-
+        
         if ($validator->fails()) {
             return redirect()
                 ->back()
                 ->withErrors($validator)
                 ->withInput();
         }
-
-        $input['password'] = Hash::make($input['password']);
+        
+        $input = $request->all();
+        $user = $this->userRepository->find($id);
+        
+        if (empty($user)) {
+            Flash::error('User not found');
+            return redirect(route('Managerusers.index'));
+        }
+        
+        // Only hash and update password if update_password is checked
+        if (isset($input['update_password']) && $input['update_password'] == 1) {
+            $input['password'] = Hash::make($input['password']);
+        } else {
+            // Remove password from input to prevent updating with empty value
+            unset($input['password']);
+        }
+        
+        // Remove the update_password checkbox value from input
+        unset($input['update_password']);
+        
         $user = $this->userRepository->update($input, $id);
         
-
-        $userHasRole = $this->userHasRoleRepository->where('model_id', $id)->first();  // Use Eloquent 'where' and 'first'
-
+        $userHasRole = $this->userHasRoleRepository->where('model_id', $id)->first();
+        
         if($userHasRole)
         {
             $userRole = [
                 "role_id" => $input["role_id"]
             ];
-
+            
             $this->userHasRoleRepository->update($userRole, $userHasRole->id);
         }
         else
@@ -182,14 +195,13 @@ class UserController extends AppBaseController
                 "model_id" => $user["id"],
                 "role_id" => $input["role_id"]
             ];
-    
+            
             $userHasRole = $this->userHasRoleRepository->create($userRole);
         }
-       
-
+        
         Flash::success('User updated successfully.');
-
-        return redirect(route('users.index'));
+        
+        return redirect(route('Managerusers.index'));
     }
 
     /**
