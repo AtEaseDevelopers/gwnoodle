@@ -4,8 +4,12 @@ namespace App\Http\Controllers;
 
 use App\DataTables\InventoryCountDataTable;
 use App\Models\InventoryCount;
+use App\Models\InventoryBalance;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\Driver;
+use App\Models\Trip;
+use App\Models\Lorry;
 use App\Models\InventoryTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -44,11 +48,254 @@ class InventoryCountController extends Controller
     }
 
     /**
+     * Get driver's inventory with batches based on latest trip
+     */
+    public function getDriverInventory(Request $request)
+    {
+        $driverId = $request->get('driver_id');
+        
+        if (!$driverId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Driver ID is required'
+            ], 400);
+        }
+        
+        try {
+            // Get the driver's latest trip with type 1 (outbound)
+            $latestTrip = Trip::where('driver_id', $driverId)
+                ->where('type', 1)
+                ->orderBy('date', 'desc')
+                ->first();
+
+            if (!$latestTrip) {
+                return response()->json([
+                    'success' => true,
+                    'inventory' => [],
+                    'message' => 'No active trip found for this driver'
+                ]);
+            }
+
+            // Get lorry ID from the trip
+            $lorryId = $latestTrip->lorry_id;
+
+            // Get inventory balance for this lorry
+            $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
+
+            if (!$inventoryBalance || empty($inventoryBalance->batches)) {
+                return response()->json([
+                    'success' => true,
+                    'inventory' => [],
+                    'message' => 'No inventory found for this driver\'s lorry'
+                ]);
+            }
+
+            // Get all batch IDs from the inventory
+            $batchIds = array_keys($inventoryBalance->batches);
+
+            // Fetch batch details with product information
+            $batches = ProductBatch::with('product')
+                ->whereIn('id', $batchIds)
+                ->where('quantity', '>', 0) // Only batches with stock
+                ->where('status', ProductBatch::STATUS_ACTIVE) // Only active batches
+                ->get();
+
+            // Prepare inventory data grouped by product
+            $inventory = [];
+            
+            foreach ($batches as $batch) {
+                $productId = $batch->product_id;
+                $availableQty = $inventoryBalance->batches[$batch->id] ?? 0;
+                
+                // Skip if no quantity available
+                if ($availableQty <= 0) {
+                    continue;
+                }
+                
+                // Initialize product entry if not exists
+                if (!isset($inventory[$productId])) {
+                    $inventory[$productId] = [
+                        'product_id' => $productId,
+                        'product_name' => $batch->product->name,
+                        'product_code' => $batch->product->code,
+                        'unit_code' => $batch->product->unit_code,
+                        'total_quantity' => 0,
+                        'batches' => []
+                    ];
+                }
+                
+                // Add batch details
+                $inventory[$productId]['batches'][] = [
+                    'batch_id' => $batch->id,
+                    'batch_code' => $batch->batch_code,
+                    'quantity' => $availableQty,
+                    'expiry_date' => $batch->expiry_date,
+                    'formatted_expiry_date' => $batch->formatted_expiry_date,
+                    'is_expiring_soon' => $batch->isExpiringSoon(),
+                    'days_to_expiry' => $batch->days_to_expiry
+                ];
+                
+                // Add to total quantity
+                $inventory[$productId]['total_quantity'] += $availableQty;
+            }
+
+            // Convert to array (reset keys)
+            $inventory = array_values($inventory);
+
+            return response()->json([
+                'success' => true,
+                'inventory' => $inventory,
+                'trip_info' => [
+                    'trip_id' => $latestTrip->id,
+                    'trip_date' => $latestTrip->date,
+                    'lorry_id' => $lorryId
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in getDriverInventory: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load driver inventory: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get product inventory with batch details
+     */
+    public function getProductInventory($productId)
+    {
+        try {
+            $product = Product::findOrFail($productId);
+            
+            // Get all batches for this product
+            $batches = ProductBatch::where('product_id', $productId)
+                ->where('quantity', '>', 0)
+                ->where('status', ProductBatch::STATUS_ACTIVE)
+                ->get();
+            
+            $totalQuantity = $batches->sum('quantity');
+            $batchCount = $batches->count();
+            
+            return response()->json([
+                'success' => true,
+                'total_quantity' => $totalQuantity,
+                'batch_count' => $batchCount,
+                'batches' => $batches->map(function($batch) {
+                    return [
+                        'id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'quantity' => $batch->quantity,
+                        'expiry_date' => $batch->formatted_expiry_date,
+                        'is_expiring_soon' => $batch->isExpiringSoon()
+                    ];
+                })
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error in getProductInventory: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load product inventory: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get available batches for a specific product from driver's inventory
+     */
+    public function getProductBatches(Request $request)
+    {
+        $driverId = $request->get('driver_id');
+        $productId = $request->get('product_id');
+        
+        if (!$driverId || !$productId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Driver ID and Product ID are required'
+            ], 400);
+        }
+        
+        try {
+            // Get the driver's latest trip
+            $latestTrip = Trip::where('driver_id', $driverId)
+                ->where('type', 1)
+                ->orderBy('date', 'desc')
+                ->first();
+
+            if (!$latestTrip) {
+                return response()->json([
+                    'success' => true,
+                    'batches' => [],
+                    'message' => 'No active trip found for this driver'
+                ]);
+            }
+
+            // Get inventory balance for this lorry
+            $inventoryBalance = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)->first();
+
+            if (!$inventoryBalance || empty($inventoryBalance->batches)) {
+                return response()->json([
+                    'success' => true,
+                    'batches' => [],
+                    'message' => 'No inventory found'
+                ]);
+            }
+
+            // Get all batch IDs for this product
+            $productBatches = ProductBatch::where('product_id', $productId)
+                ->whereIn('id', array_keys($inventoryBalance->batches))
+                ->where('quantity', '>', 0)
+                ->where('status', ProductBatch::STATUS_ACTIVE)
+                ->get();
+
+            $batches = [];
+            
+            foreach ($productBatches as $batch) {
+                $availableQty = $inventoryBalance->batches[$batch->id] ?? 0;
+                
+                if ($availableQty > 0) {
+                    $batches[] = [
+                        'id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'quantity' => $availableQty,
+                        'expiry_date' => $batch->formatted_expiry_date,
+                        'days_to_expiry' => $batch->days_to_expiry,
+                        'is_expiring_soon' => $batch->isExpiringSoon()
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'batches' => $batches
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in getProductBatches: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load product batches: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), InventoryCount::$rules);
+        $validator = Validator::make($request->all(), [
+            'driver_id' => 'required|exists:drivers,id',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'remarks' => 'nullable|string|max:500',
+        ]);
         
         if ($validator->fails()) {
             if ($request->ajax() || $request->wantsJson()) {
@@ -65,7 +312,13 @@ class InventoryCountController extends Controller
         
         $driver = Driver::find($request->driver_id);
 
-        if (!$driver->trip_id) {
+        // Get driver's latest trip
+        $latestTrip = Trip::where('driver_id', $request->driver_id)
+            ->where('type', 1)
+            ->orderBy('date', 'desc')
+            ->first();
+
+        if (!$latestTrip) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
@@ -78,7 +331,7 @@ class InventoryCountController extends Controller
 
         // Check for existing pending count for this driver and trip
         $existingCount = InventoryCount::where('driver_id', $request->driver_id)
-            ->where('trip_id', $driver->trip_id)
+            ->where('trip_id', $latestTrip->id)
             ->where('status', InventoryCount::STATUS_PENDING)
             ->exists();
 
@@ -95,20 +348,61 @@ class InventoryCountController extends Controller
 
         try {
             $formattedItems = [];
+            
+            // Get inventory balance for current quantities
+            $inventoryBalance = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)->first();
+            
             foreach ($request->items as $item) {
+                $productId = $item['product_id'];
+                $currentQuantity = 0;
+                $batchDetails = [];
+                
+                // If inventory balance exists, get batch details for this product
+                if ($inventoryBalance && !empty($inventoryBalance->batches)) {
+                    $batchIds = array_keys($inventoryBalance->batches);
+                    $productBatches = ProductBatch::where('product_id', $productId)
+                        ->whereIn('id', $batchIds)
+                        ->get();
+                    
+                    foreach ($productBatches as $batch) {
+                        $batchQty = $inventoryBalance->batches[$batch->id] ?? 0;
+                        if ($batchQty > 0) {
+
+                            $batchDetails[] = [
+                                'batch_id' => $batch->id,
+                                'batch_code' => $batch->batch_code,
+                                'current_quantity' => $batchQty,
+                                'counted_quantity' => $item['counted_quantity']
+                            ];
+                            $currentQuantity += $batchQty;
+                        }
+                    }
+                }
+                
+                // If no batch details found, create a placeholder
+                if (empty($batchDetails)) {
+                    $batchDetails[] = [
+                        'batch_id' => null,
+                        'batch_code' => 'N/A',
+                        'current_quantity' => 0,
+                        'counted_quantity' => null
+                    ];
+                }
+                
                 $formattedItems[] = [
-                    'product_id' => $item['product_id'],
-                    'current_quantity' => $item['quantity'],
-                    'counted_quantity' => '' ,
+                    'product_id' => $productId,
+                    'product_name' => Product::find($productId)->name ?? 'Unknown',
+                    'current_quantity' => $currentQuantity,
+                    'batches' => $batchDetails
                 ];
-            }            
+            }
             
             $inventoryCount = InventoryCount::create([
                 'driver_id' => $request->driver_id,
-                'items' => $formattedItems, // Store as JSON array
+                'trip_id' => $latestTrip->id,
+                'items' => $formattedItems,
                 'status' => InventoryCount::STATUS_PENDING,
                 'remarks' => $request->remarks,
-                'trip_id' => $driver->trip_id ?? '',
             ]);
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -122,6 +416,9 @@ class InventoryCountController extends Controller
             Flash::success('Inventory count created successfully with ' . count($request->items) . ' items.');
             return redirect(route('inventoryCounts.index'));
         } catch (\Exception $e) {
+            \Log::error('Failed to create count: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
@@ -132,6 +429,132 @@ class InventoryCountController extends Controller
             return redirect()->back()->withInput();
         }
     }
+
+    /**
+     * Get count data with batch details for view/edit modal
+     */
+    public function getCountWithBatches($id)
+    {
+        try {
+            $inventoryCount = InventoryCount::with(['driver', 'approver', 'rejector'])->findOrFail($id);
+
+            // Get driver's latest trip for lorry info
+            $latestTrip = Trip::where('driver_id', $inventoryCount->driver_id)
+                ->where('type', 1)
+                ->orderBy('date', 'desc')
+                ->first();
+
+            $lorryId = $latestTrip ? $latestTrip->lorry_id : null;
+            
+            // Get current inventory from lorry if available
+            $currentInventory = [];
+            if ($lorryId) {
+                $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
+                if ($inventoryBalance && !empty($inventoryBalance->batches)) {
+                    $currentInventory = $inventoryBalance->batches;
+                }
+            }
+
+            // Prepare items with batch details
+            $items = [];
+            $varianceCount = 0;
+            $countedBatchCount = 0;
+
+            if ($inventoryCount->items && is_array($inventoryCount->items)) {
+                foreach ($inventoryCount->items as $item) {
+                    $product = Product::find($item['product_id'] ?? null);
+                    
+                    // Get current quantities from inventory balance if available
+                    $batches = $item['batches'] ?? [];
+                    $updatedBatches = [];
+                    
+                    foreach ($batches as $batch) {
+                        $batchId = $batch['batch_id'] ?? null;
+                        $currentQty = $batch['current_quantity'] ?? 0;
+                        
+                        // If we have current inventory data, update the current quantity
+                        if ($batchId && isset($currentInventory[$batchId])) {
+                            $currentQty = $currentInventory[$batchId];
+                        }
+                        
+                        $countedQty = $batch['counted_quantity'] ?? null;
+                        
+                        // Check if there's a variance
+                        if ($countedQty !== null && $countedQty != $currentQty) {
+                            $varianceCount++;
+                        }
+                        
+                        // Count batches that have been counted
+                        if ($countedQty !== null) {
+                            $countedBatchCount++;
+                        }
+                        
+                        // Get batch details
+                        $batchDetails = null;
+                        if ($batchId) {
+                            $batchDetails = ProductBatch::find($batchId);
+                        }
+                        
+                        $updatedBatches[] = [
+                            'batch_id' => $batchId,
+                            'batch_code' => $batchDetails ? $batchDetails->batch_code : ($batch['batch_code'] ?? 'N/A'),
+                            'current_quantity' => $currentQty,
+                            'counted_quantity' => $countedQty,
+                            'expiry_date' => $batchDetails ? $batchDetails->expiry_date : null,
+                            'formatted_expiry_date' => $batchDetails ? $batchDetails->formatted_expiry_date : null,
+                            'is_expiring_soon' => $batchDetails ? $batchDetails->isExpiringSoon() : false
+                        ];
+                    }
+                    
+                    $items[] = [
+                        'product_id' => $item['product_id'],
+                        'product_name' => $product ? $product->name : ($item['product_name'] ?? 'Unknown Product'),
+                        'unit_code' => $product ? $product->unit_code : null,
+                        'batches' => $updatedBatches,
+                        'total_current' => collect($updatedBatches)->sum('current_quantity'),
+                        'total_counted' => collect($updatedBatches)->sum('counted_quantity')
+                    ];
+                }
+            }
+
+            $responseData = [
+                'id' => $inventoryCount->id,
+                'driver_id' => $inventoryCount->driver_id,
+                'driver_name' => $inventoryCount->driver->name ?? 'N/A',
+                'trip_id' => $inventoryCount->trip_id,
+                'status' => $inventoryCount->status,
+                'remarks' => $inventoryCount->remarks,
+                'created_at' => $inventoryCount->created_at ? $inventoryCount->created_at->format('Y-m-d H:i:s') : null,
+                'approved_by' => $inventoryCount->approver ? $inventoryCount->approver->name : null,
+                'approved_at' => $inventoryCount->approved_at ? $inventoryCount->approved_at->format('Y-m-d H:i:s') : null,
+                'rejected_by' => $inventoryCount->rejector ? $inventoryCount->rejector->name : null,
+                'rejected_at' => $inventoryCount->rejected_at ? $inventoryCount->rejected_at->format('Y-m-d H:i:s') : null,
+                'rejection_reason' => $inventoryCount->rejection_reason,
+                'items' => $items,
+                'variance_count' => $varianceCount,
+                'counted_batch_count' => $countedBatchCount,
+                'summary' => [
+                    'total_items' => count($items),
+                    'total_variance' => $varianceCount,
+                ]
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $responseData
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in getCountWithBatches: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load count details: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     /**
      * Display the specified resource.
      */
@@ -139,19 +562,7 @@ class InventoryCountController extends Controller
     {
         $count = InventoryCount::with(['driver', 'approver', 'rejector'])->findOrFail($id);
 
-        // Get product details for items
-        $itemsWithDetails = [];
-        foreach ($count->items as $item) {
-            $product = Product::find($item['product_id']);
-            $itemsWithDetails[] = [
-                'product_id' => $item['product_id'],
-                'product_name' => $product ? $product->name : 'Unknown Product',
-                'product_code' => $product ? $product->code : 'N/A',
-                'quantity' => $item['quantity']
-            ];
-        }
-
-        return view('inventory_counts.show', compact('count', 'itemsWithDetails'));
+        return view('inventory_counts.show', compact('count'));
     }
 
     /**
@@ -161,43 +572,108 @@ class InventoryCountController extends Controller
     {
         $inventoryCount = InventoryCount::findOrFail($id);
 
-        // Determine validation rules based on input
-        if ($request->has('items') && is_array($request->items)) {
-            // Full update with items
-            $validator = Validator::make($request->all(), InventoryCount::$rules);
-        } else {
-            // Partial update (e.g., only remarks)
-            $validator = Validator::make($request->all(), [
-                'remarks' => 'nullable|string|max:500'
-            ]);
+        // Check if count can be updated - ONLY pending returns
+        if ($inventoryCount->status !== InventoryCount::STATUS_PENDING) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only pending counts can be updated.'
+                ], 403);
+            }
+            
+            Flash::error('Only pending counts can be updated.');
+            return redirect()->back();
         }
+
+        // Validate the request
+        $validator = Validator::make($request->all(), [
+            'batches' => 'required|array|min:1',
+            'batches.*.batch_id' => 'nullable|exists:product_batches,id',
+            'batches.*.product_id' => 'required|exists:products,id',
+            'batches.*.counted_quantity' => 'required|integer|min:0',
+            'remarks' => 'nullable|string|max:500',
+        ]);
 
         if ($validator->fails()) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'errors' => $validator->errors(),
-                    'message' => 'Validation failed'
+                    'errors' => $validator->errors()
                 ], 422);
             }
+            
             return redirect()->back()
                 ->withErrors($validator)
                 ->withInput();
         }
 
         try {
-            $updateData = [];
+            $batches = $request->batches;
             
-            if ($request->has('items')) {
-                $updateData['items'] = json_decode(($request->items), true);
+            // Group batches by product
+            $items = [];
+            $productBatches = [];
+            
+            foreach ($batches as $batchData) {
+                $productId = $batchData['product_id'];
+                
+                if (!isset($productBatches[$productId])) {
+                    $productBatches[$productId] = [];
+                }
+                
+                $productBatches[$productId][] = [
+                    'batch_id' => $batchData['batch_id'],
+                    'counted_quantity' => (int)$batchData['counted_quantity']
+                ];
             }
             
-            if ($request->has('remarks')) {
-                $updateData['remarks'] = $request->remarks;
+            // Get current inventory to include current quantities
+            $latestTrip = Trip::where('driver_id', $inventoryCount->driver_id)
+                ->where('type', 1)
+                ->orderBy('date', 'desc')
+                ->first();
+                
+            $currentInventory = [];
+            if ($latestTrip) {
+                $inventoryBalance = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)->first();
+                if ($inventoryBalance && !empty($inventoryBalance->batches)) {
+                    $currentInventory = $inventoryBalance->batches;
+                }
             }
             
+            // Build items array with batch details
+            foreach ($productBatches as $productId => $batches) {
+                $product = Product::find($productId);
+                $batchDetails = [];
+                
+                foreach ($batches as $batchData) {
+                    $batchId = $batchData['batch_id'];
+                    $currentQty = isset($currentInventory[$batchId]) ? $currentInventory[$batchId] : 0;
+                    
+                    $batch = ProductBatch::find($batchId);
+                    
+                    $batchDetails[] = [
+                        'batch_id' => $batchId,
+                        'batch_code' => $batch ? $batch->batch_code : null,
+                        'current_quantity' => $currentQty,
+                        'counted_quantity' => $batchData['counted_quantity']
+                    ];
+                }
+                
+                $items[] = [
+                    'product_id' => $productId,
+                    'product_name' => $product ? $product->name : null,
+                    'batches' => $batchDetails
+                ];
+            }
+            
+            $updateData = [
+                'items' => $items,
+                'remarks' => $request->remarks,
+            ];
+
             $inventoryCount->update($updateData);
-            
+
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => true,
@@ -208,38 +684,19 @@ class InventoryCountController extends Controller
             
             Flash::success('Inventory count updated successfully.');
             return redirect()->back();
+
         } catch (\Exception $e) {
+            \Log::error('Failed to update count: ' . $e->getMessage());
+            
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Failed to update count: ' . $e->getMessage()
                 ], 500);
             }
+            
             Flash::error('Failed to update count: ' . $e->getMessage());
             return redirect()->back()->withInput();
-        }
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy($id)
-    {
-        $inventoryCount = InventoryCount::findOrFail($id);
-
-        // Only allow deletion if count is pending
-        if ($inventoryCount->status !== InventoryCount::STATUS_PENDING) {
-            Flash::error('Only pending counts can be deleted.');
-            return redirect()->back();
-        }
-
-        try {
-            $inventoryCount->delete();
-            Flash::success('Inventory Count deleted successfully.');
-            return redirect(route('inventoryCounts.index'));
-        } catch (\Exception $e) {
-            Flash::error('Failed to delete count: ' . $e->getMessage());
-            return redirect()->back();
         }
     }
 
@@ -266,29 +723,26 @@ class InventoryCountController extends Controller
             $items = $inventoryCount->items ?? [];
             $missingCountedItems = [];
             
-            foreach ($items as $index => $item) {
-                $countedQty = $item['counted_quantity'] ?? null;
-                
-                // Check if counted_quantity is empty/null/not set
-                if (empty($countedQty) && $countedQty !== '0' && $countedQty !== 0) {
-                    // Try to get product name from item data first
-                    $productName = $item['product_name'] ?? null;
+            foreach ($items as $item) {
+                $batches = $item['batches'] ?? [];
+                foreach ($batches as $batch) {
+                    $countedQty = $batch['counted_quantity'] ?? null;
                     
-                    // If not in item data, fetch from Product model
-                    if (!$productName && isset($item['product_id'])) {
-                        $product = Product::find($item['product_id']);
-                        $productName = $product ? $product->name : 'Product ID: ' . $item['product_id'];
-                    } else if (!$productName) {
-                        $productName = 'Unknown Product';
+                    // Check if counted_quantity is empty/null/not set
+                    if (empty($countedQty) && $countedQty !== '0' && $countedQty !== 0) {
+                        $productName = $item['product_name'] ?? 'Unknown Product';
+                        $batchCode = $batch['batch_code'] ?? 'Unknown Batch';
+                        $missingCountedItems[] = $productName . ' (Batch: ' . $batchCode . ')';
                     }
-                    
-                    $missingCountedItems[] = $productName;
                 }
             }
             
             // If there are items missing counted_quantity, return error
             if (!empty($missingCountedItems)) {
-                $errorMessage = 'Cannot approve. Please fill in counted quantity for: ' . implode(', ', $missingCountedItems);
+                $errorMessage = 'Cannot approve. Please fill in counted quantity for: ' . implode(', ', array_slice($missingCountedItems, 0, 5));
+                if (count($missingCountedItems) > 5) {
+                    $errorMessage .= ' and ' . (count($missingCountedItems) - 5) . ' more';
+                }
                 
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
@@ -318,6 +772,8 @@ class InventoryCountController extends Controller
             Flash::success('Inventory count approved successfully.');
             return redirect()->back();
         } catch (\Exception $e) {
+            \Log::error('Failed to approve count: ' . $e->getMessage());
+            
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
@@ -384,6 +840,8 @@ class InventoryCountController extends Controller
             Flash::success('Inventory count rejected successfully.');
             return redirect()->back();
         } catch (\Exception $e) {
+            \Log::error('Failed to reject count: ' . $e->getMessage());
+            
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
@@ -391,6 +849,29 @@ class InventoryCountController extends Controller
                 ], 500);
             }
             Flash::error('Failed to reject count: ' . $e->getMessage());
+            return redirect()->back();
+        }
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy($id)
+    {
+        $inventoryCount = InventoryCount::findOrFail($id);
+
+        // Only allow deletion if count is pending
+        if ($inventoryCount->status !== InventoryCount::STATUS_PENDING) {
+            Flash::error('Only pending counts can be deleted.');
+            return redirect()->back();
+        }
+
+        try {
+            $inventoryCount->delete();
+            Flash::success('Inventory Count deleted successfully.');
+            return redirect(route('inventoryCounts.index'));
+        } catch (\Exception $e) {
+            Flash::error('Failed to delete count: ' . $e->getMessage());
             return redirect()->back();
         }
     }
@@ -405,7 +886,6 @@ class InventoryCountController extends Controller
         $approved = InventoryCount::approved()->count();
         $rejected = InventoryCount::rejected()->count();
 
-        // Kept as JSON for AJAX calls
         return response()->json([
             'success' => true,
             'data' => [
@@ -414,19 +894,6 @@ class InventoryCountController extends Controller
                 'approved' => $approved,
                 'rejected' => $rejected,
             ]
-        ]);
-    }
-
-    /**
-     * Get products for inventory count
-     */
-    public function getProducts()
-    {
-        $products = Product::select('id', 'name', 'code')->orderBy('name')->get();
-        
-        return response()->json([
-            'success' => true,
-            'products' => $products
         ]);
     }
 }

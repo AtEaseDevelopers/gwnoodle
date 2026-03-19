@@ -5,6 +5,7 @@ namespace App\Models;
 use Eloquent as Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\LogsActivity;
 
 /**
  * Class Lorry
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Lorry extends Model
 {
     // use SoftDeletes;
-
+    use LogsActivity;
     use HasFactory;
 
     public $table = 'lorrys';

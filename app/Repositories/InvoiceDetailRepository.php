@@ -20,6 +20,7 @@ class InvoiceDetailRepository extends BaseRepository
         'invoice_id',
         'product_id',
         'quantity',
+        'product_batch_id',
         'price',
         'remark'
     ];

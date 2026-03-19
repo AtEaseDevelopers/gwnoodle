@@ -12,6 +12,11 @@ class InventoryTransaction extends Model
 
     public $table = 'inventory_transactions';
 
+    const TYPE_STOCK_IN = 1;
+    const TYPE_STOCK_OUT = 2;
+    const TYPE_RETURN = 3; 
+    const TYPE_TRANSFER = 4; 
+
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
 
@@ -19,16 +24,12 @@ class InventoryTransaction extends Model
         'lorry_id',
         'product_id',
         'batch_id',
+        'warehouse_id',
         'quantity',
         'type',
         'remark',
         'date',
         'user',
-        'qr_code_scanned',
-        'expiry_date_from_scan',
-        'reference_type',  // NEW: 'sales_order', 'sales_return', etc.
-        'reference_id',     // NEW: ID of the sales order
-        'customer_id'       // NEW: Direct customer reference for easy tracking
     ];
 
     protected $casts = [
@@ -36,6 +37,7 @@ class InventoryTransaction extends Model
         'lorry_id' => 'integer',
         'product_id' => 'integer',
         'batch_id' => 'integer',
+        'warehouse_id' => 'integer',
         'quantity' => 'integer',
         'type' => 'integer',
         'remark' => 'string',
@@ -47,7 +49,7 @@ class InventoryTransaction extends Model
     ];
 
     public static $rules = [
-        'lorry_id' => 'required',
+        'lorry_id' => 'nullable',
         'product_id' => 'required',
         'batch_id' => 'nullable|integer',
         'quantity' => 'required',
@@ -72,6 +74,11 @@ class InventoryTransaction extends Model
     public function batch()
     {
         return $this->belongsTo(\App\Models\ProductBatch::class, 'batch_id', 'id');
+    }
+
+      public function warehouse()
+    {
+        return $this->belongsTo(\App\Models\Warehouse::class, 'warehouse_id', 'id');
     }
 
     // NEW: Customer relationship

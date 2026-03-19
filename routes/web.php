@@ -368,11 +368,8 @@ Route::group(['middleware' => ['auth']], function() {
             'productBatches' => 'id'
         ]);
         
-        // Custom routes for stock management - using 'id' consistently
-        Route::get('/productBatches/{id}/stock-in', [App\Http\Controllers\ProductBatchController::class, 'showStockInForm'])->name('productBatches.stock-in-form');
-        Route::post('/productBatches/{id}/stock-in', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
-        Route::get('/productBatches/{id}/stock-out', [App\Http\Controllers\ProductBatchController::class, 'showStockOutForm'])->name('productBatches.stock-out-form');
-        Route::post('/productBatches/{id}/stock-out', [App\Http\Controllers\ProductBatchController::class, 'stockOut'])->name('productBatches.stock-out');
+        Route::post('/productBatches/stock-in/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
+        Route::post('/productBatches/stock-out/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockOut'])->name('productBatches.stock-out');
         
         // Mass actions
         Route::post('/productBatches/massdestroy', [App\Http\Controllers\ProductBatchController::class, 'massdestroy'])->name('productBatches.massdestroy');
@@ -380,29 +377,96 @@ Route::group(['middleware' => ['auth']], function() {
         // Utility routes
         Route::get('/productBatches/check-expiry', [App\Http\Controllers\ProductBatchController::class, 'checkExpiry'])->name('productBatches.check-expiry');
         Route::get('/productBatches/{id}/print-label', [App\Http\Controllers\ProductBatchController::class, 'printLabel'])->name('productBatches.print-label');
-        Route::get('/productBatches/by-product/{productId}', [App\Http\Controllers\ProductBatchController::class, 'getBatchesByProduct'])->name('productBatches.by-product');
+    Route::get('/productBatches/by-product/{productId}', [App\Http\Controllers\ProductBatchController::class, 'getBatchesByProduct'])->name('productBatches.by-product');
         
         // Barcode generation routes
         Route::post('/productBatches/generate-barcode-preview', [App\Http\Controllers\ProductBatchController::class, 'generateBarcodePreview'])->name('productBatches.generate-barcode-preview');
         Route::get('/productBatches/download-barcode', [App\Http\Controllers\ProductBatchController::class, 'downloadBarcode'])->name('productBatches.download-barcode');
+        Route::get('/productBatches/scan-barcode', [App\Http\Controllers\ProductBatchController::class, 'scanBarcode'])->name('productBatches.scan-barcode');
+        Route::post('/productBatches/search-by-code/{batchCode?}', [App\Http\Controllers\ProductBatchController::class, 'searchByCode'])->name('productBatches.search-by-code');
+
+
+    });
+       Route::group(['middleware' => ['permission:stockrequest']], function() {
+        // Index
+        Route::get('/inventory-requests/{id}/with-batches', [App\Http\Controllers\InventoryRequestController::class, 'getRequestWithBatches'])->name('inventoryRequests.withBatches');
+        Route::get('/inventoryRequests', [App\Http\Controllers\InventoryRequestController::class, 'index'])->name('inventoryRequests.index');
+        // Store (Create)
+        Route::post('/inventoryRequests/store', [App\Http\Controllers\InventoryRequestController::class, 'store'])->name('inventoryRequests.store');
+        // Show
+        Route::get('/inventoryRequests/show/{id}', [App\Http\Controllers\InventoryRequestController::class, 'show'])->name('inventoryRequests.show');
+        // Update
+        Route::put('/inventoryRequests/update/{id}', [App\Http\Controllers\InventoryRequestController::class, 'update'])->name('inventoryRequests.update');
+        Route::post('/inventoryRequests/update/{id}', [App\Http\Controllers\InventoryRequestController::class, 'update']); // Alternative
+        // Delete
+        Route::delete('/inventoryRequests/delete/{id}', [App\Http\Controllers\InventoryRequestController::class, 'destroy'])->name('inventoryRequests.destroy');
+        // Approve
+        Route::post('/inventoryRequests/approve/{id}', [App\Http\Controllers\InventoryRequestController::class, 'approve'])->name('inventoryRequests.approve');
+        // Reject
+        Route::post('/inventoryRequests/reject/{id}', [App\Http\Controllers\InventoryRequestController::class, 'reject'])->name('inventoryRequests.reject');
+
+        Route::get('/notification-counts', [App\Http\Controllers\InventoryRequestController::class, 'getNotificationCounts'])->name('notification.counts');
+
+
     });
 
+    Route::group(['middleware' => ['permission:stockreturn']], function() {
+    // Inventory Returns Routes
+        Route::prefix('inventoryReturns')->name('inventoryReturns.')->group(function () {
+            // List with DataTable
+            Route::get('/', [App\Http\Controllers\InventoryReturnController::class, 'index'])->name('index');
+            
+            // AJAX endpoints for inventory data
+            Route::get('/get-driver-inventory', [App\Http\Controllers\InventoryReturnController::class, 'getDriverInventory'])->name('getDriverInventory');
+            Route::get('/get-product-batches', [App\Http\Controllers\InventoryReturnController::class, 'getProductBatches'])->name('getProductBatches');
+            
+            // CRUD operations
+            Route::post('/store', [App\Http\Controllers\InventoryReturnController::class, 'store'])->name('store');
+            Route::get('/show/{id}', [App\Http\Controllers\InventoryReturnController::class, 'show'])->name('show');
+            Route::get('/with-batches/{id}', [App\Http\Controllers\InventoryReturnController::class, 'getReturnWithBatches'])->name('withBatches');
+            Route::put('/update/{id}', [App\Http\Controllers\InventoryReturnController::class, 'update'])->name('update');
+            Route::post('/update/{id}', [App\Http\Controllers\InventoryReturnController::class, 'update']); // Alternative for form submissions
+            
+            // Status management
+            Route::post('/approve/{id}', [App\Http\Controllers\InventoryReturnController::class, 'approve'])->name('approve');
+            Route::post('/reject/{id}', [App\Http\Controllers\InventoryReturnController::class, 'reject'])->name('reject');
+            
+            // Delete
+            Route::delete('/delete/{id}', [App\Http\Controllers\InventoryReturnController::class, 'destroy'])->name('destroy');
+            
+            // Statistics
+            Route::get('/statistics', [App\Http\Controllers\InventoryReturnController::class, 'statistics'])->name('statistics');
+        });
+    });
+    
     Route::group(['middleware' => ['permission:stockcount']], function() {
-        // Index
-        Route::get('/inventoryCounts', [App\Http\Controllers\InventoryCountController::class, 'index'])->name('inventoryCounts.index');
-        // Store (Create)
-        Route::post('/inventoryCounts/store', [App\Http\Controllers\InventoryCountController::class, 'store'])->name('inventoryCounts.store');
-        // Show
-        Route::get('/inventoryCounts/show/{id}', [App\Http\Controllers\InventoryCountController::class, 'show'])->name('inventoryCounts.show');
-        // Update
-        Route::put('/inventoryCounts/update/{id}', [App\Http\Controllers\InventoryCountController::class, 'update'])->name('inventoryCounts.update');
-        Route::post('/inventoryCounts/update/{id}', [App\Http\Controllers\InventoryCountController::class, 'update']); // Alternative
-        // Delete
-        Route::delete('/inventoryCounts/delete/{id}', [App\Http\Controllers\InventoryCountController::class, 'destroy'])->name('inventoryCounts.destroy');
-        // Approve
-        Route::post('/inventoryCounts/approve/{id}', [App\Http\Controllers\InventoryCountController::class, 'approve'])->name('inventoryCounts.approve');
-        // Reject
-        Route::post('/inventoryCounts/reject/{id}', [App\Http\Controllers\InventoryCountController::class, 'reject'])->name('inventoryCounts.reject');
+        // Inventory Counts Routes
+        Route::prefix('inventoryCounts')->name('inventoryCounts.')->group(function () {
+            // List with DataTable
+            Route::get('/', [App\Http\Controllers\InventoryCountController::class, 'index'])->name('index');
+            
+            // AJAX endpoints for inventory data
+            Route::get('/get-driver-inventory', [App\Http\Controllers\InventoryCountController::class, 'getDriverInventory'])->name('getDriverInventory');
+            Route::get('/get-product-batches', [App\Http\Controllers\InventoryCountController::class, 'getProductBatches'])->name('getProductBatches');
+            Route::get('/get-product-inventory/{productId}', [App\Http\Controllers\InventoryCountController::class, 'getProductInventory'])->name('getProductInventory');
+            
+            // CRUD operations
+            Route::post('/store', [App\Http\Controllers\InventoryCountController::class, 'store'])->name('store');
+            Route::get('/show/{id}', [App\Http\Controllers\InventoryCountController::class, 'show'])->name('show');
+            Route::get('/{id}/with-batches', [App\Http\Controllers\InventoryCountController::class, 'getCountWithBatches'])->name('withBatches');
+            Route::put('/update/{id}', [App\Http\Controllers\InventoryCountController::class, 'update'])->name('update');
+            Route::post('/update/{id}', [App\Http\Controllers\InventoryCountController::class, 'update']); // Alternative for form submissions
+            
+            // Status management
+            Route::post('/approve/{id}', [App\Http\Controllers\InventoryCountController::class, 'approve'])->name('approve');
+            Route::post('/reject/{id}', [App\Http\Controllers\InventoryCountController::class, 'reject'])->name('reject');
+            
+            // Delete
+            Route::delete('/delete/{id}', [App\Http\Controllers\InventoryCountController::class, 'destroy'])->name('destroy');
+            
+            // Statistics
+            Route::get('/statistics', [App\Http\Controllers\InventoryCountController::class, 'statistics'])->name('statistics');
+        });
     });
     
     Route::group(['middleware' => ['permission:customer']], function() {
@@ -443,7 +507,7 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('/invoices/massdestroy', [App\Http\Controllers\InvoiceController::class, 'massdestroy']);
         Route::post('/invoices/massupdatestatus', [App\Http\Controllers\InvoiceController::class, 'massupdatestatus']);
         //Invoice Detail
-        Route::get('invoiceDetails/getprice/{invoice_id}/{product_id}', [App\Http\Controllers\InvoiceDetailController::class, 'getprice']);
+        Route::get('invoiceDetails/getprice/{invoice_id}/{product_id}', [App\Http\Controllers\InvoiceDetailController::class, 'getprices']);
         Route::resource('invoiceDetails', App\Http\Controllers\InvoiceDetailController::class);
         Route::post('/invoiceDetails/massdestroy', [App\Http\Controllers\InvoiceDetailController::class, 'massdestroy']);
         //Invoice Payment
@@ -507,11 +571,50 @@ Route::group(['middleware' => ['auth']], function() {
         Route::resource('trips', App\Http\Controllers\TripController::class);
 
     });
+    // Warehouse Routes
+    Route::group(['middleware' => ['permission:warehouse']], function() {
+        
+        // Main CRUD routes
+        Route::get('/warehouses', [App\Http\Controllers\WarehouseController::class, 'index'])->name('warehouses.index');
+        Route::get('/warehouses/create', [App\Http\Controllers\WarehouseController::class, 'create'])->name('warehouses.create');
+        Route::post('/warehouses', [App\Http\Controllers\WarehouseController::class, 'store'])->name('warehouses.store');
+        Route::get('/warehouses/{id}', [App\Http\Controllers\WarehouseController::class, 'show'])->name('warehouses.show');
+        Route::get('/warehouses/{id}/edit', [App\Http\Controllers\WarehouseController::class, 'edit'])->name('warehouses.edit');
+        Route::put('/warehouses/{id}', [App\Http\Controllers\WarehouseController::class, 'update'])->name('warehouses.update');
+
+        // AJAX routes for getting batches/inventory
+        Route::get('/warehouses/get-warehouse-batches/{warehouse_id}', [App\Http\Controllers\WarehouseController::class, 'getWarehouseBatches'])->name('warehouses.get-warehouse-batches');
+        Route::get('/warehouses/get-product-batches/{product_id}', [App\Http\Controllers\WarehouseController::class, 'getProductBatches'])->name('warehouses.get-product-batches');
+        Route::get('/warehouses/{warehouse_id}/inventory', [App\Http\Controllers\WarehouseController::class, 'getWarehouseInventory'])->name('warehouses.get-inventory');
+        Route::get('/warehouses/{warehouse_id}/summary', [App\Http\Controllers\WarehouseController::class, 'getWarehouseSummary'])->name('warehouses.summary');
+        
+        // Specific inventory item management
+        Route::get('/warehouses/{warehouse_id}/inventory/{inventory_id}/edit', [App\Http\Controllers\WarehouseController::class, 'editInventory'])->name('warehouses.edit-inventory');
+        Route::put('/warehouses/{warehouse_id}/inventory/{inventory_id}', [App\Http\Controllers\WarehouseController::class, 'updateInventory'])->name('warehouses.update-inventory');
+        Route::delete('/warehouses/{warehouse_id}/inventory/{inventory_id}', [App\Http\Controllers\WarehouseController::class, 'destroyInventory'])->name('warehouses.destroy-inventory');
+        
+        // Transfer between warehouses
+        Route::post('/warehouses/transfer', [App\Http\Controllers\WarehouseController::class, 'transferStock'])->name('warehouses.transfer');
+        Route::get('/warehouses/transfer-form', [App\Http\Controllers\WarehouseController::class, 'showTransferForm'])->name('warehouses.transfer-form');
+        
+        // Get products and batches for dropdowns (AJAX)
+        Route::get('/warehouses/get-products', [App\Http\Controllers\WarehouseController::class, 'getProducts'])->name('warehouses.get-products');
+        Route::get('/warehouses/get-batches', [App\Http\Controllers\WarehouseController::class, 'getBatches'])->name('warehouses.get-batches');
+        Route::get('/warehouses/get-warehouses-list', [App\Http\Controllers\WarehouseController::class, 'getWarehousesList'])->name('warehouses.get-list');
+        
+    });
+
     Route::group(['middleware' => ['permission:inventorybalance']], function() {
         Route::get('/inventoryBalances', [App\Http\Controllers\InventoryBalanceController::class, 'index'])->name('inventoryBalances.index');
         Route::post('/inventoryBalances/stockin', [App\Http\Controllers\InventoryBalanceController::class, 'stockin'])->name('inventoryBalances.stockin');
         Route::get('/inventoryBalances/getstock/{lorry_id}/{product_id}', [App\Http\Controllers\InventoryBalanceController::class, 'getstock'])->name('inventoryBalances.getstock');
         Route::post('/inventoryBalances/stockout', [App\Http\Controllers\InventoryBalanceController::class, 'stockout'])->name('inventoryBalances.stockout');
+    
+        Route::get('/inventoryBalances/get-lorry-batches/{lorry_id}', [App\Http\Controllers\InventoryBalanceController::class, 'getLorryBatches'])->name('inventoryBalances.get-lorry-batches');
+
+        // For stock out - get warehouses that have a specific batch (USE InventoryBalanceController)
+        Route::get('/warehouses/with-batch/{batch_id}', [App\Http\Controllers\InventoryBalanceController::class, 'getWarehousesWithBatch'])->name('warehouses.get-warehouses-with-batch');
+        
     });
     Route::group(['middleware' => ['permission:inventorytransaction']], function() {
         Route::get('/inventoryTransactions', [App\Http\Controllers\InventoryTransactionController::class, 'index'])->name('inventoryTransactions.index');

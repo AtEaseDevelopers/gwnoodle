@@ -123,7 +123,7 @@ class ProductController extends AppBaseController
             ]);
         }
 
-        Flash::success($input['code'].__('products.saved_successfully'));
+        Flash::success($input['unit_code'] .__('products.saved_successfully'));
 
         return redirect(route('products.index'));
     }
@@ -265,7 +265,7 @@ class ProductController extends AppBaseController
             Flash::info('Cost changed from ' . number_format($oldCost, 2) . ' to ' . number_format($newCost, 2));
         }
 
-        Flash::success($product->code.__('products.updated_successfully'));
+        Flash::success($product->unit_code.__('products.updated_successfully'));
 
         return redirect(route('products.index'));
     }
@@ -307,7 +307,7 @@ class ProductController extends AppBaseController
 
         $this->productRepository->delete($id);
 
-        Flash::success($product->code.__('products.deleted_successfully'));
+        Flash::success($product->unit_code.__('products.deleted_successfully'));
 
         return redirect(route('products.index'));
     }
@@ -385,8 +385,8 @@ class ProductController extends AppBaseController
                 Session::put('ids_to_sync_xero', $ids);
             }
             // Get Xero's access token
-            if ($req->has('code')) {
-                $res = $xero->getToken($req->code);
+            if ($req->has('unit_code')) {
+                $res = $xero->getToken($req->unit_code);
                 if (!$res->ok()) {
                     throw new Exception('Failed to get xero access token.');
                 }
@@ -401,7 +401,7 @@ class ProductController extends AppBaseController
             $products = Product::whereIn('id',$ids)->get();
             
             for ($i = 0; $i < count($products) ;$i++) {
-                $res = $xero->createItem($products[$i]->code, $products[$i]->name, $products[$i]->price);
+                $res = $xero->createItem($products[$i]->unit_code, $products[$i]->name, $products[$i]->price);
 
                 if (!$res->ok()) {  
                     throw new Exception('Failed to sync product.');

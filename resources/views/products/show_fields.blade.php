@@ -215,7 +215,6 @@
                                     <tr>
                                         <th>Batch Code</th>
                                         <th>Expiry Date</th>
-                                        <th>Initial Qty</th>
                                         <th>Current Qty</th>
                                         <th>Usage</th>
                                         <th>Status</th>
@@ -239,27 +238,8 @@
                                                 <span class="badge badge-danger">Expired</span>
                                             @endif
                                         </td>
-                                        <td class="text-right">{{ number_format($batch['initial_quantity']) }}</td>
                                         <td class="text-right">{{ number_format($batch['quantity']) }}</td>
-                                        <td style="width: 150px;">
-                                            @if($batch['initial_quantity'] > 0)
-                                                @php
-                                                    $usedPercentage = 100 - $batch['percentage_remaining'];
-                                                @endphp
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar bg-success" 
-                                                         role="progressbar" 
-                                                         style="width: {{ $usedPercentage }}%;" 
-                                                         aria-valuenow="{{ $usedPercentage }}" 
-                                                         aria-valuemin="0" 
-                                                         aria-valuemax="100">
-                                                        {{ number_format($usedPercentage, 1) }}%
-                                                    </div>
-                                                </div>
-                                            @else
-                                                <span class="text-muted">N/A</span>
-                                            @endif
-                                        </td>
+                                        
                                         <td>
                                             @if($batch['is_expired'])
                                                 <span class="badge badge-danger">Expired</span>
@@ -271,12 +251,15 @@
                                                     @case(2)
                                                         <span class="badge badge-danger">Expired</span>
                                                         @break
+                                                    @case(3)
+                                                        <span class="badge badge-warning">Inactive</span>
+                                                        @break
                                                     
                                                 @endswitch
                                             @endif
                                         </td>
                                         <td>
-                                            <a href="{{ route('productBatches.show', ['productBatch' => Crypt::encrypt($batch['id'])]) }}" 
+                                            <a href="{{ route('productBatches.show', ['id' => Crypt::encrypt($batch['id'])]) }}" 
                                                class="btn btn-sm btn-info" title="View Batch">
                                                 <i class="fa fa-eye"></i>
                                             </a>
@@ -287,10 +270,9 @@
                                 </tbody>
                                 <tfoot class="bg-light">
                                     <tr>
-                                        <th colspan="3" class="text-right">Totals:</th>
-                                        <th class="text-right">{{ number_format($product->batches->sum('initial_quantity')) }}</th>
+                                        <th colspan="2" class="text-right">Totals:</th>
                                         <th class="text-right">{{ number_format($product->total_quantity) }}</th>
-                                        <th colspan="2"></th>
+                                        <th colspan="4"></th>
                                     </tr>
                                 </tfoot>
                             </table>

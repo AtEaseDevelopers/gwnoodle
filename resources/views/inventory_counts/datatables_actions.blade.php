@@ -26,8 +26,6 @@
     @endphp
     
     @if($request->status == 'pending' | $isAdmin)
-        @if($driver->trip_id === $request->trip_id)
-        <!-- Edit Count Button (NEW: For admin to fill counted quantities) -->
         <button type="button" class="btn btn-ghost-primary edit-count-btn" title="Edit Count"
                 data-id="{{ $request->id }}"
                 data-request='{
@@ -40,7 +38,6 @@
                 }'>
             <i class="fa fa-edit"></i>
         </button>
-        @endif
     @endif
     
     <!-- Remove old Approve/Reject buttons from here - they will be in the View modal -->
@@ -50,7 +47,7 @@
     <form action="{{ route('inventoryCounts.destroy', $request->id) }}" method="POST" style="display: inline;">
         @csrf
         @method('DELETE')
-        <button type="submit" class="btn btn-ghost-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this stock count request?')">
+        <button type="submit" class="btn btn-ghost-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this stock out request?')">
             <i class="fa fa-trash"></i>
         </button>
     </form>

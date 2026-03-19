@@ -3,7 +3,7 @@
 @section('content')
     <ol class="breadcrumb">
       <li class="breadcrumb-item">
-         <a href="{!! route('lorries.index') !!}">{{ __('lorries.lorry') }}</a>
+         <a href="{!! route('lorries.index') !!}">{{ __('Vans') }}</a>
       </li>
       <li class="breadcrumb-item active">{{ __('lorries.create') }}</li>
     </ol>
@@ -15,7 +15,7 @@
                         <div class="card">
                             <div class="card-header">
                                 <i class="fa fa-plus-square-o fa-lg"></i>
-                                <strong>{{ __('lorries.create_lorry') }}</strong>
+                                <strong>{{ __('Create Vans') }}</strong>
                             </div>
                             <div class="card-body">
                                 {!! Form::open(['route' => 'lorries.store']) !!}

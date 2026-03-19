@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Models;
+use App\Traits\LogsActivity;
 
 use Eloquent as Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -8,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Product extends Model
 {
     use HasFactory;
+    use LogsActivity;
 
     public $table = 'products';
     
@@ -28,7 +30,7 @@ class Product extends Model
 
     protected $casts = [
         'id' => 'integer',
-        'code' => 'string',
+        'unit_code' => 'string',
         'name' => 'string',
         'price' => 'float',
         'cost' => 'float',      
@@ -212,14 +214,10 @@ class Product extends Model
                 return [
                     'id' => $batch->id,
                     'batch_code' => $batch->batch_code,
-                    'expiry_date' => $batch->expiry_date->format('d-m-Y'),
+                    'expiry_date' => $batch->expiry_date,
                     'quantity' => $batch->quantity,
-                    'initial_quantity' => $batch->initial_quantity,
                     'status' => $batch->status,
                     'status_text' => $this->getBatchStatusText($batch->status),
-                    'percentage_remaining' => $batch->initial_quantity > 0 
-                        ? round(($batch->quantity / $batch->initial_quantity) * 100, 2)
-                        : 0,
                     'is_expired' => $batch->isExpired(),
                     'days_to_expiry' => now()->diffInDays($batch->expiry_date, false)
                 ];
@@ -234,14 +232,14 @@ class Product extends Model
         return $this->batches()
             ->where('status', 1)
             ->where('quantity', '>', 0)
-            ->where('expiry_date', '>', now())
+        ->where('expiry_date', '>', now())
             ->orderBy('expiry_date', 'asc') // FEFO - First Expiry First Out
             ->get()
             ->map(function($batch) {
                 return [
                     'id' => $batch->id,
                     'batch_code' => $batch->batch_code,
-                    'expiry_date' => $batch->expiry_date->format('d-m-Y'),
+                    'expiry_date' => $batch->expiry_date,
                     'available_quantity' => $batch->quantity,
                     'days_to_expiry' => now()->diffInDays($batch->expiry_date, false)
                 ];
@@ -305,7 +303,7 @@ class Product extends Model
             $allocations[] = [
                 'batch_id' => $batch->id,
                 'batch_code' => $batch->batch_code,
-                'expiry_date' => $batch->expiry_date->format('d-m-Y'),
+                'expiry_date' => $batch->expiry_date,
                 'quantity_to_take' => $takeQuantity,
                 'remaining_in_batch' => $batch->quantity - $takeQuantity
             ];

@@ -20,6 +20,7 @@ class SharePendingCounts
     {
         // Share with all views after authentication
         view()->share([
+            'pendingStockRequestsCount' => InventoryRequest::where('status', InventoryRequest::STATUS_PENDING)->count(),
             'pendingStockCountsCount' => InventoryCount::where('status', InventoryCount::STATUS_PENDING)->count(),
         ]);
         

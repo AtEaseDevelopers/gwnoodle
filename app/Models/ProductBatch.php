@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
 
 class ProductBatch extends Model
 {
     use HasFactory;
+    use LogsActivity;
 
     protected $table = 'product_batches';
 
@@ -16,8 +18,7 @@ class ProductBatch extends Model
         'batch_code',
         'expiry_date',
         'quantity',
-        'initial_quantity',   
-        'status', // 1=active, 2=expired, 3=depleted
+        'status', // 1=active, 2=expired, 3=inactive
     ];
 
     protected $casts = [
@@ -27,15 +28,12 @@ class ProductBatch extends Model
         'status' => 'integer',
     ];
 
-    public function product()
-    {
-        return $this->belongsTo(Product::class);
-    }
-
-    public function inventoryTransactions()
-    {
-        return $this->hasMany(InventoryTransaction::class, 'batch_id');
-    }
+    /**
+     * Status constants for better code readability
+     */
+    const STATUS_ACTIVE = 1;
+    const STATUS_EXPIRED = 2;
+    const STATUS_INACTIVE = 3;
 
     /**
      * Check if batch is expired
@@ -46,13 +44,161 @@ class ProductBatch extends Model
     }
 
     /**
+     * Check if batch is inactive (quantity is 0)
+     */
+    public function isInactive()
+    {
+        return $this->quantity <= 0;
+    }
+
+    /**
+     * Check if batch is active (has stock and not expired)
+     */
+    public function isActive()
+    {
+        return $this->status == self::STATUS_ACTIVE && 
+               $this->quantity > 0 && 
+               !$this->isExpired();
+    }
+
+    /**
      * Check if batch has stock
      */
     public function hasStock()
     {
         return $this->quantity > 0;
     }
-    
+
+    /**
+     * Get status text attribute
+     */
+    public function getStatusTextAttribute()
+    {
+        return match($this->status) {
+            self::STATUS_ACTIVE => 'Active',
+            self::STATUS_EXPIRED => 'Expired',
+            self::STATUS_INACTIVE => 'Inactive',
+            default => 'Unknown'
+        };
+    }
+
+    /**
+     * Get status badge class attribute
+     */
+    public function getStatusBadgeClassAttribute()
+    {
+        return match($this->status) {
+            self::STATUS_ACTIVE => 'badge-success',
+            self::STATUS_EXPIRED => 'badge-secondary',
+            self::STATUS_INACTIVE => 'badge-danger',
+            default => 'badge-secondary'
+        };
+    }
+
+    /**
+     * Get status color attribute for UI
+     */
+    public function getStatusColorAttribute()
+    {
+        return match($this->status) {
+            self::STATUS_ACTIVE => 'success',
+            self::STATUS_INACTIVE => 'danger',
+            self::STATUS_EXPIRED => 'secondary',
+            default => 'secondary'
+        };
+    }
+
+    /**
+     * Get the used percentage of stock
+     */
+    public function getUsedPercentageAttribute()
+    {
+        return 100 - $this->remaining_percentage;
+    }
+
+    /**
+     * Get days until expiry
+     */
+    public function getDaysToExpiryAttribute()
+    {
+        if (!$this->expiry_date) {
+            return null;
+        }
+        
+        return now()->diffInDays($this->expiry_date, false);
+    }
+
+    /**
+     * Check if batch is expiring soon (within 30 days)
+     */
+    public function isExpiringSoon($days = 30)
+    {
+        if ($this->isExpired()) {
+            return false;
+        }
+        
+        $daysToExpiry = $this->days_to_expiry;
+        return $daysToExpiry !== null && $daysToExpiry <= $days;
+    }
+
+    /**
+     * Scope a query to only include active batches
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE)
+                     ->where('quantity', '>', 0)
+                     ->where('expiry_date', '>', now());
+    }
+
+    /**
+     * Scope a query to only include expired batches
+     */
+    public function scopeExpired($query)
+    {
+        return $query->where(function($q) {
+            $q->where('status', self::STATUS_EXPIRED)
+              ->orWhere('expiry_date', '<', now());
+        });
+    }
+
+    /**
+     * Scope a query to only include inactive batches (quantity = 0)
+     */
+    public function scopeInactive($query)
+    {
+        return $query->where('status', self::STATUS_INACTIVE)
+                     ->orWhere('quantity', '<=', 0);
+    }
+
+    /**
+     * Scope a query to only include batches with stock
+     */
+    public function scopeInStock($query)
+    {
+        return $query->where('quantity', '>', 0);
+    }
+
+    /**
+     * Scope a query to order by expiry date (FEFO - First Expiry First Out)
+     */
+    public function scopeFefo($query)
+    {
+        return $query->orderBy('expiry_date', 'asc');
+    }
+
+    // Relationships
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function inventoryTransactions()
+    {
+        return $this->hasMany(InventoryTransaction::class, 'batch_id');
+    }
+
+    // Batch Code Generation and Parsing
     /**
      * Generate batch code based on format
      */
@@ -121,5 +267,76 @@ class ProductBatch extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Accessor for expiry date
+     */
+    public function getExpiryDateAttribute($value)
+    {
+        if ($value) {
+            return \Carbon\Carbon::parse($value)->format('Y-m-d');
+        }
+        return null;
+    }
+
+    /**
+     * Get formatted expiry date
+     */
+    public function getFormattedExpiryDateAttribute()
+    {
+        if (!$this->expiry_date) {
+            return 'N/A';
+        }
+        
+        return \Carbon\Carbon::parse($this->expiry_date)->format('d-m-Y');
+    }
+
+    /**
+     * Increase batch quantity (stock in)
+     */
+    public function increaseQuantity($amount, $remark = null, $userId = null)
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Amount must be positive');
+        }
+        
+        $this->quantity += $amount;
+        $this->save();
+        
+        // Create transaction record
+        return $this->inventoryTransactions()->create([
+            'type' => 1, // Stock In
+            'quantity' => $amount,
+            'date' => now(),
+            'remark' => $remark,
+            'user_id' => $userId ?? auth()->id()
+        ]);
+    }
+
+    /**
+     * Decrease batch quantity (stock out)
+     */
+    public function decreaseQuantity($amount, $remark = null, $userId = null)
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Amount must be positive');
+        }
+        
+        if ($amount > $this->quantity) {
+            throw new \InvalidArgumentException('Insufficient stock');
+        }
+        
+        $this->quantity -= $amount;
+        $this->save();
+        
+        // Create transaction record
+        return $this->inventoryTransactions()->create([
+            'type' => 2, // Stock Out
+            'quantity' => -$amount,
+            'date' => now(),
+            'remark' => $remark,
+            'user_id' => $userId ?? auth()->id()
+        ]);
     }
 }

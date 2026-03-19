@@ -177,6 +177,18 @@
 
 @endcanany
 
+
+@can('warehouse')
+
+<li class="nav-item {{ Request::is('trips*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('warehouses.index') }}">
+        <i class="nav-icon icon-home"></i>
+        <span>{{ trans('Warehouse') }}</span>
+    </a>
+</li>
+
+@endcan 
+
 @canany(['inventorybalance','inventorytransaction'])
 <li class="nav-item nav-dropdown {{ Request::is('inventoryBalances*','inventoryTransactions*') ? 'open' : '' }}">
     <a class="nav-link nav-dropdown-toggle" href="#">
@@ -204,11 +216,35 @@
         </ul>
     @endcan
 
+    <!-- @can('stockrequest')
+    <ul class="nav-dropdown-items">
+        <li class="nav-item {{ Request::is('inventoryRequests*') ? 'active' : '' }}">
+            <a class="nav-link {{ Request::is('inventoryRequests*') ? 'active' : '' }}" href="{{ route('inventoryRequests.index') }}">
+                <span>{{ trans('Stock Requests') }}</span>
+                <span id="stockRequestBadge" class="badge badge-danger badge-pill ml-2" 
+                    style="{{ $pendingStockRequestsCount > 0 ? '' : 'display: none;' }}">
+                    {{ $pendingStockRequestsCount }}
+                </span>
+            </a>
+        </li>
+    </ul>
+    @endcan
+    
+    @can('stockreturn')
+     <ul class="nav-dropdown-items">
+        <li class="nav-item {{ Request::is('inventoryReturns*') ? 'active' : '' }}">
+            <a class="nav-link {{ Request::is('inventoryReturns*') ? 'active' : '' }}" href="{{ route('inventoryReturns.index') }}">
+                <span>{{ trans('Stock Return') }}</span>
+            </a>
+        </li>
+    </ul>
+    @endcan -->
+
     @can('stockcount')
     <ul class="nav-dropdown-items">
         <li class="nav-item {{ Request::is('inventoryCounts*') ? 'active' : '' }}">
             <a class="nav-link {{ Request::is('inventoryCounts*') ? 'active' : '' }}" href="{{ route('inventoryCounts.index') }}">
-                <span>{{ trans('Stock Count') }}</span>
+                <span>{{ trans('Stock Out') }}</span>
                 <span id="stockCountBadge" class="badge badge-danger badge-pill ml-2" 
                     style="{{ $pendingStockCountsCount > 0 ? '' : 'display: none;' }}">
                     {{ $pendingStockCountsCount }}
@@ -222,7 +258,7 @@
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('inventoryBalances*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('inventoryBalances*') ? 'active' : '' }}" href="{{ route('inventoryBalances.index') }}">
-                    <span>{{ trans('side_menu.balances') }}</span>
+                    <span>{{ trans('Driver Inventory Balance') }}</span>
                 </a>
             </li>
         </ul>
@@ -236,7 +272,7 @@
             </li>
         </ul>
     @endcan
-    @can('inventorytransfer')
+    <!-- @can('inventorytransfer')
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('inventoryTransfers*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('inventoryTransfers*') ? 'active' : '' }}" href="{{ route('inventoryTransfers.index') }}">
@@ -244,7 +280,7 @@
                 </a>
             </li>
         </ul>
-    @endcan
+    @endcan -->
 </li>
 @endcanany
 
@@ -261,17 +297,17 @@
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('lorries*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('lorries*') ? 'active' : '' }}" href="{{ route('lorries.index') }}">
-                    <span>{{ trans('side_menu.lorries') }}</span>
+                    <span>{{ trans('Vans') }}</span>
                 </a>
             </li>
         </ul>
-        <ul class="nav-dropdown-items">
+        <!-- <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('servicedetails*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('servicedetails*') ? 'active' : '' }}" href="{{ route('servicedetails.index') }}">
                     <span>{{ trans('side_menu.lorry_service') }}</span>
                 </a>
             </li>
-        </ul>
+        </ul> -->
     @endcan
 
     @can('driver')
@@ -290,7 +326,7 @@
             </li>
         </ul>
     @endcan
-
+<!-- 
     @can('kelindan')
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('kelindans*') ? 'active' : '' }}">
@@ -299,7 +335,7 @@
                 </a>
             </li>
         </ul>
-    @endcan
+    @endcan -->
 
     @can('agent')
         <ul class="nav-dropdown-items">

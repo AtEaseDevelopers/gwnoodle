@@ -3,57 +3,67 @@
         <!-- Code Field -->
         <div class="form-group">
             {!! Form::label('code', __('customers.code')) !!}:<span class="asterisk"> *</span>
-            {!! Form::text('code', null, ['class' => 'form-control', 'maxlength' => 255, 'autofocus']) !!} <!-- Removed duplicate maxlength -->
+            {!! Form::text('code', null, ['class' => 'form-control', 'maxlength' => 255, 'autofocus']) !!}
         </div>
 
         <!-- Company Field -->
         <div class="form-group">
             {!! Form::label('company', __('customers.company')) !!}:<span class="asterisk"> *</span>
-            {!! Form::text('company', null, ['class' => 'form-control', 'maxlength' => 255]) !!} <!-- Removed duplicate maxlength -->
+            {!! Form::text('company', null, ['class' => 'form-control', 'maxlength' => 255]) !!}
         </div>
 
         <!-- Paymentterm Field -->
         <div class="form-group">
             {!! Form::label('paymentterm', __('customers.payment_term')) !!}:<span class="asterisk"> *</span>
-            {{ Form::select('paymentterm', [
-                1 => __('customers.payment_term_cash'),
-                2 => __('customers.payment_term_credit_note'),
-            ], null, ['class' => 'form-control']) }}
+            {!! Form::select('paymentterm', $paymentTerm ?? [],
+            old('paymentterm', $customer->paymentterm ?? null), ['class' => 'form-control selectpicker', 'placeholder' => 'Select Payment Term...', 'data-live-search' => 'true']) !!}
         </div>
 
         <!-- Group Field -->
         <div class="form-group">
             {!! Form::label('group', __('customers.group')) !!}:
-            {!! Form::select('group[]', $groups, explode(",", $customer->group ?? ""), ['class' => 'selectpicker form-control', 'multiple' => true]) !!}
-            {{-- {!! Form::select('group[]', $groups, explode(",", $customer->group ?? ""), ['class' => 'selectpicker form-control', 'placeholder' => 'Select Group']) !!} --}}
+            {!! Form::select('group[]', $groups ?? [], explode(",", $customer->group ?? ""), ['class' => 'selectpicker form-control', 'multiple' => true, 'data-live-search' => 'true']) !!}
+        </div>
+
+        <!-- Category Field - NEW -->
+        <div class="form-group">
+            {!! Form::label('category', __('Category')) !!}:
+            {!! Form::select('category', $categoryOptions ?? [], null, ['class' => 'form-control selectpicker', 'placeholder' => 'Select Category...', 'data-live-search' => 'true']) !!}
+        </div>
+
+        <!-- Driver Id Field - NEW -->
+        <div class="form-group">
+            {!! Form::label('driver_id', __('Driver')) !!}:<span class="asterisk"> *</span>
+            {!! Form::select('driver_id', $driverItems ?? [], null, ['class' => 'form-control selectpicker', 'placeholder' => 'Pick a Driver...', 'data-live-search' => 'true']) !!}
         </div>
 
         <!-- Agent Id Field -->
         <div class="form-group">
             {!! Form::label('agent_id', __('customers.agent')) !!}:
-            {!! Form::select('agent_id', $agentItems, null, ['class' => 'form-control', 'placeholder' => 'Pick a Agent...']) !!}
+            {!! Form::select('agent_id', $agentItems ?? [], null, ['class' => 'form-control selectpicker', 'placeholder' => 'Pick a Agent...', 'data-live-search' => 'true']) !!}
         </div>
 
-        <!-- Supervisor Id Field -->
-        <div class="form-group">
-            {!! Form::label('supervisor_id', __('customers.operation')) !!}:
-            {!! Form::select('supervisor_id', $supervisorItems, null, ['class' => 'form-control', 'placeholder' => 'Pick a Operation...']) !!}
-        </div>
 
         <!-- Phone Field -->
-        <div class="form-group ">
+        <div class="form-group">
             {!! Form::label('phone', __('customers.phone')) !!}:
-            {!! Form::text('phone', null, ['class' => 'form-control', 'maxlength' => 20]) !!} <!-- Removed duplicate maxlength -->
+            {!! Form::text('phone', null, ['class' => 'form-control', 'maxlength' => 20]) !!}
         </div>
 
-        <!-- Address Field -->
-        <div class="form-group ">
-            {!! Form::label('address', __('customers.address')) !!}:
-            {!! Form::text('address', null, ['class' => 'form-control', 'maxlength' => 65535]) !!} <!-- Removed duplicate maxlength -->
+        <!-- Billing Address Field - UPDATED from 'address' to 'billing_address' -->
+        <div class="form-group">
+            {!! Form::label('billing_address', __('Billing Address')) !!}:
+            {!! Form::textarea('billing_address', null, ['class' => 'form-control', 'rows' => 3]) !!}
+        </div>
+
+        <!-- Delivery Address Field - NEW -->
+        <div class="form-group">
+            {!! Form::label('delivery_address', __('Delivery Address')) !!}:
+            {!! Form::textarea('delivery_address', null, ['class' => 'form-control', 'rows' => 3]) !!}
         </div>
 
         <!-- Status Field -->
-        <div class="form-group ">
+        <div class="form-group">
             {!! Form::label('status', __('customers.status')) !!}:<span class="asterisk"> *</span>
             {{ Form::select('status', [
                 1 => __('customers.active'),
@@ -61,6 +71,7 @@
             ], null, ['class' => 'form-control']) }}
         </div>
     </div>
+    
     @einvoice
     <div class="col-md-6">
         <div class="card">

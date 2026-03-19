@@ -160,6 +160,7 @@ class InvoiceDetailDataTable extends DataTable
             'data' => 'product.name',
             'name' => 'product.name']),
 
+            
             'quantity'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('invoice_details.quantity'),
             'data' => 'quantity',
             'name' => 'product.quantity']),
@@ -171,10 +172,6 @@ class InvoiceDetailDataTable extends DataTable
             'totalprice'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_details.total_price'),
             'data' => 'totalprice',
             'name' => 'totalprice']),
-
-            'remark'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_details.remark'),
-            'data' => 'totalprice',
-            'name' => 'remark']),
 
         ];
     }

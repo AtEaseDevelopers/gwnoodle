@@ -27,12 +27,6 @@ class ProductBatchDataTable extends DataTable
             ->editColumn('quantity', function($batch) {
                 return number_format($batch->quantity);
             })
-            ->editColumn('initial_quantity', function($batch) {
-                return number_format($batch->initial_quantity);
-            })
-            ->editColumn('expiry_date', function($batch) {
-                return $batch->expiry_date->format('d-m-Y');
-            })
             ->editColumn('status', function($batch) {
                 $statusLabels = [
                     1 => 'Active',
@@ -188,7 +182,6 @@ class ProductBatchDataTable extends DataTable
             'product_id' => ['title' => 'Product', 'data' => 'product_id', 'name' => 'product_id'],
             'batch_code' => ['title' => 'Batch Code', 'data' => 'batch_code', 'name' => 'batch_code'],
             'expiry_date' => ['title' => 'Expiry Date', 'data' => 'expiry_date', 'name' => 'expiry_date'],
-            'initial_quantity' => ['title' => 'Initial Qty', 'data' => 'initial_quantity', 'name' => 'initial_quantity'],
             'quantity' => ['title' => 'Current Qty', 'data' => 'quantity', 'name' => 'quantity'],
             'status' => ['title' => 'Status', 'data' => 'status', 'name' => 'status'],
             'created_at' => ['title' => 'Created', 'data' => 'created_at', 'name' => 'created_at', 'exportable' => false],

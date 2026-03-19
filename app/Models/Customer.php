@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\DB;
 use App\Models\Code;
+use App\Traits\LogsActivity;
 
 class Customer extends Model
 {
     // use SoftDeletes;
-
+    use LogsActivity;
     use HasFactory;
 
     public $table = 'customers';
@@ -27,19 +28,20 @@ class Customer extends Model
     public $fillable = [
         'code',
         'company',
-        'chinese_name',
         'paymentterm',
         'group',
-        'agent_id',
         'driver_id',
-        'supervisor_id',
         'phone',
-        'address',
+        'billing_address',
+        'delivery_address',
         'status',
-        'sst',
+        'category',
+        'agent_id',
+        'supervisor_id',
+
         //e-invoice fields
         'postcode',
-        'city',
+        'area',
         'email',
         'state',
         'country',
@@ -58,15 +60,27 @@ class Customer extends Model
         'id' => 'integer',
         'code' => 'string',
         'company' => 'string',
-        'paymentterm' => 'integer',
-        'group' => 'string',
+        'paymentterm' => 'string',
+        'group' => 'array',
+        'driver_id' => 'integer',
+        'phone' => 'string',
+        'billing_address' => 'string',
+        'delivery_address' => 'string',
+        'status' => 'integer',
+        'category' => 'string',
         'agent_id' => 'integer',
         'supervisor_id' => 'integer',
-        'phone' => 'string',
-        'address' => 'string',
-        'status' => 'integer',
-        'sst' => 'string',
-        'tin' => 'string'
+        
+        //e-invoice fields casts
+        'postcode' => 'integer',
+        'area' => 'string',
+        'email' => 'string',
+        'state' => 'string',
+        'country' => 'string',
+        'registration_no' => 'string',
+        'msic' => 'string',
+        'sst_registration_no' => 'string',
+        'tourism_tax_registration' => 'string',
     ];
 
     /**
@@ -76,15 +90,41 @@ class Customer extends Model
      */
     public static $rules = [
         'code' => 'required|string|max:255|unique:customers,code',
-        'company' => 'required|string|max:255|string|max:255',
+        'company' => 'required|string|max:255',
         'paymentterm' => 'required',
-        'phone' => 'nullable|string|max:20|nullable|string|max:20',
-        'address' => 'nullable|string|max:65535|nullable|string|max:65535',
-        'status' => 'required',
-        'driver_id' => 'required',
-        'sst' => 'nullable|string|max:255',
-        'tin' => 'nullable|string|max:255',
+        'group' => 'nullable|array',
+        'driver_id' => 'required|integer|exists:drivers,id',
+        'phone' => 'nullable|string|max:20',
+        'billing_address' => 'nullable|string',
+        'delivery_address' => 'nullable|string',
+        'status' => 'required|boolean',
+        'category' => 'nullable|string|max:100',
+        'agent_id' => 'nullable|integer|exists:agents,id',
+        'supervisor_id' => 'nullable|integer|exists:supervisors,id',
+        
+        //e-invoice validation rules
+        'postcode' => 'nullable|integer|max:20',
+        'area' => 'nullable|string|max:255',
+        'email' => 'nullable|email|max:255',
+        'state' => 'nullable|string|max:100',
+        'country' => 'nullable|string|max:100',
+        'registration_no' => 'nullable|string|max:255',
+        'msic' => 'nullable|string|max:50',
+        'sst_registration_no' => 'nullable|string|max:255',
+        'tourism_tax_registration' => 'nullable|string|max:255',
     ];
+
+    public static $paymentTerm = [
+            'cash' => 'Cash',
+            'credit_note' => 'Credit Note',
+            'cod'=>'COD',
+        ];
+        
+    public static $categoryOptions = [
+            'business' => 'Business',
+            'individual' => 'Individual',
+            'government' => 'Government',
+        ];
 
     /**
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -98,6 +138,7 @@ class Customer extends Model
     {
         return $this->belongsTo(\App\Models\Driver::class, 'driver_id', 'id');
     }
+    
     /**
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      **/

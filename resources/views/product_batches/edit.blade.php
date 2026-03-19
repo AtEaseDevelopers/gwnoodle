@@ -91,7 +91,7 @@
                                                             {!! Form::select('status', [
                                                                 1 => 'Active',
                                                                 2 => 'Expired',
-                                                                3 => 'Depleted'
+                                                                3 => 'Inactive'
                                                             ], null, [
                                                                 'class' => 'form-control',
                                                                 'id' => 'status'
@@ -110,50 +110,12 @@
                                                         </h5>
                                                     </div>
                                                     <div class="card-body">
-                                                        <!-- Initial Quantity (Read-only) -->
-                                                        <div class="form-group">
-                                                            {!! Form::label('initial_quantity_display', 'Initial Quantity') !!}
-                                                            <input type="text" class="form-control" value="{{ number_format($productBatch->initial_quantity) }} units" readonly disabled>
-                                                        </div>
+                                                    
 
                                                         <!-- Current Quantity (Read-only) -->
                                                         <div class="form-group">
                                                             {!! Form::label('current_quantity_display', 'Current Quantity') !!}
                                                             <input type="text" class="form-control" value="{{ number_format($productBatch->quantity) }} units" readonly disabled>
-                                                        </div>
-
-                                                        <!-- Sold Quantity (Read-only) -->
-                                                        <div class="form-group">
-                                                            {!! Form::label('sold_quantity_display', 'Sold Quantity') !!}
-                                                            @php
-                                                                $soldQty = $productBatch->initial_quantity - $productBatch->quantity;
-                                                            @endphp
-                                                            <input type="text" class="form-control" value="{{ number_format($soldQty) }} units" readonly disabled>
-                                                        </div>
-
-                                                        <!-- Usage Rate (Read-only) -->
-                                                        <div class="form-group">
-                                                            {!! Form::label('usage_rate_display', 'Usage Rate') !!}
-                                                            @if($productBatch->initial_quantity > 0)
-                                                                @php
-                                                                    $usageRate = ($soldQty / $productBatch->initial_quantity) * 100;
-                                                                @endphp
-                                                                <div class="progress">
-                                                                    <div class="progress-bar bg-success" role="progressbar" 
-                                                                        style="width: {{ 100 - $usageRate }}%" 
-                                                                        aria-valuenow="{{ 100 - $usageRate }}" 
-                                                                        aria-valuemin="0" 
-                                                                        aria-valuemax="100">
-                                                                        {{ number_format(100 - $usageRate, 1) }}% Remaining
-                                                                    </div>
-                                                                    <div class="progress-bar bg-warning" role="progressbar" 
-                                                                        style="width: {{ $usageRate }}%">
-                                                                        {{ number_format($usageRate, 1) }}% Sold
-                                                                    </div>
-                                                                </div>
-                                                            @else
-                                                                <p class="form-control-static">N/A</p>
-                                                            @endif
                                                         </div>
                                                     </div>
                                                 </div>

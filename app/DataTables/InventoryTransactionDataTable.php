@@ -18,7 +18,48 @@ class InventoryTransactionDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
-        return $dataTable->addColumn('action', 'inventory_transactions.datatables_actions');
+        return $dataTable
+            ->addColumn('action', 'inventory_transactions.datatables_actions')
+            ->editColumn('type', function($transaction) {
+                switch($transaction->type) {
+                    case 1:
+                        return '<span class="badge badge-success">Stock In</span>';
+                    case 2:
+                        return '<span class="badge badge-danger">Stock Out</span>';
+                    case 3:
+                        return '<span class="badge badge-warning">Stock Return</span>';
+                    case 4:
+                        return '<span class="badge badge-secondary">Stock Transfer</span>';
+                    default:
+                        return '<span class="badge badge-secondary">Unknown</span>';
+                }
+            })
+            ->editColumn('quantity', function($transaction) {
+                $quantity = $transaction->quantity;
+                $formatted = number_format(abs($quantity));
+                
+                if ($quantity > 0) {
+                    return '<span class="text-success font-weight-bold">+' . $formatted . '</span>';
+                } elseif ($quantity < 0) {
+                    return '<span class="text-danger font-weight-bold">-' . $formatted . '</span>';
+                } else {
+                    return '<span class="text-muted">0</span>';
+                }
+            })
+            ->editColumn('date', function($transaction) {
+                return $transaction->date ? $transaction->date->format('d-m-Y H:i:s') : '-';
+            })
+            ->editColumn('batch.batch_code', function($transaction) {
+                return $transaction->batch ? $transaction->batch->batch_code : '-';
+            })
+            // Add warehouse column
+            ->addColumn('warehouse_name', function($transaction) {
+                if ($transaction->warehouse) {
+                    return '<span class="badge badge-info">' . e($transaction->warehouse->name) . '</span>';
+                }
+                return '<span class="text-muted">-</span>';
+            })
+            ->rawColumns(['action', 'type', 'quantity', 'warehouse_name']);
     }
 
     /**
@@ -30,9 +71,13 @@ class InventoryTransactionDataTable extends DataTable
     public function query(InventoryTransaction $model)
     {
         return $model->newQuery()
-        ->with('lorry:id,lorryno')
-        ->with('product:id,name')
-        ->select('inventory_transactions.*');
+            ->with([
+                'lorry:id,lorryno', 
+                'product:id,name', 
+                'batch:id,batch_code',
+                'warehouse:id,name' // Add warehouse relationship
+            ])
+            ->select('inventory_transactions.*');
     }
 
     /**
@@ -45,24 +90,22 @@ class InventoryTransactionDataTable extends DataTable
         return $this->builder()
             ->columns($this->getColumns())
             ->minifiedAjax()
-            // ->addAction(['width' => '120px', 'printable' => false])
             ->parameters([
                 'dom'       => '<"row"B><"row"<"dataTableBuilderDiv"t>><"row"ip>',
                 'stateSave' => true,
                 'stateDuration' => 0,
                 'processing' => false,
                 'order'     => [[0, 'desc']],
-                'lengthMenu' => [[ 10, 50, 100, 300 ],[ '10 rows', '50 rows', '100 rows', '300 rows' ]],
+                'lengthMenu' => [[10, 50, 100, 300], ['10 rows', '50 rows', '100 rows', '300 rows']],
                 'buttons' => [
-                    // [
-                    //     'extend' => 'create',
-                    //     'className' => 'btn btn-default btn-sm no-corner',
-                    //     'text' => '<i class="fa fa-plus"></i> ' . trans('table_buttons.create'),
-                    // ],
                     [
                         'extend' => 'print',
                         'className' => 'btn btn-default btn-sm no-corner',
                         'text' => '<i class="fa fa-print"></i> ' . trans('table_buttons.print'),
+                        'exportOptions' => [
+                            'columns' => ':visible',
+                            'modifier' => ['search' => 'applied', 'order' => 'applied']
+                        ]
                     ],
                     [
                         'extend' => 'reset',
@@ -77,20 +120,26 @@ class InventoryTransactionDataTable extends DataTable
                     [
                         'extend' => 'excelHtml5',
                         'text' => '<i class="fa fa-file-excel-o"></i> ' . trans('table_buttons.excel'),
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => [
+                            'columns' => ':visible',
+                            'modifier' => ['search' => 'applied', 'order' => 'applied']
+                        ],
                         'className' => 'btn btn-default btn-sm no-corner',
-                        'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'title' => 'Inventory Transactions',
+                        'filename' => 'inventory_transactions_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'pdfHtml5',
                         'orientation' => 'landscape',
                         'pageSize' => 'LEGAL',
                         'text' => '<i class="fa fa-file-pdf-o"></i> ' . trans('table_buttons.pdf'),
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => [
+                            'columns' => ':visible',
+                            'modifier' => ['search' => 'applied', 'order' => 'applied']
+                        ],
                         'className' => 'btn btn-default btn-sm no-corner',
-                        'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'title' => 'Inventory Transactions',
+                        'filename' => 'inventory_transactions_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'colvis',
@@ -105,24 +154,20 @@ class InventoryTransactionDataTable extends DataTable
                 ],
                 'columnDefs' => [
                     [
-                        'targets' => 1,
-                        'render' => 'function(data, type){
-                                                            if(data == 1){
-                                                                return "Stock In";
-                                                            }
-                                                            if(data == 2){
-                                                                return "Stock Out";
-                                                            }
-                                                            if(data == 3){
-                                                                return "Invoice";
-                                                            }
-                                                            if(data == 4){
-                                                                return "Transfer";
-                                                            }
-                                                            if(data == 5){
-                                                                return "Wastage";
-                                                            }
-                                                        }'
+                        'targets' => 1, // Type column index
+                        'className' => 'text-center',
+                    ],
+                    [
+                        'targets' => 4, // Batch code column index
+                        'className' => 'text-left',
+                    ],
+                    [
+                        'targets' => 5, // Quantity column index
+                        'className' => 'text-center',
+                    ],
+                    [
+                        'targets' => 6, // Warehouse column index (adjust based on your column order)
+                        'className' => 'text-center',
                     ],
                 ],
                 'initComplete' => 'function(){
@@ -133,16 +178,16 @@ class InventoryTransactionDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == \'Type\'){
-                                var input = \'<select class="border-0" id="typeStock" style="width: 100%;"><option value=""></option><option value="1">Stock In</option><option value="2">Stock Out</option><option value="3">Invoice</option><option value="4">Transfer</option><option value="5">Wastage</option></select>\';
+                                var input = \'<select class="border-0 form-control-sm" style="width: 100%;"><option value=""></option><option value="1">Stock In</option><option value="2">Stock Out</option><option value="3">Stock Return</option><option value="4">Stock Transfer</option></select>\';
                             }else if(columns[index].title == \'Date\'){
-                                var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
+                                var input = \'<input type="text" class="form-control-sm" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search">\';
                             }else{
-                                var input = \'<input type="text" placeholder="Search ">\';
+                                var input = \'<input type="text" class="form-control-sm" placeholder="Search">\';
                             }
-                            $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
+                            $(input).appendTo($(column.footer()).empty()).on(\'keyup change\', function(){
                                 column.search($(this).val(),true,false).draw();
                                 ShowLoad();
-                            })
+                            });
                         }
                     });
                 }'
@@ -157,34 +202,85 @@ class InventoryTransactionDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            'date'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transactions.date'),
-            'data' => 'date',
-            'name' => 'date']),
+            'date' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('inventory_transactions.date'),
+                'data' => 'date',
+                'name' => 'date',
+                'width' => '150px',
+                'className' => 'text-left'
+            ]),
 
-            'type'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transactions.type'),
-            'data' => 'type',
-            'name' => 'inventory_transactions.type']),
+            'type' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('inventory_transactions.type'),
+                'data' => 'type',
+                'name' => 'inventory_transactions.type',
+                'width' => '100px',
+                'className' => 'text-center'
+            ]),
 
-            'lorry_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transactions.lorry'),
-            'data' => 'lorry.lorryno',
-            'name' => 'lorry.lorryno']),
+            'lorry_id' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('inventory_transactions.lorry'),
+                'data' => 'lorry.lorryno',
+                'name' => 'lorry.lorryno',
+                'defaultContent' => '-',
+                'width' => '100px',
+                'className' => 'text-left'
+            ]),
 
-            'product_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transactions.product'),
-            'data' => 'product.name',
-            'name' => 'product.name']),
+            'product_id' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('inventory_transactions.product'),
+                'data' => 'product.name',
+                'name' => 'product.name',
+                'defaultContent' => '-',
+                'width' => '200px',
+                'className' => 'text-left'
+            ]),
 
-            'quantity'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transactions.quantity'),
-            'data' => 'quantity',
-            'name' => 'quantity']),
+            'batch_id' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Batch Code',
+                'data' => 'batch.batch_code',
+                'name' => 'batch.batch_code',
+                'defaultContent' => '-',
+                'width' => '150px',
+                'className' => 'text-left'
+            ]),
 
-            'remark'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transactions.remark'),
-            'data' => 'remark',
-            'name' => 'remark']),
+            'warehouse_id' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Warehouse',
+                'data' => 'warehouse_name', // Use the added column
+                'name' => 'warehouse.name',
+                'defaultContent' => '-',
+                'width' => '150px',
+                'className' => 'text-center',
+                'searchable' => true,
+                'orderable' => true
+            ]),
 
-            'user'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transactions.user'),
-            'data' => 'user',
-            'name' => 'user']),
+            'quantity' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('inventory_transactions.quantity'),
+                'data' => 'quantity',
+                'name' => 'quantity',
+                'width' => '100px',
+                'className' => 'text-center'
+            ]),
 
+            'remark' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('inventory_transactions.remark'),
+                'data' => 'remark',
+                'name' => 'remark',
+                'defaultContent' => '-',
+                'width' => '200px',
+                'className' => 'text-left'
+            ]),
+
+            'user' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('inventory_transactions.user'),
+                'data' => 'user',
+                'name' => 'user',
+                'defaultContent' => '-',
+                'width' => '150px',
+                'className' => 'text-left'
+            ]),
         ];
     }
 
@@ -195,6 +291,6 @@ class InventoryTransactionDataTable extends DataTable
      */
     protected function filename()
     {
-        return 'inventory_transactions_datatable_' . time();
+        return 'inventory_transactions_' . date('Y-m-d_H-i-s');
     }
 }

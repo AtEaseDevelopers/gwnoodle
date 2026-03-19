@@ -30,10 +30,10 @@ Route::group(['prefix' => 'v1'], function () {
     //Trip
     Route::get('/driver/trip', [App\Http\Controllers\Api\V1\DriverController::class, 'checktrip']);
     Route::post('/driver/trip/start', [App\Http\Controllers\Api\V1\DriverController::class, 'starttrip']);
-    Route::post('/driver/trip/end', [App\Http\Controllers\Api\V1\DriverController::class, 'endtrip']);
+    Route::post('/driver/trip/end', [App\Http\Controllers\Api\V1\DriverController::class, 'tripEnd']);
     Route::post('/driver/trip', [App\Http\Controllers\Api\V1\DriverController::class, 'trip']);
     //Kelindan
-    Route::get('/driver/kelindan', [App\Http\Controllers\Api\V1\DriverController::class, 'getkelindan']);
+    // Route::get('/driver/kelindan', [App\Http\Controllers\Api\V1\DriverController::class, 'getkelindan']);
     //Lorry
     Route::get('/driver/lorry', [App\Http\Controllers\Api\V1\DriverController::class, 'getlorry']);
     //Task
@@ -41,15 +41,21 @@ Route::group(['prefix' => 'v1'], function () {
     Route::get('/driver/taskpage', [App\Http\Controllers\Api\V1\DriverController::class, 'gettaskpage']);
     Route::post('/driver/task/start', [App\Http\Controllers\Api\V1\DriverController::class, 'starttask']);
     Route::post('/driver/task/cancel', [App\Http\Controllers\Api\V1\DriverController::class, 'canceltask']);
+
     //Product
     Route::post('/driver/product', [App\Http\Controllers\Api\V1\DriverController::class, 'getproduct']);
+
     //Customer
     Route::get('/driver/customer', [App\Http\Controllers\Api\V1\DriverController::class, 'getcustomer']);
     Route::post('/driver/customer/detail', [App\Http\Controllers\Api\V1\DriverController::class, 'customerdetail']);
     Route::post('/driver/customer/makepayment', [App\Http\Controllers\Api\V1\DriverController::class, 'customermakepayment']);
     Route::post('/driver/customer/invoice', [App\Http\Controllers\Api\V1\DriverController::class, 'customerinvoice']);
     Route::post('/driver/customer/payment', [App\Http\Controllers\Api\V1\DriverController::class, 'customerpayment']);
+
     //Invoice
+    Route::get('/driver/get-invoice-list/{customer_id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getInvoice']);
+    Route::get('/driver/get-invoice-detail/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'getInvoiceById']);
+
     Route::post('/driver/invoice', [App\Http\Controllers\Api\V1\DriverController::class, 'addinvoice']);
     Route::post('/driver/invoice/pdf', [App\Http\Controllers\Api\V1\DriverController::class, 'invoicepdf']);
 
@@ -65,13 +71,43 @@ Route::group(['prefix' => 'v1'], function () {
     Route::get('/driver/stock/transfer', [App\Http\Controllers\Api\V1\DriverController::class, 'gettransfer']);
     Route::get('/driver/stock/transfer/update', [App\Http\Controllers\Api\V1\DriverController::class, 'updatetransfer']);
     //Task transfer
-    Route::get('/driver/task/listdriver', [App\Http\Controllers\Api\V1\DriverController::class, 'listalldriver']);
-    Route::post('/driver/task/driver', [App\Http\Controllers\Api\V1\DriverController::class, 'getdrivertask']);
-    Route::post('/driver/task/pull', [App\Http\Controllers\Api\V1\DriverController::class, 'pulldrivertask']);
-    Route::post('/driver/task/push', [App\Http\Controllers\Api\V1\DriverController::class, 'pushdrivertask']);
-    Route::get('/driver/task/listtranfer', [App\Http\Controllers\Api\V1\DriverController::class, 'listtranfer']);
+    // Route::get('/driver/task/listdriver', [App\Http\Controllers\Api\V1\DriverController::class, 'listalldriver']);
+    // Route::post('/driver/task/driver', [App\Http\Controllers\Api\V1\DriverController::class, 'getdrivertask']);
+    // Route::post('/driver/task/pull', [App\Http\Controllers\Api\V1\DriverController::class, 'pulldrivertask']);
+    // Route::post('/driver/task/push', [App\Http\Controllers\Api\V1\DriverController::class, 'pushdrivertask']);
+    // Route::get('/driver/task/listtranfer', [App\Http\Controllers\Api\V1\DriverController::class, 'listtranfer']);
     //dashboard
     Route::post('/driver/dashboard', [App\Http\Controllers\Api\V1\DriverController::class, 'dashboard']);
+
+
+
+
+    Route::get('/driver/inventory-balance', [App\Http\Controllers\Api\V1\DriverController::class, 'getInventoryBalance']);
+    Route::get('/driver/stock/transaction', [App\Http\Controllers\Api\V1\DriverController::class, 'getInventoryTransaction']);
+
+    Route::get('/driver/get-product', [App\Http\Controllers\Api\V1\DriverController::class, 'getAllProduct']);
+    Route::post('/driver/stock-request', [App\Http\Controllers\Api\V1\DriverController::class, 'StockRequest']);
+    Route::post('/driver/stock-count', [App\Http\Controllers\Api\V1\DriverController::class, 'StockCount']);
+    Route::get('/driver/stock-count-status', [App\Http\Controllers\Api\V1\DriverController::class, 'StockCountStatus']);
+    Route::get('/driver/driver-stock-request-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockRequestRecord']);
+    Route::get('/driver/driver-stock-return-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockReturnRecord']);
+
+
+
+
+    //manager
+    Route::get('/driver/get-driver-product', [App\Http\Controllers\Api\V1\DriverController::class, 'getDriverProduct']);
+    Route::get('/driver/stock-request-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockRequest']);
+    Route::get('/driver/stock-return-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockReturn']);
+    Route::post('/driver/stock-request-approve', [App\Http\Controllers\Api\V1\DriverController::class, 'approveStockRequest']);
+    Route::post('/driver/stock-request-reject', [App\Http\Controllers\Api\V1\DriverController::class, 'rejectStockRequest']);
+    Route::get('/driver/stock-count-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockCount']);
+    Route::post('/driver/stock-count-approve', [App\Http\Controllers\Api\V1\DriverController::class, 'approveStockCount']);
+    Route::post('/driver/stock-return', [App\Http\Controllers\Api\V1\DriverController::class, 'StockReturn']);
+
+    Route::post('/driver/manager-login', [App\Http\Controllers\Api\V1\DriverController::class, 'managerLogin']);
+    Route::post('/driver/manager-logout', [App\Http\Controllers\Api\V1\DriverController::class, 'managerLogout']);
+
 
 
 });

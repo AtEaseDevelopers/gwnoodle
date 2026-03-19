@@ -18,10 +18,12 @@ class Trip extends Model
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
 
-
+    const START_TRIP = 1;
+    const END_TRIP = 0;
 
     public $fillable = [
         'date',
+        'uuid',
         'driver_id',
         'kelindan_id',
         'lorry_id',
@@ -52,7 +54,7 @@ class Trip extends Model
     public static $rules = [
         'date' => 'required',
         'driver_id' => 'required',
-        'kelindan_id' => 'required',
+        'kelindan_id' => 'nullable',
         'lorry_id' => 'required',
         'type' => 'required',
         'created_at' => 'nullable|nullable',
@@ -79,5 +81,18 @@ class Trip extends Model
         return Carbon::parse($value)->format('d-m-Y H:i:s');
     }
 
+    public static function generateUniqueReference()
+    {
+        do {
+            // Generate a random integer (adjust range as needed)
+            $reference = mt_rand(100000, 999999); // 6-digit number
+            
+            // Add timestamp prefix for more uniqueness
+            // $reference = (int) (time() . mt_rand(1000, 9999));
+            
+        } while (self::where('uuid', $reference)->exists());
+        
+        return $reference;
+    }
 
 }

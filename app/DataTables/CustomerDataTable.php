@@ -18,8 +18,38 @@ class CustomerDataTable extends DataTable
     public function dataTable($query)
     {
         $dataTable = new EloquentDataTable($query);
+        
+        $categoryMap = Customer::$categoryOptions;
 
-        return $dataTable->addColumn('action', 'customers.datatables_actions');
+        $paymentTermMap = Customer::$paymentTerm;
+
+        return $dataTable
+            ->addColumn('action', 'customers.datatables_actions')
+            ->editColumn('paymentterm', function($customer) use ($paymentTermMap) {
+                // Find the key that matches the paymentterm value
+                $paymentTermValue = $customer->paymentterm;
+                
+                // If it's numeric (1,2,3 etc), map to the corresponding key
+                if (is_numeric($paymentTermValue)) {
+                    $keys = array_keys($paymentTermMap);
+                    $index = (int)$paymentTermValue - 1;
+                    return $paymentTermMap[$keys[$index] ?? 'cash'] ?? $paymentTermValue;
+                }
+                
+                // If it's already a key (cash, credit_note, cod)
+                return $paymentTermMap[$paymentTermValue] ?? $paymentTermValue;
+            })
+            ->editColumn('category', function($customer) use ($categoryMap) {
+                return $categoryMap[$customer->category] ?? $customer->category;
+            });
+
+            // If you want to keep the original values for exporting, you can add raw columns
+            // ->addColumn('raw_paymentterm', function($customer) {
+            //     return $customer->paymentterm;
+            // })
+            // ->addColumn('raw_category', function($customer) {
+            //     return $customer->category;
+            // });
     }
 
     /**
@@ -30,27 +60,6 @@ class CustomerDataTable extends DataTable
      */
     public function query(Customer $model)
     {
-        // return $model->newQuery()
-        // ->with('agent:id,name')
-        // ->with('supervisor:id,name')
-        // // ->with('groups:value,description')
-        // ->leftJoin(DB::raw('(select invoices.customer_id, sum(invoice_details.totalprice) as totalprice, COALESCE(paymentsummary.amount,0) as paid, ( sum(invoice_details.totalprice) - COALESCE(paymentsummary.amount,0) ) as credit from invoices left join invoice_details on invoices.id = invoice_details.invoice_id left join ( select invoice_payments.customer_id, sum(COALESCE(invoice_payments.amount,0)) as amount from invoice_payments where invoice_payments.status = 1 group by invoice_payments.customer_id ) as paymentsummary on invoices.customer_id = paymentsummary.customer_id where invoices.status = 1 group by invoices.customer_id, paymentsummary.customer_id, paymentsummary.amount) invoicesummary'),
-        // function($join)
-        // {
-        //    $join->on('customers.id', '=', 'invoicesummary.customer_id');
-        // })
-        // ->leftJoin('codes', function($join)
-        // {
-        //     $join->whereRaw('find_in_set(codes.value, customers.group)');
-        //     $join->where('codes.code', '=', 'customer_group');
-        // })
-        // ->select('customers.*',DB::raw("COALESCE(invoicesummary.credit,0) as credit"),DB::raw("GROUP_CONCAT(codes.description) as group_descr"))
-        // ->distinct()
-        // ->groupby('customers.id','customers.code','customers.company','customers.paymentterm','customers.phone','customers.address',
-        // 'customers.status','customers.created_at','customers.updated_at','customers.deleted_at','customers.supervisor_id','customers.agent_id', 'customers.sst', 'customers.tin',
-        // 'customers.group','customers.group','invoicesummary.customer_id','invoicesummary.totalprice','invoicesummary.paid','invoicesummary.credit',)
-        // ;
-
         $invoicesSubquery = "
         SELECT
             invoices.customer_id,
@@ -77,9 +86,8 @@ class CustomerDataTable extends DataTable
     ";
     
             $query = $model->newQuery()
-    
                 ->with('agent:id,name')
-    
+                ->with('driver:id,name')
                 ->with('supervisor:id,name')
                 ->leftJoin(DB::raw("
                 (
@@ -119,25 +127,31 @@ class CustomerDataTable extends DataTable
     
                 ")
             )
-    
                 ->groupBy(
                     'customers.id',
                     'customers.code',
                     'customers.company',
                     'customers.paymentterm',
                     'customers.phone',
-                    'customers.address',
+                    'customers.billing_address',
+                    'customers.delivery_address',
                     'customers.status',
                     'customers.created_at',
                     'customers.updated_at',
                     'customers.deleted_at',
-                    'customers.supervisor_id',
                     'customers.agent_id',
+                    'customers.driver_id',
                     'customers.group',
-                    'customers.tin',
-                    'customers.sst',
-                    'customers.customer_type', 
-                    'customers.chinese_name',
+                    'customers.category',
+                    'customers.postcode',
+                    'customers.area',
+                    'customers.email',
+                    'customers.state',
+                    'customers.country',
+                    'customers.registration_no',
+                    'customers.msic',
+                    'customers.sst_registration_no',
+                    'customers.tourism_tax_registration',
                     'invoicesummary.customer_id',
                     'invoicesummary.totalprice',
                     'invoicesummary.paid',
@@ -145,9 +159,7 @@ class CustomerDataTable extends DataTable
                 );
                 
             if ($this->request()->has('group_id') && $this->request()->input('group_id') != -1) {
-    
                 $query->whereRaw('FIND_IN_SET(?, customers.group)', [$this->request()->input('group_id')]);
-    
             }
             
             return $query;
@@ -198,7 +210,7 @@ class CustomerDataTable extends DataTable
                         'exportOptions' => ['columns' => ':visible:not(:last-child)'],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'filename' => 'customers_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'pdfHtml5',
@@ -208,7 +220,7 @@ class CustomerDataTable extends DataTable
                         'exportOptions' => ['columns' => ':visible:not(:last-child)'],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'filename' => 'customers_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'colvis',
@@ -232,24 +244,9 @@ class CustomerDataTable extends DataTable
                         'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
                     ],
                     [
-                        'targets' => 3,
-                        'visible' => true,
-                        'render' => 'function(data, type){
-                                                            if(data == 1){
-                                                                return "Cash";
-                                                            }
-                                                            if(data == 2){
-                                                                return "Credit Note";
-                                                            }
-                                                        }'
+                        'targets' => 7, // Status column index (adjust as needed)
+                        'render' => 'function(data, type){return data == 1 ? "Active" : "Inactive";}'
                     ],
-                    [
-                        'targets' => 7,
-                        'className' => "truncate"
-                    ],
-                    [
-                    'targets' => 8,
-                    'render' => 'function(data, type){return data == 1 ? "Active" : "Unactive";}'],
                 ],
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
@@ -259,9 +256,11 @@ class CustomerDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == \'Status\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Unactive</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Inactive</option></select>\';
                             }else if(columns[index].title == \'Payment Term\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Cash</option><option value="2">Credit Note</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="cash">Cash</option><option value="credit_note">Credit Note</option><option value="cod">COD</option></select>\';
+                            }else if(columns[index].title == \'Category\'){
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="business">Business</option><option value="individual">Individual</option><option value="government">Government</option></select>\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }
@@ -294,32 +293,25 @@ class CustomerDataTable extends DataTable
             'data' => 'company',
             'name' => 'company']),
 
-            'paymentterm'=> new \Yajra\DataTables\Html\Column(['title' => trans('customers.paymentterm'),
+            'paymentterm'=> new \Yajra\DataTables\Html\Column(['title' => trans('Payment Term'),
             'data' => 'paymentterm',
             'name' => 'paymentterm']),
 
-            // 'group'=> new \Yajra\DataTables\Html\Column(['title' => 'Group',
-            // 'data' => 'groups.description',
-            // 'name' => 'groups.description']),
+            'driver_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('Driver'),
+            'data' => 'driver.name',
+            'name' => 'driver.name']),
 
             'agent_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('customers.agent'),
             'data' => 'agent.name',
             'name' => 'agent.name']),
 
-            'supervisor_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('customers.operation'),
-            'data' => 'supervisor.name',
-            'name' => 'supervisor.name']),
-
             'phone',
-            'address',
             'status',
             'credit',
             
-            'sst'=> new \Yajra\DataTables\Html\Column(['title' => trans('customers.ssm'),
-            'data' => 'sst',
-            'name' => 'sst']),
-            
-            'tin',
+            'category'=> new \Yajra\DataTables\Html\Column(['title' => trans('Category'),
+            'data' => 'category',
+            'name' => 'category']),
 
             'group_descr'=> new \Yajra\DataTables\Html\Column(['title' => trans('customers.group'),
             'data' => 'GroupDescription',

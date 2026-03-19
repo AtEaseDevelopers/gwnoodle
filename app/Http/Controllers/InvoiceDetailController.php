@@ -21,6 +21,10 @@ use App\Models\Product;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Session;
 use Exception;
+use App\Models\ProductBatch;
+use App\Models\InventoryTransaction;
+use Illuminate\Support\Facades\Validator;
+
 
 class InvoiceDetailController extends AppBaseController
 {
@@ -63,102 +67,181 @@ class InvoiceDetailController extends AppBaseController
      *
      * @return Response
      */
-    public function store(CreateInvoiceDetailRequest $request)
+    public function store(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'invoice_id' => 'required|exists:invoices,id',
+            'product_id' => 'required|exists:products,id',
+            'product_batch_id' => 'required|exists:product_batches,id',
+            'quantity' => 'required|integer|min:1',
+            'price' => 'required|numeric|min:0',
+            'remark' => 'nullable|string|max:255'
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
         $input = $request->all();
+
+        // Check if batch has enough quantity
+        $batch = ProductBatch::find($input['product_batch_id']);
+        if ($batch->quantity < $input['quantity']) {
+            Flash::error('Insufficient batch quantity. Available: ' . $batch->quantity);
+            return redirect()->back()->withInput();
+        }
+
         Session::put('is_store', true);
         Session::put('invoice_detail_data', $input);
 
-        $res = $this->upsertDetail(true, $request);
-        if ($res != null) {
-            return $res;
-        }
-        
+        $this->upsertDetail(true, $request);
+
         return redirect(route('invoiceDetails.index'));
     }
     
-    private function upsertDetail($is_store, Request $req) {
+    private function upsertDetail($is_store, Request $req) 
+    {
         $input = Session::get('invoice_detail_data');
         if ($input == null) {
             return null;
         }
 
         $invoice = Invoice::where('id', $input['invoice_id'])->first();
+        if (empty($invoice)) {
+            Flash::error('Invoice not found');
+            return redirect()->back();
+        }
 
         DB::beginTransaction();
 
-        if ($is_store == true) {
-            $input['totalprice'] = $input['quantity'] * $input['price'];
-            $invoiceDetail = $this->invoiceDetailRepository->create($input);
-        } else {
-            $input['totalprice'] = $input['quantity'] * $input['price'];
-            $invoiceDetail = $this->invoiceDetailRepository->update($input, $input['edit_id']);
-        }
+        try {
+            if ($is_store == true) {
+                // CREATE MODE - Add new detail
+                $batch = ProductBatch::find($input['product_batch_id']);
+                
+                if ($batch->quantity < $input['quantity']) {
+                    throw new \Exception('Insufficient batch quantity. Available: ' . $batch->quantity);
+                }
 
-        // Create credit note in Xero if payment term is credit
-        $xero_has_err = false;
-        if ($invoice != null && $invoice->paymentterm == 2) {
-            try {
-                $redirect_uri = config('app.url') . '/invoiceDetails';
-                $xero = new XeroController($redirect_uri);
-    
-                // Get Xero's access token
-                if ($req->has('code')) {
-                    $res = $xero->getToken($req->code);
-                    if (!$res->ok()) {
-                        throw new Exception('Failed to get xero access token.');
+                $input['totalprice'] = $input['quantity'] * $input['price'];
+                $invoiceDetail = $this->invoiceDetailRepository->create($input);
+                
+                // Deduct quantity from batch
+                $batch->decrement('quantity', $input['quantity']);
+                
+                // Create inventory transaction for stock out
+                InventoryTransaction::create([
+                    'type' => 2, // Stock Out
+                    'product_id' => $input['product_id'],
+                    'batch_id' => $input['product_batch_id'],
+                    'quantity' => -$input['quantity'],
+                    'date' => now(),
+                    'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
+                    'remark' => 'Invoice #' . $invoice->invoiceno . ' - New detail added'
+                ]);
+                
+            } else {
+                // UPDATE MODE - Need to handle batch adjustments
+                $existingDetail = $this->invoiceDetailRepository->find($input['edit_id']);
+                
+                if (empty($existingDetail)) {
+                    throw new \Exception('Invoice detail not found');
+                }
+
+                // Check if batch or quantity changed
+                $batchChanged = ($existingDetail->product_batch_id != $input['product_batch_id']);
+                $quantityChanged = ($existingDetail->quantity != $input['quantity']);
+                
+                if ($batchChanged || $quantityChanged) {
+                    // CASE 1: Return stock to original batch
+                    $oldBatch = ProductBatch::find($existingDetail->product_batch_id);
+                    if ($oldBatch) {
+                        $oldBatch->increment('quantity', $existingDetail->quantity);
+                        
+                        // Create inventory transaction for reversal
+                        InventoryTransaction::create([
+                            'type' => 1, // Stock In (Reversal)
+                            'product_id' => $existingDetail->product_id,
+                            'batch_id' => $existingDetail->product_batch_id,
+                            'quantity' => $existingDetail->quantity,
+                            'date' => now(),
+                            'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
+                            'remark' => 'Reversal - Updating invoice #' . $invoice->invoiceno
+                        ]);
+                    }
+
+                    // CASE 2: Check new batch has enough stock
+                    $newBatch = ProductBatch::find($input['product_batch_id']);
+                    if ($newBatch->quantity < $input['quantity']) {
+                        throw new \Exception('Insufficient quantity in new batch. Available: ' . $newBatch->quantity);
+                    }
+
+                    // Deduct from new batch
+                    $newBatch->decrement('quantity', $input['quantity']);
+                    
+                    // Create inventory transaction for new stock out
+                    InventoryTransaction::create([
+                        'type' => 2, // Stock Out
+                        'product_id' => $input['product_id'],
+                        'batch_id' => $input['product_batch_id'],
+                        'quantity' => -$input['quantity'],
+                        'date' => now(),
+                        'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
+                        'remark' => 'Updated invoice #' . $invoice->invoiceno
+                    ]);
+                } else {
+                    // No batch change, only quantity changed? This shouldn't happen with your UI
+                    // But just in case, handle quantity adjustment
+                    if ($input['quantity'] != $existingDetail->quantity) {
+                        $batch = ProductBatch::find($input['product_batch_id']);
+                        $quantityDiff = $input['quantity'] - $existingDetail->quantity;
+                        
+                        if ($quantityDiff > 0) {
+                            // Need more stock - check availability
+                            if ($batch->quantity < $quantityDiff) {
+                                throw new \Exception('Insufficient batch quantity. Available: ' . $batch->quantity . ', Need: ' . $quantityDiff);
+                            }
+                            $batch->decrement('quantity', $quantityDiff);
+                        } else {
+                            // Returning stock
+                            $batch->increment('quantity', abs($quantityDiff));
+                        }
+                        
+                        // Create inventory transaction for adjustment
+                        InventoryTransaction::create([
+                            'type' => ($quantityDiff > 0) ? 2 : 1, // Stock Out if positive, Stock In if negative
+                            'product_id' => $input['product_id'],
+                            'batch_id' => $input['product_batch_id'],
+                            'quantity' => -$quantityDiff,
+                            'date' => now(),
+                            'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
+                            'remark' => 'Quantity adjustment - Invoice #' . $invoice->invoiceno
+                        ]);
                     }
                 }
-                // Xero auth
-                $res = $xero->auth();
-                if ($res !== true) {
-                    return $res;
-                }
-                // Get contact
-                $customer_name = Customer::where('id', $invoice->customer_id)->value('company');
-                
-                $res = $xero->getContact($customer_name); // Get contact
-                $payload = $res->object();
 
-                if (!$res->ok()) {
-                    throw new Exception('Failed to get xero contact.');
-                } elseif ($res->ok() && isset($payload->Contacts) && count($payload->Contacts) <= 0) { // Create contact in Xero
-                    $res = $xero->createContact($customer_name);
-                    if (!$res->ok()) {
-                        throw new Exception('Failed to create contact for ' . $customer_name);
-                    }
-                    $payload = $res->object();
-                }
-                // Create credit note
-                $items = [
-                    'Quantity' => $input['quantity'],
-                    'UnitAmount' => $input['price'], 
-                    'Description' => $input['remark'] ?? $invoice->invoiceno
-                ];
-                $res = $xero->createCreditNote(true, $payload->Contacts[0], $items, 'ID' . ($is_store == true ? $invoiceDetail->id : $input['edit_id']));
-                if (!$res->ok()) {
-                    throw new Exception('Failed to create credit note.');
-                }
-            } catch (\Throwable $th) {
-                DB::rollback();
-                report($th);
-                
-                $xero_has_err = true;
-                Flash::error(__('invoices_details.something_went_wrong'));
+                // Update the invoice detail
+                $input['totalprice'] = $input['quantity'] * $input['price'];
+                $invoiceDetail = $this->invoiceDetailRepository->update($input, $input['edit_id']);
             }
-        }
-        
-        if (!$xero_has_err) {
+
+            DB::commit();
+
             if ($is_store == true) {
                 Flash::success(__('invoices_details.invoice_detail_saved_successfully'));
             } else {
                 Flash::success(__('invoices_details.invoice_detail_updated_successfully'));
             }
             
-            DB::commit();
+            Session::forget('invoice_detail_data');
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error: ' . $e->getMessage());
+            return redirect()->back()->withInput();
         }
-        
-        Session::forget('invoice_detail_data');
     }
 
     /**
@@ -218,20 +301,23 @@ class InvoiceDetailController extends AppBaseController
 
         if (empty($invoiceDetail)) {
             Flash::error(__('invoices_details.invoice_detail_not_found'));
-
             return redirect(route('invoiceDetails.index'));
         }
 
         $input = $request->all();
-        $input['edit_id'] = $id;
+        $input['edit_id'] = $id; // Make sure this is set
+        
+        // Validate batch quantity before proceeding
+        $batch = ProductBatch::find($input['product_batch_id']);
+        if ($batch->quantity < $input['quantity']) {
+            Flash::error('Insufficient batch quantity. Available: ' . $batch->quantity);
+            return redirect()->back()->withInput();
+        }
         
         Session::put('is_store', false);
         Session::put('invoice_detail_data', $input);
 
-        $res = $this->upsertDetail(false, $request);
-        if ($res != null) {
-            return $res;
-        }
+        $this->upsertDetail(false, $request);
 
         return redirect(route('invoiceDetails.index'));
     }
@@ -287,9 +373,10 @@ class InvoiceDetailController extends AppBaseController
     
         return $count;
     }
-    
-    public function getprice($invoice_id,$product_id)
-    {
+
+
+    public function getprices($invoice_id,$product_id)
+    {   
         $invoice = Invoice::where('id',$invoice_id)->first();
 
         if (empty($invoice)) {
@@ -306,9 +393,8 @@ class InvoiceDetailController extends AppBaseController
 
         if (empty($specialprice)) {
             return response()->json(['status' => true, 'message' => 'Special Price not found!', 'data' => $product->price]);
-        }else{
+        } else {
             return response()->json(['status' => true, 'message' => 'Special Price found!', 'data' => $specialprice->price]);
         }
-
     }
 }

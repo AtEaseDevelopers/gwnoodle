@@ -1,6 +1,6 @@
 <!-- Lorryno Field -->
 <div class="form-group">
-    {!! Form::label('lorryno',  __('lorries.lorry_no')) !!}:
+    {!! Form::label('lorryno',  __('Van Plate Number')) !!}:
     <p>{{ $lorry->lorryno }}</p>
 </div>
 

@@ -40,10 +40,10 @@
 
 
 <!-- Kelindan Id Field -->
-<div class="form-group col-sm-6">
+<!-- <div class="form-group col-sm-6">
     {!! Form::label('kelindan_id', __('invoices.kelindan')) !!}
     {!! Form::select('kelindan_id', $kelindanItems, null, ['class' => 'form-control select2-kelindan', 'placeholder' => 'Pick a Kelindan...']) !!}
-</div>
+</div> -->
 
 
 <!-- Agent Id Field -->
@@ -63,7 +63,7 @@
 <!-- Paymentterm Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('paymentterm',  __('invoices.payment_term'))  !!}
-    {{ Form::select('paymentterm', array(1 => 'Cash' , 2 => 'Credit',3 => 'Online BankIn' , 4 => 'E-wallet', 5 => 'Cheque'), null, ['class' => 'form-control']) }}
+    {{ Form::select('paymentterm', array(1 => 'Cash' , 2 => 'Credit'), null, ['class' => 'form-control']) }}
 </div>
 
 <!-- ChequeNo Field -->

@@ -149,52 +149,11 @@ class LorryDataTable extends DataTable
                         'visible' => true,
                         'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
                     ],
-                    // [
-                    //     'targets' => 3,
-                    //     'render' => 'function(data, type){return parseFloat(data).toFixed(2);}'
-                    //     ,'className' => 'dt-body-right'
-                    // ],
-                    // [
-                    //     'targets' => 4,
-                    //     'render' => 'function(data, type){return parseFloat(data).toFixed(2);}'
-                    //     ,'className' => 'dt-body-right'
-                    // ],
-                    // [
-                    //     'targets' => 5,
-                    //     'render' => 'function(data, type){return parseFloat(data).toFixed(2);}'
-                    //     ,'className' => 'dt-body-right'
-                    // ],
+                    
                     [
-                        'targets' => 2,
-                        'render' => 'function(data, type){return "<a href=\'#\' class=\'TyreService\' lorrykey=\'"+data.split(":")[0]+"\'>"+data.split(":")[1]+"</a>";}'
+                    'targets' => 2,
+                    'render' => 'function(data, type){return data == 1 ? "Active" : "Inactive";}'
                     ],
-                    [
-                        'targets' => 3,
-                        'render' => 'function(data, type){return "<a href=\'#\' class=\'InsuranceList\' lorrykey=\'"+data.split(":")[0]+"\'>"+data.split(":")[1]+"</a>";}'
-                    ],
-                    [
-                        'targets' => 4,
-                        'render' => 'function(data, type){return "<a href=\'#\' class=\'PermitList\' lorrykey=\'"+data.split(":")[0]+"\'>"+data.split(":")[1]+"</a>";}'
-                    ],
-                    [
-                        'targets' => 5,
-                        'render' => 'function(data, type){return "<a href=\'#\' class=\'RoadTaxList\' lorrykey=\'"+data.split(":")[0]+"\'>"+data.split(":")[1]+"</a>";}'
-                    ],
-                    [
-                        'targets' => 6,
-                        'render' => 'function(data, type){return "<a href=\'#\' class=\'InspectionList\' lorrykey=\'"+data.split(":")[0]+"\'>"+data.split(":")[1]+"</a>";}'
-                    ],
-                    [
-                        'targets' => 7,
-                        'render' => 'function(data, type){return "<a href=\'#\' class=\'OtherList\' lorrykey=\'"+data.split(":")[0]+"\'>"+data.split(":")[1]+"</a>";}'
-                    ],
-                    [
-                        'targets' => 8,
-                        'render' => 'function(data, type){return "<a href=\'#\' class=\'FireExtinguisherList\' lorrykey=\'"+data.split(":")[0]+"\'>"+data.split(":")[1]+"</a>";}'
-                    ],
-                    [
-                    'targets' => 9,
-                    'render' => 'function(data, type){return data == 1 ? "Active" : "Inactive";}'],
                 ],
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
@@ -232,57 +191,9 @@ class LorryDataTable extends DataTable
             'orderable' => false,
             'searchable' => false]),
 
-            'lorryno'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.lorry_no'),
+            'lorryno'=> new \Yajra\DataTables\Html\Column(['title' => trans('Vans'),
             'data' => 'lorryno',
             'name' => 'lorryno']),
-
-            // 'type'=> new \Yajra\DataTables\Html\Column(['title' => 'Group',
-            // 'data' => 'type',
-            // 'name' => 'type']),
-
-            // 'weightagelimit'=> new \Yajra\DataTables\Html\Column(['title' => 'Weightage Limit (TON)',
-            // 'data' => 'weightagelimit',
-            // 'name' => 'weightagelimit']),
-
-            // 'commissionlimit'=> new \Yajra\DataTables\Html\Column(['title' => 'Commission Limit (TON)',
-            // 'data' => 'commissionlimit',
-            // 'name' => 'commissionlimit']),
-
-            // 'commissionpercentage'=> new \Yajra\DataTables\Html\Column(['title' => 'Commission %',
-            // 'data' => 'commissionpercentage',
-            // 'name' => 'commissionpercentage']),
-
-            // 'permitholder'=> new \Yajra\DataTables\Html\Column(['title' => 'Permit Holder',
-            // 'data' => 'permitholder',
-            // 'name' => 'permitholder']),
-
-            'tyre'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.tyre_next_date'),
-            'data' => 'tyrenextdateshow',
-            'name' => 'tyrenextdate']),
-
-            'insurance'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.insurance_next_date'),
-            'data' => 'insurancenextdateshow',
-            'name' => 'insurancenextdate']),
-
-            'permit'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.permit_next_date'),
-            'data' => 'permitnextdateshow',
-            'name' => 'permitnextdate']),
-
-            'roadtax'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.road_tax_next_date'),
-            'data' => 'roadtaxnextdateshow',
-            'name' => 'roadtaxnextdate']),
-
-            'inspection'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.inspection_next_date'),
-            'data' => 'inspectionnextdateshow',
-            'name' => 'inspectionnextdate']),
-
-            'other'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('lorries.other_next_date'),
-            'data' => 'othernextdateshow',
-            'name' => 'othernextdate']),
-
-            'fireextinguisher'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.fire_extinguisher'),
-            'data' => 'fireextinguishernextdateshow',
-            'name' => 'fireextinguisher']),
 
             'status'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.status'),
             'data' => 'status',
@@ -291,26 +202,6 @@ class LorryDataTable extends DataTable
             'remark'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.remark'),
             'data' => 'remark',
             'name' => 'remark']),
-
-            
-            // 'STR_UDF1'=> new \Yajra\DataTables\Html\Column(['title' => 'String UDF1',
-            // 'data' => 'STR_UDF1',
-            // 'name' => 'STR_UDF1']),
-            // 'STR_UDF2'=> new \Yajra\DataTables\Html\Column(['title' => 'String UDF2',
-            // 'data' => 'STR_UDF2',
-            // 'name' => 'STR_UDF2']),
-            // 'STR_UDF3'=> new \Yajra\DataTables\Html\Column(['title' => 'String UDF3',
-            // 'data' => 'STR_UDF3',
-            // 'name' => 'STR_UDF3']),
-            // 'INT_UDF1'=> new \Yajra\DataTables\Html\Column(['title' => 'Integer UDF1',
-            // 'data' => 'INT_UDF1',
-            // 'name' => 'INT_UDF1']),
-            // 'INT_UDF2'=> new \Yajra\DataTables\Html\Column(['title' => 'Integer UDF2',
-            // 'data' => 'INT_UDF2',
-            // 'name' => 'INT_UDF2']),
-            // 'INT_UDF3'=> new \Yajra\DataTables\Html\Column(['title' => 'Integer UDF3',
-            // 'data' => 'INT_UDF3',
-            // 'name' => 'INT_UDF3']),
         ];
     }
 

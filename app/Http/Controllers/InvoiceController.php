@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Customer;
+use App\Models\ProductBatch;
+use App\Models\InventoryTransaction;
 use App\Models\InvoiceDetail;
 use App\Models\InvoicePayment;
 use App\Models\Trip;
@@ -134,7 +136,7 @@ class InvoiceController extends AppBaseController
             return redirect(route('invoices.index'));
         }
 
-        $invoicedetails = InvoiceDetail::with('product')->where('invoice_id',$id)->get()->toArray();
+        $invoicedetails = InvoiceDetail::with('product')->with('batch')->where('invoice_id',$id)->get()->toArray();
 
         return view('invoices.show')->with('invoice', $invoice)->with('invoicedetails', $invoicedetails)->with('id',$id);
     }
@@ -499,138 +501,305 @@ class InvoiceController extends AppBaseController
         return redirect(route('invoices.show',encrypt($id)));
     }
     
-    private function syncDetailToXero(Request $request) {
+    private function syncDetailToXero(Request $request) 
+    {
         $input = Session::get('invoice_detail_data');
         if ($input == null) {
             return null;
         }
         
         $invoice = Invoice::where('id', $input['invoice_id'])->first();
-
-        // DB::beginTransaction();
         
-        $invoicedetail = new InvoiceDetail();
-        $invoicedetail->invoice_id  = $input['invoice_id'];
-        $invoicedetail->product_id = $input['product_id'];
-        $invoicedetail->quantity = $input['quantity'];
-        $invoicedetail->price = $input['price'];
-        $invoicedetail->totalprice = $input['quantity'] * $input['price'];
-        $invoicedetail->remark = $input['remark'];
-        $invoicedetail->save();
-        
-
-        if($invoice->paymentterm == 1)
-        {
-            // Check invoice payment if cash 
-            $id = $input['invoice_id'];
-            $invoicePayment = InvoicePayment::where('invoice_id', $id)->first();
-            
-            $totalAmount = InvoiceDetail::where('invoice_id', $id)->sum('totalprice');
-
-            if(!$invoicePayment)
-            {
-                $invoicepayment_new = New InvoicePayment();
-                $invoicepayment_new->invoice_id = $id;
-                $invoicepayment_new->type = 1;
-                $invoicepayment_new->customer_id = $invoice->customer_id;
-                $invoicepayment_new->amount = $totalAmount;
-                $invoicepayment_new->status = $invoice->status;
-                $invoicepayment_new->driver_id = $invoice->driver_id;
-                $invoicepayment_new->approve_by = Auth::user()->email;
-                $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
-                $invoicepayment_new->save();
-            }
-            else
-            {
-                $invoicePayment->status = 1;
-                $invoicePayment->amount = $totalAmount;
-                $invoicePayment->save();
-            }
-        }
-
-
-        
-        // $xero_has_err = false;
-        // try {
-        //     $redirect_uri = config('app.url') . '/invoices';
-        //     $xero = new XeroController($redirect_uri);
-
-        //     // Get Xero's access token
-        //     if ($request->has('code')) {
-        //         $res = $xero->getToken($request->code);
-        //         if (!$res->ok()) {
-        //             throw new Exception('Failed to get xero access token.');
-        //         }
-        //     }
-        //     // Xero auth
-        //     $res = $xero->auth();
-        //     if ($res !== true) {
-        //         return $res;
-        //     }
-        //     // Get contact
-        //     $customer_name = Customer::where('id', $invoice->customer_id)->value('company');
-            
-        //     $res = $xero->getContact($customer_name); // Get contact
-        //     $payload = $res->object();
-
-        //     if (!$res->ok()) {
-        //         throw new Exception('Failed to get xero contact.');
-        //     } elseif ($res->ok() && isset($payload->Contacts) && count($payload->Contacts) <= 0) { // Create contact in Xero
-        //         $res = $xero->createContact($customer_name);
-        //         if (!$res->ok()) {
-        //             throw new Exception('Failed to create contact for ' . $customer_name);
-        //         }
-        //         $payload = $res->object();
-        //     }
-        //     // Create credit note
-        //     $items = [
-        //         'Quantity' => $input['quantity'],
-        //         'UnitAmount' => $input['price'], 
-        //         'Description' => $input['remark'] ?? $invoice->invoiceno
-        //     ];
-        //     $res = $xero->createCreditNote(true, $payload->Contacts[0], $items, 'ID' . $invoicedetail->id);
-        //     if (!$res->ok()) {
-        //         throw new Exception('Failed to create credit note.');
-        //     }
-            
-        //     DB::commit();
-        // } catch (\Throwable $th) {
-        //     DB::rollback();
-        //     report($th);
-            
-        //     $xero_has_err = true;
-        //     Flash::error('Something went wrong. Please contact administator.');
-        // }
-
-        // if (!$xero_has_err) {
-            Flash::success('Invoice Detail saved successfully.');
-        // }
-        
-        Session::forget('invoice_detail_data');
-    }
-
-    public function deletedetail($id)
-    {
-        $id = Crypt::decrypt($id);
-
-        $invoicedetail = InvoiceDetail::where('id',$id)->first();
-
-        if (empty($invoicedetail)) {
-            Flash::error('Invoice Detail not found');
-
+        if (empty($invoice)) {
+            Flash::error('Invoice not found');
             return redirect()->back();
         }
 
-        $invoicedetail->delete($id);
+        // Validate required fields
+        if (!isset($input['product_batch_id']) || empty($input['product_batch_id'])) {
+            Flash::error('Please select a product batch');
+            return redirect()->back()->withInput();
+        }
 
-        Flash::success('Invoice Detail deleted successfully.');
+        DB::beginTransaction();
+        
+        try {
+            // Check if we're updating an existing detail
+            $existingDetail = null;
+            if (isset($input['detail_id']) && !empty($input['detail_id'])) {
+                $existingDetail = InvoiceDetail::find($input['detail_id']);
+            }
 
-        return redirect(route('invoices.show',encrypt($invoicedetail->invoice_id)));
+            // Get the product batch for the new item
+            $newProductBatch = ProductBatch::find($input['product_batch_id']);
+            
+            if (empty($newProductBatch)) {
+                throw new \Exception('Product batch not found');
+            }
+
+            // Handle existing detail reversal if we're updating
+            if ($existingDetail) {
+                // Get the original batch that was used
+                $oldProductBatch = ProductBatch::find($existingDetail->product_batch_id);
+                
+                if ($oldProductBatch) {
+                    // Add back the original quantity to the old batch
+                    $oldProductBatch->quantity = $oldProductBatch->quantity + $existingDetail->quantity;
+                    $oldProductBatch->save();
+
+                    // Create inventory transaction record for the reversal
+                    $reversalTransaction = new InventoryTransaction();
+                    $reversalTransaction->type = 1; // Stock In (Reversal)
+                    $reversalTransaction->product_id = $existingDetail->product_id;
+                    $reversalTransaction->batch_id = $existingDetail->product_batch_id;
+                    $reversalTransaction->quantity = $existingDetail->quantity;
+                    $reversalTransaction->date = now();
+                    $reversalTransaction->user = Auth::user()->name;
+                    $reversalTransaction->remark = 'Reversal for invoice #' . $invoice->invoiceno . ' - Detail ID: ' . $existingDetail->id;
+                    $reversalTransaction->save();
+
+                    // Update lorry inventory balance - add back the quantity to old batch
+                    $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
+                    
+                    if ($inventorybalance) {
+                        // Use helper function to add back quantity
+                        $inventorybalance->updateBatchQuantity(
+                            $existingDetail->product_batch_id,
+                            $existingDetail->quantity,
+                            'add'
+                        );
+                    }
+                }
+            }
+
+            // Check if new batch has enough quantity
+            if ($newProductBatch->quantity < $input['quantity']) {
+                throw new \Exception('Insufficient batch quantity. Available: ' . $newProductBatch->quantity . ', Requested: ' . $input['quantity']);
+            }
+
+            // Create or update invoice detail
+            if ($existingDetail) {
+                // Update existing detail
+                $existingDetail->product_id = $input['product_id'];
+                $existingDetail->product_batch_id = $input['product_batch_id'];
+                $existingDetail->quantity = $input['quantity'];
+                $existingDetail->price = $input['price'];
+                $existingDetail->totalprice = $input['quantity'] * $input['price'];
+                $existingDetail->remark = $input['remark'] ?? null;
+                $existingDetail->save();
+                
+                $invoicedetail = $existingDetail;
+            } else {
+                // Create new detail
+                $invoicedetail = new InvoiceDetail();
+                $invoicedetail->invoice_id = $input['invoice_id'];
+                $invoicedetail->product_id = $input['product_id'];
+                $invoicedetail->product_batch_id = $input['product_batch_id'];
+                $invoicedetail->quantity = $input['quantity'];
+                $invoicedetail->price = $input['price'];
+                $invoicedetail->totalprice = $input['quantity'] * $input['price'];
+                $invoicedetail->remark = $input['remark'] ?? null;
+                $invoicedetail->save();
+            }
+
+            // Deduct quantity from new product batch
+            $newProductBatch->quantity = $newProductBatch->quantity - $input['quantity'];
+            $newProductBatch->save();
+
+            // Create inventory transaction record for the new sale
+            $inventoryTransaction = new InventoryTransaction();
+            $inventoryTransaction->type = 2; // Stock Out (Sale)
+            $inventoryTransaction->product_id = $input['product_id'];
+            $inventoryTransaction->batch_id = $input['product_batch_id']; 
+            $inventoryTransaction->quantity = -$input['quantity']; 
+            $inventoryTransaction->date = now();
+            $inventoryTransaction->user = Auth::user()->name;
+            $inventoryTransaction->remark = 'Invoice #' . ($invoice->invoiceno ?? '') . ' - Sale of product';
+            $inventoryTransaction->save();
+
+            // Update lorry inventory balance for the new batch
+            $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
+            
+            if (empty($inventorybalance)) {
+                // Create new inventory balance record
+                $newinventorybalance = new InventoryBalance();
+                $newinventorybalance->lorry_id = $invoice->driver->trip->lorry_id ?? null;
+                
+                // Initialize batches array with the current batch and quantity
+                $batches = [
+                    $input['product_batch_id'] => $input['quantity']
+                ];
+                $newinventorybalance->batches = $batches;
+                $newinventorybalance->save();
+            } else {
+                // Use helper function to subtract quantity from the batch
+                $inventorybalance->updateBatchQuantity(
+                    $input['product_batch_id'],
+                    $input['quantity'],
+                    'subtract'
+                );
+            }
+
+            // Handle invoice payment if cash term
+            if ($invoice->paymentterm == 1) {
+                $id = $input['invoice_id'];
+                $invoicePayment = InvoicePayment::where('invoice_id', $id)->first();
+                
+                $totalAmount = InvoiceDetail::where('invoice_id', $id)->sum('totalprice');
+
+                if (!$invoicePayment) {
+                    $invoicepayment_new = new InvoicePayment();
+                    $invoicepayment_new->invoice_id = $id;
+                    $invoicepayment_new->type = 1;
+                    $invoicepayment_new->customer_id = $invoice->customer_id;
+                    $invoicepayment_new->amount = $totalAmount;
+                    $invoicepayment_new->status = $invoice->status;
+                    $invoicepayment_new->driver_id = $invoice->driver_id;
+                    $invoicepayment_new->approve_by = Auth::user()->email;
+                    $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
+                    $invoicepayment_new->save();
+                } else {
+                    $invoicePayment->status = 1;
+                    $invoicePayment->amount = $totalAmount;
+                    $invoicePayment->save();
+                }
+            }
+            
+            DB::commit();
+            
+            $action = $existingDetail ? 'updated' : 'saved';
+            Flash::success('Invoice Detail ' . $action . ' successfully. Stock deducted: ' . $input['quantity'] . ' units from batch ' . $newProductBatch->batch_code);
+            
+            Session::forget('invoice_detail_data');
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error saving invoice detail: ' . $e->getMessage());
+            return redirect()->back()->withInput();
+        }
+    }
+   public function deletedetail($id)
+    {
+        $id = Crypt::decrypt($id);
+
+        $invoicedetail = InvoiceDetail::with('invoice')->where('id', $id)->first();
+
+        if (empty($invoicedetail)) {
+            Flash::error('Invoice Detail not found');
+            return redirect()->back();
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $invoice = $invoicedetail->invoice;
+            
+            // Get the product batch
+            $productBatch = ProductBatch::find($invoicedetail->product_batch_id);
+            
+            if ($productBatch) {
+                // Add back the quantity to the batch
+                $productBatch->quantity = $productBatch->quantity + $invoicedetail->quantity;
+                $productBatch->save();
+
+                // Create inventory transaction record for the reversal
+                $reversalTransaction = new InventoryTransaction();
+                $reversalTransaction->type = 1; // Stock In (Reversal)
+                $reversalTransaction->product_id = $invoicedetail->product_id;
+                $reversalTransaction->batch_id = $invoicedetail->product_batch_id;
+                $reversalTransaction->quantity = $invoicedetail->quantity;
+                $reversalTransaction->date = now();
+                $reversalTransaction->user = Auth::user()->name;
+                $reversalTransaction->remark = 'Reversal from deleted invoice detail - Invoice #' . ($invoice->invoiceno ?? '');
+                $reversalTransaction->save();
+
+                // Update lorry inventory balance - add back the quantity
+                $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
+                
+                if ($inventorybalance) {
+                    // Use helper function to add back quantity
+                    $inventorybalance->updateBatchQuantity(
+                        $invoicedetail->product_batch_id,
+                        $invoicedetail->quantity,
+                        'add'
+                    );
+                }
+            }
+
+            // Update invoice payment if cash term
+            if ($invoice->paymentterm == 1) {
+                $totalAmount = InvoiceDetail::where('invoice_id', $invoice->id)->sum('totalprice');
+                $invoicePayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
+                
+                if ($invoicePayment) {
+                    if ($totalAmount > 0) {
+                        $invoicePayment->amount = $totalAmount;
+                        $invoicePayment->save();
+                    } else {
+                        // If no details left, delete or cancel the payment
+                        $invoicePayment->status = 2; // Cancelled
+                        $invoicePayment->save();
+                    }
+                }
+            }
+
+            // Delete the invoice detail
+            $invoicedetail->delete();
+
+            DB::commit();
+
+            Flash::success('Invoice Detail deleted successfully. Stock returned to batch.');
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error deleting invoice detail: ' . $e->getMessage());
+            return redirect()->back();
+        }
+
+        return redirect(route('invoices.show', encrypt($invoicedetail->invoice_id)));
     }
 
     public function print()
     {
         return view('invoices.print');
+    }
+
+    /**
+     * Optimized version - calculates credit in a single query
+     */
+    private function calculateCustomerCredit($customerId, $asOfDate)
+    {
+        try {
+            // Get total invoiced amount (what the customer owes)
+            $totalInvoiced = Invoice::where('invoices.customer_id', $customerId)
+                ->where('invoices.status', 1)
+                ->where('invoices.updated_at', '<=', $asOfDate)
+                ->join('invoice_details', 'invoices.id', '=', 'invoice_details.invoice_id')
+                ->selectRaw('COALESCE(SUM(invoice_details.totalprice), 0) as total')
+                ->value('total'); 
+
+            // Get total paid amount (what the customer has paid)
+            $totalPaid = InvoicePayment::where('customer_id', $customerId)
+                ->where('status', 1)
+                ->where('approve_at', '<=', $asOfDate)
+                ->sum('amount') ?? 0;
+
+            $outstandingBalance = $totalInvoiced - $totalPaid;
+
+            return [
+                'totalprice' => $totalInvoiced,
+                'paid' => $totalPaid,
+                'credit' => $outstandingBalance
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Credit calculation failed: ' . $e->getMessage());
+            return [
+                'totalprice' => 0,
+                'paid' => 0,
+                'credit' => 0
+            ];
+        }
     }
 
     public function getInvoiceViewPDF($id,$function)
@@ -650,11 +819,18 @@ class InvoiceController extends AppBaseController
         $each = 23;
         $height = (count($invoice['invoicedetail']) * $each) + $min;
 
-        $invoice->newcredit = round(DB::select('call ice_spGetCustomerCreditByDate("'.$invoice->updated_at.'",'.$invoice->customer_id.');')[0]->credit,2);
+        $creditData = $this->calculateCustomerCredit(
+            $invoice->customer_id, 
+            $invoice->updated_at
+        );
+        
+        $invoice->newcredit = round($creditData['credit'] ?? 0, 2);
+
         $invoice->customer->groupcompany = DB::table('companies')
         ->where('companies.group_id',explode(',',$invoice->customer->group)[0])
         ->select('companies.*')
         ->first() ?? null;
+
         try{
             $pdf = Pdf::loadView('invoices.print', array(
                 'invoice' => $invoice
@@ -667,7 +843,7 @@ class InvoiceController extends AppBaseController
             }
         }
         catch(Exception $e){
-            abort(404);
+            dd($e->getMessage());
         }
 
     }

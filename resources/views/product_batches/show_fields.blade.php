@@ -4,67 +4,58 @@
 <div class="container-fluid">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">Batch Details: {{ $productBatch->batch_code }}</h3>
+            <h3 class="card-title" style="font-size: 1.5rem;">Batch Details: {{ $productBatch->batch_code }}</h3>
             <div class="card-tools">
-                <a href="{{ route('productBatches.edit', ['productBatch' => Crypt::encrypt($productBatch->id)]) }}" 
-                   class="btn btn-info btn-sm">
+                <a href="{{ route('productBatches.edit', Crypt::encrypt($productBatch->id)) }}" 
+                class="btn btn-info btn-sm" style="font-size: 0.9rem;">
                     <i class="fa fa-edit"></i> Edit
                 </a>
-                <a href="{{ route('productBatches.print-label', ['productBatch' => Crypt::encrypt($productBatch->id)]) }}" 
-                   class="btn btn-primary btn-sm">
+                <a href="{{ route('productBatches.print-label', Crypt::encrypt($productBatch->id)) }}" 
+                   class="btn btn-primary btn-sm" style="font-size: 0.9rem;">
                     <i class="fa fa-print"></i> Download Barcode
                 </a>
             </div>
         </div>
-        <div class="card-body">
+        <div class="card-body" style="font-size: 1rem;">
             <!-- Summary Cards -->
             <div class="row">
                 <div class="col-md-3">
                     <div class="info-box bg-info border border-dark">
-                        <span class="info-box-icon"><i class="fa fa-cube"></i></span>
+                        <span class="info-box-icon" style="font-size: 2rem;"><i class="fa fa-cube"></i></span>
                         <div class="info-box-content">
-                            <span class="info-box-text">Product</span>
-                            <span class="info-box-number">{{ $productBatch->product->name ?? 'N/A' }}</span>
-                            <small>{{ $productBatch->product->unit_code ?? '' }}</small>
+                            <span class="info-box-text" style="font-size: 1rem;">Product</span>
+                            <span class="info-box-number" style="font-size: 1.4rem; font-weight: bold;">{{ $productBatch->product->name ?? 'N/A' }}</span>
+                            <small style="font-size: 0.9rem;">{{ $productBatch->product->unit_code ?? '' }}</small>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="info-box bg-success border border-dark">
-                        <span class="info-box-icon"><i class="fa fa-calendar"></i></span>
+                        <span class="info-box-icon" style="font-size: 2rem;"><i class="fa fa-calendar"></i></span>
                         <div class="info-box-content">
-                            <span class="info-box-text">Expiry Date</span>
-                            <span class="info-box-number">{{ $productBatch->expiry_date->format('d-m-Y') }}</span>
+                            <span class="info-box-text" style="font-size: 1rem;">Expiry Date</span>
+                            <span class="info-box-number" style="font-size: 1.4rem; font-weight: bold;">{{ $productBatch->expiry_date }}</span>
                             @if($productBatch->isExpired())
-                                <span class="badge badge-danger">Expired</span>
+                                <span class="badge badge-danger" style="font-size: 0.9rem;">Expired</span>
                             @else
                                 @php
                                     $daysToExpiry = now()->diffInDays($productBatch->expiry_date, false);
                                 @endphp
                                 @if($daysToExpiry <= 30)
-                                    <span class="badge badge-warning">{{ $daysToExpiry }} days left</span>
+                                    <span class="badge badge-warning" style="font-size: 0.9rem;">{{ $daysToExpiry }} days left</span>
                                 @endif
                             @endif
                         </div>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="info-box bg-warning border border-dark">
-                        <span class="info-box-icon"><i class="fa fa-database"></i></span>
-                        <div class="info-box-content">
-                            <span class="info-box-text">Initial Stock</span>
-                            <span class="info-box-number">{{ number_format($productBatch->initial_quantity) }}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
                     <div class="info-box bg-danger border border-dark">
-                        <span class="info-box-icon"><i class="fa fa-bar-chart"></i></span>
+                        <span class="info-box-icon" style="font-size: 2rem;"><i class="fa fa-bar-chart"></i></span>
                         <div class="info-box-content">
-                            <span class="info-box-text">Current Stock</span>
-                            <span class="info-box-number">{{ number_format($productBatch->quantity) }}</span>
+                            <span class="info-box-text" style="font-size: 1rem;">Current Stock</span>
+                            <span class="info-box-number" style="font-size: 1.4rem; font-weight: bold;">{{ number_format($productBatch->quantity) }}</span>
                             @if($productBatch->quantity == 0)
-                                <span class="badge badge-secondary">Depleted</span>
+                                <span class="badge badge-secondary" style="font-size: 0.9rem;">Inactive</span>
                             @endif
                         </div>
                     </div>
@@ -76,46 +67,46 @@
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">
-                            <h4 class="card-title">Batch Information</h4>
+                            <h4 class="card-title" style="font-size: 1.3rem;">Batch Information</h4>
                         </div>
                         <div class="card-body">
-                            <table class="table table-bordered">
+                            <table class="table table-bordered" style="font-size: 1rem;">
                                 <tr>
-                                    <th width="40%">Batch Code</th>
-                                    <td>{{ $productBatch->batch_code }}</td>
+                                    <th width="40%" style="font-size: 1rem;">Batch Code</th>
+                                    <td style="font-size: 1rem; font-weight: 500;">{{ $productBatch->batch_code }}</td>
                                 </tr>
                                 <tr>
-                                    <th>Product</th>
-                                    <td>
-                                        {{ $productBatch->product->name ?? 'N/A' }}
+                                    <th style="font-size: 1rem;">Product</th>
+                                    <td style="font-size: 1rem;">
+                                        <span style="font-size: 1.1rem;">{{ $productBatch->product->name ?? 'N/A' }}</span>
                                         <br>
-                                        <small>Unit Code : {{ $productBatch->product->unit_code ?? 'N/A' }}</small>
+                                        <small style="font-size: 0.9rem;">Unit Code : {{ $productBatch->product->unit_code ?? 'N/A' }}</small>
                                     </td>
                                 </tr>
                                 <tr>
-                                    <th>Expiry Date</th>
-                                    <td>
-                                        {{ $productBatch->expiry_date->format('d-m-Y') }}
+                                    <th style="font-size: 1rem;">Expiry Date</th>
+                                    <td style="font-size: 1rem;">
+                                        <span style="font-size: 1.1rem;">{{ $productBatch->expiry_date }}</span>
                                         @if($productBatch->isExpired())
-                                            <span class="badge badge-danger ml-2">Expired</span>
+                                            <span class="badge badge-danger ml-2" style="font-size: 0.9rem;">Expired</span>
                                         @endif
                                     </td>
                                 </tr>
                                 <tr>
-                                    <th>Status</th>
-                                    <td>
+                                    <th style="font-size: 1rem;">Status</th>
+                                    <td style="font-size: 1rem;">
                                         @switch($productBatch->status)
                                             @case(1)
-                                                <span class="badge badge-success">Active</span>
+                                                <span class="badge badge-success" style="font-size: 1rem;">Active</span>
                                                 @break
                                             @case(2)
-                                                <span class="badge badge-danger">Expired</span>
+                                                <span class="badge badge-danger" style="font-size: 1rem;">Expired</span>
                                                 @break
                                             @case(3)
-                                                <span class="badge badge-warning">Depleted</span>
+                                                <span class="badge badge-warning" style="font-size: 1rem;">Inactive</span>
                                                 @break
                                             @default
-                                                <span class="badge badge-secondary">Unknown</span>
+                                                <span class="badge badge-secondary" style="font-size: 1rem;">Unknown</span>
                                         @endswitch
                                     </td>
                                 </tr>
@@ -127,106 +118,60 @@
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">
-                            <h4 class="card-title">Stock Information</h4>
+                            <h4 class="card-title" style="font-size: 1.3rem;">Stock Information</h4>
                         </div>
                         <div class="card-body">
-                            <table class="table table-bordered">
+                            <table class="table table-bordered" style="font-size: 1rem;">
+                                
                                 <tr>
-                                    <th width="40%">Initial Quantity</th>
-                                    <td>{{ number_format($productBatch->initial_quantity) }} units</td>
+                                    <th style="font-size: 1rem;">Current Quantity</th>
+                                    <td style="font-size: 1.1rem; font-weight: 500;">{{ number_format($productBatch->quantity) }} units</td>
                                 </tr>
-                                <tr>
-                                    <th>Current Quantity</th>
-                                    <td>{{ number_format($productBatch->quantity) }} units</td>
-                                </tr>
-                                <tr>
-                                    <th>Sold Quantity</th>
-                                    <td>{{ number_format($productBatch->initial_quantity - $productBatch->quantity) }} units</td>
-                                </tr>
-                                <tr>
-                                    <th>Usage Rate</th>
-                                    <td>
-                                        @if($productBatch->initial_quantity > 0)
-                                            @php
-                                                $usageRate = (($productBatch->initial_quantity - $productBatch->quantity) / $productBatch->initial_quantity) * 100;
-                                            @endphp
-                                            <div class="progress">
-                                                <div class="progress-bar bg-success" role="progressbar" 
-                                                     style="width: {{ $usageRate }}%" 
-                                                     aria-valuenow="{{ $usageRate }}" 
-                                                     aria-valuemin="0" 
-                                                     aria-valuemax="100">
-                                                    {{ number_format($usageRate, 1) }}%
-                                                </div>
-                                            </div>
-                                        @else
-                                            N/A
-                                        @endif
-                                    </td>
-                                </tr>
-                
+                                
                             </table>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- QR Code Display (if exists) -->
-            @if($productBatch->qr_code)
-            <div class="row mt-3">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4 class="card-title">QR Code</h4>
-                        </div>
-                        <div class="card-body text-center">
-                            {!! QrCode::size(200)->generate($productBatch->qr_code) !!}
-                            <p class="mt-2"><code>{{ $productBatch->qr_code }}</code></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            @endif
-
             <!-- Transactions History -->
             <div class="row mt-3">
                 <div class="col-md-12">
                     <div class="card">
                         <div class="card-header">
-                            <h4 class="card-title">Transaction History</h4>
+                            <h4 class="card-title" style="font-size: 1.3rem;">Transaction History</h4>
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
-                                <table class="table table-bordered table-striped">
+                                <table class="table table-bordered table-striped" style="font-size: 1.2rem;">
                                     <thead>
                                         <tr>
-                                            <th>Date</th>
-                                            <th>Type</th>
-                                            <th>Quantity</th>
-                                            <th>Remark</th>
-                                            <th>User</th>
+                                            <th style="font-size: 1rem;">Date</th>
+                                            <th style="font-size: 1rem;">Type</th>
+                                            <th style="font-size: 1rem;">Quantity</th>
+                                            <th style="font-size: 1rem;">Remark</th>
+                                            <th style="font-size: 1rem;">User</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @forelse($transactions ?? [] as $transaction)
                                         <tr>
-                                            <td>{{ $transaction->date->format('d-m-Y H:i:s') }}</td>
+                                            <td style="font-size: 1.2rem;">{{ $transaction->date->format('d-m-Y H:i:s') }}</td>
                                             <td>
                                                 @if($transaction->type == 1)
-                                                    <span class="badge badge-success">Stock In</span>
+                                                    <span class="badge badge-success" style="font-size: 0.9rem;">Stock In</span>
                                                 @else
-                                                    <span class="badge badge-warning">Stock Out</span>
+                                                    <span class="badge badge-warning" style="font-size: 0.9rem;">Stock Out</span>
                                                 @endif
                                             </td>
-                                            <td class="{{ $transaction->type == 1 ? 'text-success' : 'text-danger' }}">
+                                            <td class="{{ $transaction->type == 1 ? 'text-success' : 'text-danger' }}" style="font-size: 1.2rem; font-weight: 500;">
                                                 {{ $transaction->type == 1 ? '+' : '-' }}{{ number_format(abs($transaction->quantity)) }}
                                             </td>
-                                            <td>{{ $transaction->remark ?? '-' }}</td>
-                                            <td>{{ $transaction->user ?? 'system' }}</td>
+                                            <td style="font-size: 1.2rem;">{{ $transaction->remark ?? '-' }}</td>
+                                            <td style="font-size: 1.2rem;">{{ $transaction->user ?? 'system' }}</td>
                                         </tr>
                                         @empty
                                         <tr>
-                                            <td colspan="5" class="text-center">No transactions found</td>
+                                            <td colspan="5" class="text-center" style="font-size: 1rem;">No transactions found</td>
                                         </tr>
                                         @endforelse
                                     </tbody>
@@ -262,3 +207,25 @@
         });
     </script>
 @endpush
+
+<style>
+    /* Additional global font adjustments */
+    .info-box {
+        min-height: 100px;
+    }
+    .info-box-icon {
+        line-height: 100px;
+    }
+    .badge {
+        padding: 5px 8px;
+    }
+    .table td, .table th {
+        padding: 12px;
+    }
+    .progress {
+        margin-bottom: 0;
+    }
+    .card-title {
+        margin-bottom: 0;
+    }
+</style>

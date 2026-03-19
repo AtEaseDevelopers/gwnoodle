@@ -23,6 +23,9 @@ use Illuminate\Support\Facades\Session;
 use Exception;
 use App\Services\EInvoiceService;
 use App\Models\Code; // For dropdown options
+use App\Models\Driver; // Added for dropdown
+use App\Models\Agent;
+use App\Models\Supervisor;
 
 class CustomerController extends AppBaseController
 {
@@ -55,7 +58,26 @@ class CustomerController extends AppBaseController
      */
      public function create()
     {
-        return view('customers.create');
+        // Get data for dropdowns
+        $groups = Code::where('code', 'customer_group')->pluck('description', 'value')->toArray();
+        $agentItems = Agent::pluck('name', 'id')->toArray();
+        $supervisorItems = Supervisor::pluck('name', 'id')->toArray();
+        $driverItems = Driver::pluck('name', 'id')->toArray(); // Added driver dropdown
+        
+        $categoryOptions = Customer::$categoryOptions;
+
+        $paymentTerm = Customer::$paymentTerm;
+        
+        $data = [
+            'groups' => $groups,
+            'agentItems' => $agentItems,
+            'supervisorItems' => $supervisorItems,
+            'driverItems' => $driverItems, 
+            'categoryOptions' => $categoryOptions, 
+            'paymentTerm' => $paymentTerm,
+        ];
+        
+        return view('customers.create', $data);
     }
 
     /**
@@ -68,7 +90,11 @@ class CustomerController extends AppBaseController
     public function store(CreateCustomerRequest $request)
     {
         $input = $request->all();
-        $input['group'] = implode(",",$input['group'] ?? []);
+        
+        // Handle group as comma-separated string if it's an array
+        if (isset($input['group']) && is_array($input['group'])) {
+            $input['group'] = implode(",", $input['group']);
+        }
         
         $customer = $this->customerRepository->create($input);
 
@@ -88,16 +114,21 @@ class CustomerController extends AppBaseController
     {
         $id = Crypt::decrypt($id);
         $customer = $this->customerRepository->find($id);
+        
+        // Load relationships
+        $customer->load('agent', 'supervisor', 'driver');
 
-        $customer->group = DB::table('codes')
-        ->where('codes.code', '=', 'customer_group')
-        ->whereRaw('find_in_set(codes.value, "'.$customer->group.'")')
-        ->selectRaw('GROUP_CONCAT(codes.description) as group_descr')
-        ->get()->first()->group_descr;
+        // Get group descriptions
+        if ($customer->group) {
+            $customer->group_description = DB::table('codes')
+                ->where('codes.code', '=', 'customer_group')
+                ->whereRaw('find_in_set(codes.value, "'.$customer->group.'")')
+                ->selectRaw('GROUP_CONCAT(codes.description) as group_descr')
+                ->get()->first()->group_descr ?? '';
+        }
         
         if (empty($customer)) {
             Flash::error(__('customers.customer_not_found'));
-
             return redirect(route('customers.index'));
         }
         
@@ -118,11 +149,32 @@ class CustomerController extends AppBaseController
 
         if (empty($customer)) {
             Flash::error(__('customers.customer_not_found'));
-
             return redirect(route('customers.index'));
         }
         
-        $data = ['customer' => $customer];
+        // Get data for dropdowns
+        $groups = Code::where('code', 'customer_group')->pluck('description', 'value')->toArray();
+        $agentItems = Agent::pluck('name', 'id')->toArray();
+        $supervisorItems = Supervisor::pluck('name', 'id')->toArray();
+        $driverItems = Driver::pluck('name', 'id')->toArray(); // Added driver dropdown
+        $paymentTerm = Customer::$paymentTerm;
+
+        // Category options
+        $categoryOptions = [
+            'regular' => 'Regular',
+            'premium' => 'Premium',
+            'vip' => 'VIP',
+        ];
+        
+        $data = [
+            'customer' => $customer,
+            'groups' => $groups,
+            'agentItems' => $agentItems,
+            'supervisorItems' => $supervisorItems,
+            'driverItems' => $driverItems, // Added to data array
+            'categoryOptions' => $categoryOptions, // Added category options
+            'paymentTerm' => $paymentTerm,
+        ];
     
         return view('customers.edit', $data);
     }
@@ -142,12 +194,15 @@ class CustomerController extends AppBaseController
 
         if (empty($customer)) {
             Flash::error(__('customers.customer_not_found'));
-
             return redirect(route('customers.index'));
         }
 
         $input = $request->all();
-        $input['group'] = implode(",",$input['group'] ?? []);
+        
+        // Handle group as comma-separated string if it's an array
+        if (isset($input['group']) && is_array($input['group'])) {
+            $input['group'] = implode(",", $input['group']);
+        }
 
         $customer = $this->customerRepository->update($input, $id);
 
@@ -170,35 +225,30 @@ class CustomerController extends AppBaseController
 
         if (empty($customer)) {
             Flash::error(__('customers.customer_not_found'));
-
             return redirect(route('customers.index'));
         }
 
         $Invoice = Invoice::where('customer_id',$id)->get()->toArray();
         if(count($Invoice)>0){
             Flash::error('Unable to delete '.$customer->name.', '.$customer->name.' is being used in Invoice');
-
             return redirect(route('customers.index'));
         }
 
         $SpecialPrice = SpecialPrice::where('customer_id',$id)->get()->toArray();
         if(count($SpecialPrice)>0){
             Flash::error('Unable to delete '.$customer->name.', '.$customer->name.' is being used in Special Price');
-
             return redirect(route('customers.index'));
         }
 
         $foc = foc::where('customer_id',$id)->get()->toArray();
         if(count($foc)>0){
             Flash::error('Unable to delete '.$customer->name.', '.$customer->name.' is being used in Foc');
-
             return redirect(route('customers.index'));
         }
 
         $Assign = Assign::where('customer_id',$id)->get()->toArray();
         if(count($Assign)>0){
             Flash::error('Unable to delete '.$customer->name.', '.$customer->name.' is being used in Assign');
-
             return redirect(route('customers.index'));
         }
 

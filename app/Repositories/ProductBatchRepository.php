@@ -22,7 +22,6 @@ class ProductBatchRepository extends BaseRepository
         'manufacturing_date',
         'expiry_date',
         'quantity',
-        'initial_quantity',
         'qr_code',
         'barcode_data',
         'status'

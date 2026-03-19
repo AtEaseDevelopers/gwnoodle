@@ -6,12 +6,14 @@ use Eloquent as Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Carbon;
+use App\Traits\LogsActivity;
 
 class Driver extends Model
 {
     // use SoftDeletes;
 
     use HasFactory;
+    use LogsActivity;
 
     public $table = 'drivers';
 
@@ -24,6 +26,7 @@ class Driver extends Model
 
 
     public $fillable = [
+        'trip_id',
         'employeeid',
         'password',
         'name',

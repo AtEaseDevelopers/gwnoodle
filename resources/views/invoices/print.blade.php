@@ -5,44 +5,57 @@
     <title>{{config('app.name')}}</title>
     <style>
         @page {
-            margin-bottom:30px;
-            margin-top:30px;
-            margin-left:30px;
-            margin-right:30px;
+            margin: 0;
+            size: auto;
         }
         body{
-            font-size: 14px;
-            margin: 0%;
-            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            margin: 0 auto;
+            padding: 10px 15px; /* Balanced left and right padding */
+            font-family: 'Courier New', Courier, monospace;
+            width: 80mm; /* Standard receipt width */
+            max-width: 100%;
+            line-height: 1.3;
+            box-sizing: border-box; /* Ensures padding is included in width */
         }
         table{
             width: 100%;
             border-collapse: collapse;
-            table-layout: fixed;
         }
-        table th, table td{
-            /* border: 1px solid black; */
-            font-size: 12px;
-        }
-
-        .login-image{
-            background-image: url('{{config('app.url')}}/logo.png');
-            width: auto;
-            height: 55px;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            margin-bottom: 0.5rem;
+        table td, table th{
+            padding: 2px 0;
+            vertical-align: top;
         }
         .company{
             font-weight: bold;
             text-align: center;
+            font-size: 14px;
+            margin: 0 0 2px 0;
+            text-transform: uppercase;
+            width: 100%;
         }
         .address{
             text-align: center;
+            font-size: 10px;
+            margin: 1px 0;
+            white-space: nowrap;
+            width: 100%;
         }
-        p{
-            margin: 0%;
+        .header-line{
+            text-align: center;
+            margin: 5px 0;
+            font-size: 11px;
+            width: 100%;
+        }
+        .divider{
+            border-top: 1px dashed #000;
+            margin: 8px 0;
+            width: 100%;
+        }
+        .divider-solid{
+            border-top: 1px solid #000;
+            margin: 8px 0;
+            width: 100%;
         }
         .ta-r{
             text-align: right;
@@ -50,206 +63,253 @@
         .ta-l{
             text-align: left;
         }
-        .paidsummary{
+        .ta-c{
             text-align: center;
+        }
+        p{
+            margin: 0;
+        }
+        .item-row td{
+            padding: 1px 0;
+            font-size: 11px;
+        }
+        .item-name{
+            font-size: 11px;
+            padding-left: 5px;
+            color: #555;
+        }
+        .totals td{
+            padding: 3px 0;
+            font-size: 12px;
             font-weight: bold;
-            color: #394068;
+
+        }
+        .payment-line{
+            font-size: 12px;
+            margin: 2px 0;
+        }
+        .barcode{
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            margin: 8px 0 5px 0;
+            letter-spacing: 2px;
+        }
+        .small-text{
+            font-size: 9px;
+            text-align: center;
+            color: #666;
+            margin: 2px 0;
+        }
+        .address-block{
+            font-size: 10px;
+            margin: 2px 0;
+            white-space: normal;
+            word-wrap: break-word;
+            text-align: center;
+        }
+        .address-label{
+            font-weight: bold;
+            font-size: 10px;
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 2px;
+        }
+        .document-info {
+            width: 100%;
+            margin: 5px 0;
+        }
+        .document-info td {
+            padding: 1px 0;
+        }
+        .items-summary {
+            width: 100%;
+            margin: 5px 0;
+        }
+        .items-summary td {
+            padding: 2px 0;
+        }
+        .itemize-header {
+            font-weight: bold;
+            margin: 10px 0 5px 0;
+            text-align: left;
+            text-decoration: underline;
+        }
+        .total-count {
+            text-align: right;
+            margin: 5px 0;
+            font-weight: normal;
+        }
+        .payment-section {
+            width: 100%;
+            margin: 8px 0;
+        }
+        .payment-section td {
+            padding: 2px 0;
+        }
+        .footer-section {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .receipt-container {
+            width: 100%;
+            margin: 0 auto;
         }
     </style>
 </head>
 <body>
-    <table class="invoice">
-        <tr>
-            <td>
-                <div class="login-image"></div>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <p class="company">{{ $invoice['customer']['groupcompany']->name ?? config('invoice.name') }}</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <p class="address">{{ $invoice['customer']['groupcompany']->ssm ?? config('invoice.ssm') }}</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <p class="address">{{ $invoice['customer']['groupcompany']->address1 ?? config('invoice.address1') }}</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <p class="address">{{ $invoice['customer']['groupcompany']->address2 ?? config('invoice.address2') }}</p>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <p class="address">{{ $invoice['customer']['groupcompany']->address3 ?? env('INVOICE_ADDRESS3') }}</p>
-            </td>
-        </tr>
-       
-        <tr>
-            <td>
-                <br>
-                <table id="header">
-                    <tr>
-                        <td width="35%">
-                            <p>Invoice</p>
-                        </td>
-                        <td width="65%">
-                            <p class="ta-r">{{ $invoice['invoiceno'] ?? '-' }}</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <p>Invoice Date</p>
-                        </td>
-                        <td>
-                            <p class="ta-r">{{ date_format(date_create($invoice['date']),'d-m-Y H:i:s') ?? '-' }}</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <p>Payment Method</p>
-                        </td>
-                        <td>
-                            <p class="ta-r">
-                            @if($invoice['paymentterm']==1)
-                                {{ 'Cash' }}
-                            @elseif($invoice['paymentterm']==2)
-                                {{ 'Credit'}}
-                            @elseif($invoice['paymentterm']==3)
-                                {{ 'Online BankIn'}}
-                            @elseif($invoice['paymentterm']==4)
-                                {{ 'E-wallet'}}
-                            @elseif($invoice['paymentterm']==5)
-                                {{ 'Cheque'}}
-                            @endif
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    @if($invoice['paymentterm']==5)
-                    <tr>
-                        <td>
-                            <p>Cheque No</p>
-                        </td>
-                        <td>
-                            <p class="ta-r">
-                            {{ $invoice['chequeno'] }}
-                            </p>
-                        </td>
-                    </tr>
-                    @endif
-                    <tr>
-                        <td>
-                            <p>Address</p>
-                        </td>
-                        <td>
-                            <p class="ta-r">{{ $invoice['customer']['address'] ?? '-' }}</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <p>Driver</p>
-                        </td>
-                        <td>
-                            <p class="ta-r">{{ $invoice['driver']['name'] ?? '-' }}</p>
-                        </td>
-                    </tr>
-                    
-                    <tr><td height="15">&nbsp;</td></tr>
-                    <tr>
-                        <td>
-                            <p style="font-size:16px; font-weight:bold;">Customer</p>
-                        </td>
-                        <td>
-                            <p class="ta-r" style="font-size:16px; font-weight:bold;">{{ $invoice['customer']['company'] ?? '-' }}</p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <br>
-                <table id="detail">
-                    <tr>
-                        <th>
-                            <p class="ta-l">Product</p>
-                        </th>
-                        <th>
-                            <p class="ta-r">Price <br>(RM)</p>
-                        </th>
-                        <th>
-                            <p class="ta-r">Qty</p>
-                        </th>
-                        <th>
-                            <p class="ta-r">Subtotal</p>
-                        </th>
-                    </tr>
-                    @php
-                            $totalamount = 0;
-                    @endphp
-                    @foreach ($invoice['invoicedetail'] as $invoicedetail)
-                        @php
-                            $totalamount = ($totalamount ?? 0) + $invoicedetail['totalprice'];
-                        @endphp
-                        <tr>
-                            <td>
-                                <p style="font-size:16px;">{{ $invoicedetail['product']['name'] }}</p>
-                            </td>
-                            <td>
-                                <p class="ta-r" style="font-size:16px;">{{ number_format($invoicedetail['price'],2) }}</p>
-                            </td>
-                            <td>
-                                <p class="ta-r" style="font-size:16px;">{{ $invoicedetail['quantity'] }}</p>
-                            </td>
-                            <td>
-                                <p class="ta-r" style="font-size:16px;">{{ number_format($invoicedetail['totalprice'],2) }}</p>
-                            </td>
-                        </tr>
-                    @endforeach
-                </table>
-            </td>
-        </tr>
-        <tr>
-            <td>
-                <br>
-                <table id="total">
-                    <tr>
-                        <th>
-                            <p class="ta-l" style="font-size:18px;">Total</p>
-                        </th>
-                        <th>
-                            <p class="ta-r" style="font-size:18px;">RM{{ number_format($totalamount,2) }}</p>
-                        </td>
-                    </tr>
-                </table>
-                <p class="paidsummary">Paid Summary</p>
-                <table id="footer">
-                    <tr>
-                        <th>
-                            <p class="ta-l" style="font-size:18px;">Paid Amount</p>
-                        </th>
-                        <td>
-                            <p class="ta-r" style="font-size:18px;">RM{{ number_format($totalamount,2) }}</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>
-                            <p class="ta-l" style="font-size:18px;">Updated Credit</p>
-                        </th>
-                        <td>
-                            <p class="ta-r" style="font-size:18px;">RM{{ number_format($invoice->newcredit,2) }}</p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
+    @php
+        $totalamount = 0;
+        $totalquantity = 0;
 
+        foreach ($invoice['invoicedetail'] as $invoicedetail) {
+            $totalamount += $invoicedetail['totalprice'];
+            $totalquantity += $invoicedetail['quantity'];
+        }
+    @endphp
+
+    <div class="receipt-container">
+        <!-- Company Header -->
+        <div class="company">{{ config('invoice.name') }}</div>
+        <div class="address">{{  config('invoice.ssm') }}</div>
+        <div class="address">{{  config('invoice.address1') }}</div>
+        <div class="address">{{ config('invoice.address2') }}</div>
+        <div class="address">{{ env('INVOICE_ADDRESS3') }}</div>
+        <div class="address">(TEL){{ config('invoice.phone') ?? '+60167237931' }}</div>
+
+        <div class="divider"></div>
+
+        <!-- Sale Type -->
+        <div class="header-line">
+            @php
+                $paymentMethods = ['1' => 'Cash Sale', '2' => 'Credit Sale', '3' => 'Online BankIn', '4' => 'E-wallet', '5' => 'Cheque'];
+            @endphp
+            <strong>{{ $paymentMethods[$invoice['paymentterm']] ?? 'Sale' }}</strong>
+        </div>
+
+        <!-- Document Info -->
+        <table class="document-info">
+            <tr>
+                <td class="ta-l">Document #:</td>
+                <td class="ta-r">{{ $invoice['invoiceno'] ?? '-' }}</td>
+            </tr>
+            <tr>
+                <td class="ta-l">Date :</td>
+                <td class="ta-r">{{ date_format(date_create($invoice['date']),'D d/M/Y H:i') ?? '-' }}</td>
+            </tr>
+            <tr>
+                <td class="ta-l">S/Driver :</td>
+                <td class="ta-r">{{ $invoice['driver']['name'] ?? '-' }}</td>
+            </tr>
+            
+            @if($invoice['paymentterm']==5 && !empty($invoice['chequeno']))
+            <tr>
+                <td class="ta-l">Cheque No :</td>
+                <td class="ta-r">{{ $invoice['chequeno'] }}</td>
+            </tr>
+            @endif
+        </table>
+
+        <div class="divider"></div>
+
+        <!-- Billing Address -->
+        <div class="address-label">BILLING TO :</div>
+        <div class="address-block">
+            {{ $invoice->customer['company'] ?? '' }}<br>
+            ({{ $invoice->customer['phone'] ?? '' }})<br>
+            {{ $invoice->customer['billing_address'] ?? 'No billing address provided' }}
+        </div>
+
+        <div style="margin-top: 8px;"><span class="address-label">DELIVERY TO :</span></div>
+        <div class="address-block">
+            {{ $invoice->customer['delivery_address'] ?? 'No delivery address provided' }}
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Items Summary -->
+        <table class="items-summary">
+            <tr>
+                <td class="ta-l">total {{ count($invoice['invoicedetail']) }} items :</td>
+                <td class="ta-r">{{ number_format($totalamount, 2) }}</td>
+            </tr>
+        </table>
+
+        <div class="divider-solid"></div>
+
+        <!-- Items Detail -->
+        <div class="itemize-header">Items :</div>
+        
+        <table style="margin-bottom: 5px;">
+            <thead>
+                <tr style="font-weight: bold;">
+                    <td class="ta-l">Price</td>
+                    <td class="ta-l">Qty</td>
+                    <td class="ta-r">Amount</td>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($invoice['invoicedetail'] as $invoicedetail)
+
+                <tr class="item-row">
+                    <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['price'], 2) }}</td>
+                    <td class="ta-l" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
+                    <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 2) }}</td>
+                </tr>
+                <tr class="item-row">
+                    <td colspan="3" class="item-name">{{ $invoicedetail['product']['name'] }}({{$invoicedetail->batch->batch_code }})</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        <div class="divider"></div>
+        <table>
+            </tbody>
+                <tr class="item-row">
+                    <td class="ta-l" style="width: 25%;">Total :</td>
+                    <td class="ta-l" style="width: 30%;">{{ $totalquantity }}</td>
+                    <td class="ta-r" style="width: 20%;">{{ number_format($totalamount, 2) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="divider"></div>
+
+        <!-- Totals -->
+        <table class="totals">
+            <tr>
+                <td class="ta-r">Total :</td>
+                <td class="ta-r">{{ number_format($totalamount, 2) }}</td>
+            </tr>
+            <tr>
+                <td class="ta-r">Rounding Adj :</td>
+                <td class="ta-r">0.00</td>
+            </tr>
+            <tr>
+                <td class="ta-r">Final Total :</td>
+                <td class="ta-r">{{ number_format($totalamount, 2) }}</td>
+            </tr>
+        </table>
+
+        <div class="divider-solid"></div>
+
+        <!-- Payments -->
+        <table class="payment-section">
+            <tr>
+                <td class="ta-l">payments :</td>
+                <td class="ta-r">Cash {{ number_format($totalamount, 2) }}</td>
+            </tr>
+            <tr>
+                <td class="ta-l">changes :</td>
+                <td class="ta-r">0.00</td>
+            </tr>
+        </table>
+
+        <div class="divider"></div>
+
+        <!-- Footer -->
+        <div class="footer-section">
+            <div class="small-text">Thank you for your business!</div>
+        </div>
+    </div>
+</body>
 </html>

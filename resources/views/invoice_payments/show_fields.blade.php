@@ -43,7 +43,74 @@
 <!-- Attachment Field -->
 <div class="form-group">
     {!! Form::label('attachment', __('invoice_payments.attachment')) !!}:
-    <p>{{ $invoicePayment->attachment }}</p>
+    @if($invoicePayment->attachment)
+        <div class="mt-2">
+            @php
+                $extension = pathinfo($invoicePayment->attachment, PATHINFO_EXTENSION);
+                $fileUrl = asset('/' . $invoicePayment->attachment);
+            @endphp
+            
+            @if(in_array(strtolower($extension), ['jpg', 'jpeg', 'png', 'gif', 'bmp']))
+                <div class="card" style="max-width: 300px;">
+                    <div class="card-body text-center">
+                        <a href="{{ $fileUrl }}" target="_blank">
+                            <img src="{{ $fileUrl }}" alt="Attachment" class="img-fluid img-thumbnail" style="max-height: 200px;">
+                        </a>
+                        <div class="mt-2">
+                            <a href="{{ $fileUrl }}" target="_blank" class="btn btn-sm btn-primary">
+                                <i class="fa fa-eye"></i> View Full Image
+                            </a>
+                            <a href="{{ $fileUrl }}" download class="btn btn-sm btn-success">
+                                <i class="fa fa-download"></i> Download
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            @elseif(strtolower($extension) == 'pdf')
+                <div class="card" style="max-width: 400px;">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <i class="fa fa-file-pdf-o text-danger" style="font-size: 48px;"></i>
+                            <div class="ml-3">
+                                <h6 class="mb-1">PDF Document</h6>
+                                <small class="text-muted">{{ basename($invoicePayment->attachment) }}</small>
+                                <div class="mt-2">
+                                    <a href="{{ $fileUrl }}" target="_blank" class="btn btn-sm btn-primary">
+                                        <i class="fa fa-eye"></i> View PDF
+                                    </a>
+                                    <a href="{{ $fileUrl }}" download class="btn btn-sm btn-success">
+                                        <i class="fa fa-download"></i> Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @else
+                <div class="card" style="max-width: 400px;">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <i class="fa fa-file-o text-secondary" style="font-size: 48px;"></i>
+                            <div class="ml-3">
+                                <h6 class="mb-1">File Attachment</h6>
+                                <small class="text-muted">{{ basename($invoicePayment->attachment) }}</small>
+                                <div class="mt-2">
+                                    <a href="{{ $fileUrl }}" target="_blank" class="btn btn-sm btn-primary">
+                                        <i class="fa fa-eye"></i> View File
+                                    </a>
+                                    <a href="{{ $fileUrl }}" download class="btn btn-sm btn-success">
+                                        <i class="fa fa-download"></i> Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+        </div>
+    @else
+        <p class="text-muted"><em>No attachment uploaded</em></p>
+    @endif
 </div>
 
 <!-- Approve By Field -->

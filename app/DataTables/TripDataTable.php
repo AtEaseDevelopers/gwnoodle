@@ -18,19 +18,9 @@ class TripDataTable extends DataTable
     public function dataTable($query)
     {
         $dataTable = new EloquentDataTable($query);
-
-      return $dataTable->addColumn('action', function ($row) {
-        if ($row->type == 2) {
-            return '<div class="btn-group">
-                        <a href="' . route('trips.show', Crypt::encrypt($row->id)) . '" class="btn btn-ghost-success">
-                            <i class="fa fa-eye"></i>
-                        </a>
-                    </div>';
-        } else {
-            return '';
-        }
-    })
-    ->rawColumns(['action']);
+        
+        // Return the dataTable without any action column
+        return $dataTable;
     }
 
     /**
@@ -58,7 +48,6 @@ class TripDataTable extends DataTable
         return $this->builder()
             ->columns($this->getColumns())
             ->minifiedAjax()
-            ->addAction(['title' => trans('trips.action'), 'printable' => false])
             ->parameters([
                 'dom'       => '<"row"B><"row"<"dataTableBuilderDiv"t>><"row"ip>',
                 'stateSave' => true,
@@ -128,7 +117,7 @@ class TripDataTable extends DataTable
                     //     'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
                     // ],
                     [
-                        'targets' => 6,
+                        'targets' => 4,
                         'render' => 'function(data, type){return data == 1 ? "Start Trip" : "End Trip";}'
                     ],
                     
@@ -175,17 +164,17 @@ class TripDataTable extends DataTable
             'data' => 'driver.name',
             'name' => 'driver.name']),
 
-            'kelindan_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.kelindan'),
-            'data' => 'kelindan.name',
-            'name' => 'kelindan.name']),
+            // 'kelindan_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.kelindan'),
+            // 'data' => 'kelindan.name',
+            // 'name' => 'kelindan.name']),
 
             'lorry_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.lorry'),
             'data' => 'lorry.lorryno',
             'name' => 'lorry.lorryno']),
 
-            'cash'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.closing_cash'),
-            'data' => 'cash',
-            'name' => 'cash']),
+            // 'cash'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.closing_cash'),
+            // 'data' => 'cash',
+            // 'name' => 'cash']),
 
             'type'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.type'),
             'data' => 'type',

@@ -182,7 +182,7 @@ class InventoryCountDataTable extends DataTable
     {
         $query = $model->newQuery()
             ->with([
-                'driver:id,name,trip_id',
+                'driver:id,name',
                 'approver:id,name',
                 'rejector:id,name'
             ])

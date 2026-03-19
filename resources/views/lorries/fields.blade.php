@@ -1,6 +1,6 @@
 <!-- Lorryno Field -->
 <div class="form-group col-sm-6">
-    {!! Form::label('lorryno', __('lorries.lorry_no')) !!}<span class="asterisk"> *</span>
+    {!! Form::label('lorryno', __('Van Plate Number')) !!}<span class="asterisk"> *</span>
     {!! Form::text('lorryno', null, ['class' => 'form-control','maxlength' => 255,'maxlength' => 255,'autofocus']) !!}
 </div>
 
@@ -8,7 +8,7 @@
 <div class="form-group col-sm-6">
 
     {!! Form::label('status', __('lorries.status'))!!}<span class="asterisk"> *</span>
-    {{ Form::select('status', array(1 => 'Active', 0 => 'Unactive'), null, ['class' => 'form-control']) }}
+    {{ Form::select('status', array(1 => 'Active', 0 => 'Inactive'), null, ['class' => 'form-control']) }}
 </div>
 
 <!-- Remark Field -->

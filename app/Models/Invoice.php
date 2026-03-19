@@ -21,6 +21,9 @@ class Invoice extends Model
     public const STATUS_SYNCED_TO_XERO = 1;
     public const STATUS_VOIDED = 2;
 
+    const STATUS_COMPLETED = 1;
+    const STATUS_NEW = 2;
+
     public $fillable = [
         'invoiceno',
         'date',
@@ -64,12 +67,18 @@ class Invoice extends Model
         'date' => 'required',
         'customer_id' => 'required',
         'paymentterm' => 'required',
+        'driver_id' => 'required',
         'status' => 'required',
         'remark' => 'nullable|string|max:255|string|max:255',
         'created_at' => 'nullable|nullable',
         'updated_at' => 'nullable|nullable'
     ];
 
+    public function getStatusTextAttribute()
+    {
+        return $this->status = 1 ? 'Completed' : 'New';
+    }
+    
     public function customer()
     {
         return $this->belongsTo(\App\Models\Customer::class, 'customer_id', 'id');

@@ -8,6 +8,8 @@ use App\Http\Requests\CreateProductBatchRequest;
 use App\Http\Requests\UpdateProductBatchRequest;
 use App\Repositories\ProductBatchRepository;
 use App\Models\Product;
+use App\Models\Warehouse;
+use App\Models\WarehouseInventoryBalance;
 use App\Models\InventoryTransaction;
 use App\Models\ProductBatch;
 use Flash;
@@ -21,8 +23,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Exception;
 use Milon\Barcode\Facades\DNS1DFacade as DNS1D;
-use Intervention\Image\ImageManager;
-use Intervention\Image\Drivers\Gd\Driver;
 
 class ProductBatchController extends AppBaseController
 {
@@ -59,7 +59,13 @@ class ProductBatchController extends AppBaseController
             ->pluck('name', 'id')
             ->toArray();
 
-        return view('product_batches.create', compact('products'));
+        // Get active warehouses for dropdown
+        $warehouses = Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->toArray();
+
+        return view('product_batches.create', compact('products', 'warehouses'));
     }
 
     /**
@@ -73,9 +79,10 @@ class ProductBatchController extends AppBaseController
     {
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:products,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
             'batch_code' => 'required|string|unique:product_batches,batch_code',
             'expiry_date' => 'required|date|after:today',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'nullable|integer|min:1',
             'status' => 'sometimes|integer'
         ]);
 
@@ -86,24 +93,40 @@ class ProductBatchController extends AppBaseController
         }
 
         $input = $request->all();
-        $input['initial_quantity'] = $input['quantity'];
         $input['status'] = 1; // Active
+        
         DB::beginTransaction();
         
         try {
             // Create product batch
             $productBatch = $this->productBatchRepository->create($input);
-            // Create inventory transaction for stock in
-            InventoryTransaction::create([
-                'product_id' => $productBatch->product_id,
-                'batch_id' => $productBatch->id,
-                'quantity' => $input['quantity'],
-                'type' => 1, // Stock In
-                'transaction_type' => 'stock_in',
-                'remark' => 'Initial stock for batch: ' . $productBatch->batch_code,
-                'date' => now(),
-                'user' => Auth::user()->name ?? 'system'
-            ]);
+            
+            // If quantity is provided, add to warehouse inventory
+            if (isset($input['quantity']) && $input['quantity'] > 0) {
+                // Add to warehouse inventory balance
+                $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
+                    [
+                        'warehouse_id' => $request->warehouse_id,
+                        'product_id' => $productBatch->product_id,
+                        'batch_id' => $productBatch->id,
+                    ],
+                    ['quantity' => 0]
+                );
+                
+                $warehouseInventory->increaseQuantity($input['quantity']);
+                
+                // Create inventory transaction for warehouse stock in
+                InventoryTransaction::create([
+                    'warehouse_id' => $request->warehouse_id,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => $input['quantity'],
+                    'type' => 1, // Stock In
+                    'remark' => 'Initial stock for batch: ' . $productBatch->batch_code,
+                    'date' => now(),
+                    'user' => Auth::user()->name ?? 'system'
+                ]);
+            }
 
             DB::commit();
 
@@ -113,7 +136,6 @@ class ProductBatchController extends AppBaseController
 
         } catch (\Exception $e) {
             DB::rollBack();
-            dd( $e->getMessage());
             Flash::error('Error creating batch: ' . $e->getMessage());
             return redirect()->back()->withInput();
         }
@@ -138,9 +160,14 @@ class ProductBatchController extends AppBaseController
         }
 
         // Get inventory transactions for this batch
-        $transactions = \App\Models\InventoryTransaction::where('batch_id', $productBatch->id)
-            ->with('product')
+        $transactions = InventoryTransaction::where('batch_id', $productBatch->id)
+            ->with(['product', 'warehouse'])
             ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Get warehouse inventory balances for this batch
+        $warehouseBalances = WarehouseInventoryBalance::where('batch_id', $productBatch->id)
+            ->with('warehouse')
             ->get();
 
         // Calculate statistics
@@ -151,6 +178,7 @@ class ProductBatchController extends AppBaseController
         return view('product_batches.show', compact(
             'productBatch', 
             'transactions', 
+            'warehouseBalances',
             'totalStockIn', 
             'totalStockOut', 
             'currentStock'
@@ -181,7 +209,13 @@ class ProductBatchController extends AppBaseController
             ->pluck('name', 'id')
             ->toArray();
 
-        return view('product_batches.edit', compact('productBatch', 'products'));
+        // Get active warehouses for dropdown
+        $warehouses = Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->toArray();
+
+        return view('product_batches.edit', compact('productBatch', 'products', 'warehouses'));
     }
 
     /**
@@ -192,7 +226,7 @@ class ProductBatchController extends AppBaseController
      *
      * @return Response
      */
-    public function update($id, UpdateProductBatchRequest $request)
+    public function update($id, Request $request)
     {
         $id = Crypt::decrypt($id);
         $productBatch = $this->productBatchRepository->find($id);
@@ -207,7 +241,6 @@ class ProductBatchController extends AppBaseController
 
         // Don't allow quantity update through edit - use stock in/out functions
         unset($input['quantity']);
-        unset($input['initial_quantity']);
 
         // Validate batch code uniqueness for the same product (excluding current batch)
         $existingBatch = ProductBatch::where('product_id', $input['product_id'])
@@ -246,10 +279,18 @@ class ProductBatchController extends AppBaseController
         }
 
         // Check if batch has any transactions
-        $hasTransactions = \App\Models\InventoryTransaction::where('batch_id', $id)->exists();
+        $hasTransactions = InventoryTransaction::where('batch_id', $id)->exists();
         
         if ($hasTransactions) {
             Flash::error('Cannot delete batch because it has inventory transactions.');
+            return redirect(route('productBatches.index'));
+        }
+
+        // Check if batch has stock in any warehouse
+        $hasWarehouseStock = WarehouseInventoryBalance::where('batch_id', $id)->exists();
+        
+        if ($hasWarehouseStock) {
+            Flash::error('Cannot delete batch because it has stock in warehouses.');
             return redirect(route('productBatches.index'));
         }
 
@@ -284,9 +325,10 @@ class ProductBatchController extends AppBaseController
             
             if ($productBatch) {
                 // Check if batch has transactions
-                $hasTransactions = \App\Models\InventoryTransaction::where('batch_id', $id)->exists();
+                $hasTransactions = InventoryTransaction::where('batch_id', $id)->exists();
+                $hasWarehouseStock = WarehouseInventoryBalance::where('batch_id', $id)->exists();
                 
-                if (!$hasTransactions && $productBatch->quantity == 0) {
+                if (!$hasTransactions && !$hasWarehouseStock && $productBatch->quantity == 0) {
                     $productBatch->delete();
                     $count++;
                 }
@@ -296,97 +338,249 @@ class ProductBatchController extends AppBaseController
         return $count;
     }
 
-    /**
-     * Show form for stock in
-     */
-    public function showStockInForm($id)
+    public function searchByCode(Request $request, $batchCode = null)
     {
-        $id = Crypt::decrypt($id);
-        $productBatch = $this->productBatchRepository->find($id);
-
-        if (empty($productBatch)) {
-            Flash::error('Product Batch not found');
-            return redirect(route('productBatches.index'));
-        }
-
-        return view('product_batches.stock_in', compact('productBatch'));
-    }
-
-    /**
-     * Show form for stock out
-     */
-    public function showStockOutForm($id)
-    {
-        $id = Crypt::decrypt($id);
-        $productBatch = $this->productBatchRepository->find($id);
-
-        if (empty($productBatch)) {
-            Flash::error('Product Batch not found');
-            return redirect(route('productBatches.index'));
-        }
-
-        return view('product_batches.stock_out', compact('productBatch'));
-    }
-
-    /**
-     * Process stock out
-     */
-    public function stockOut(Request $request, $id)
-    {
-        $id = Crypt::decrypt($id);
-        $productBatch = $this->productBatchRepository->find($id);
-
-        if (empty($productBatch)) {
-            Flash::error('Product Batch not found');
-            return redirect(route('productBatches.index'));
-        }
-
-        $validator = Validator::make($request->all(), [
-            'quantity' => 'required|integer|min:1|max:' . $productBatch->quantity,
-            'remark' => 'nullable|string|max:255'
-        ]);
-
-        if ($validator->fails()) {
-            return redirect()->back()->withErrors($validator)->withInput();
-        }
-
-        DB::beginTransaction();
-        
         try {
-            $quantity = $request->quantity;
-
-            // Update batch quantity
-            $productBatch->decrement('quantity', $quantity);
+            $code = $batchCode ?: $request->input('batch_code');
             
-            // Update status based on remaining quantity
-            if ($productBatch->quantity <= 0) {
-                $productBatch->status = 3; // Depleted
+            if (empty($code)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Batch code is required'
+                ], 400);
             }
-            $productBatch->save();
+            
+            // Search for batch by batch_code (not by ID)
+            $productBatch = ProductBatch::where('batch_code', $code)->first();
+        
+            if (!$productBatch) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product Batch not found with code: ' . $code
+                ], 404);
+            }
+            
+            // Get active warehouses for dropdown
+            $warehouses = Warehouse::where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name', 'location']);
 
-            // Create inventory transaction
-            \App\Models\InventoryTransaction::create([
-                'product_id' => $productBatch->product_id,
-                'batch_id' => $productBatch->id,
-                'quantity' => -$quantity,
-                'type' => 2, // Stock Out
-                'transaction_type' => 'stock_out',
-                'remark' => $request->remark ?? 'Stock out',
-                'date' => now(),
-                'user' => Auth::user()->name ?? 'system'
+            // Encrypt the ID for safe URL passing
+            $encryptedId = Crypt::encrypt($productBatch->id);
+            
+            return response()->json([
+                'success' => true,
+                'id' => $productBatch->id,
+                'encrypted_id' => $encryptedId,
+                'batch_code' => $productBatch->batch_code,
+                'product_name' => $productBatch->product->name ?? 'N/A',
+                'product_code' => $productBatch->product->unit_code ?? '',
+                'expiry_date' => $productBatch->expiry_date instanceof \Carbon\Carbon 
+                    ? $productBatch->expiry_date->format('Y-m-d')
+                    : $productBatch->expiry_date,
+                'quantity' => $productBatch->quantity,
+                'status' => $productBatch->status,
+                'warehouses' => $warehouses,
+                'redirect_url' => route('productBatches.show', $encryptedId)
             ]);
 
-            DB::commit();
-
-            Flash::success($quantity . ' units removed from batch successfully.');
-
-            return redirect(route('productBatches.show', ['id' => Crypt::encrypt($productBatch->id)]));
-
         } catch (\Exception $e) {
-            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function stockIn(Request $request, $id)
+    {
+        try {
+            $productBatch = $this->productBatchRepository->find($id);
+
+            if (empty($productBatch)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product Batch not found'
+                ], 404);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'quantity' => 'required|integer|min:1',
+                'warehouse_id' => 'required|exists:warehouses,id',
+                'remark' => 'nullable|string|max:255'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $validator->errors()->first()
+                ], 422);
+            }
+
+            DB::beginTransaction();
             
-            Flash::error('Error processing stock out: ' . $e->getMessage());
-            return redirect()->back()->withInput();
+            try {
+                $quantity = $request->quantity;
+                $warehouseId = $request->warehouse_id;
+                $warehouse = Warehouse::find($warehouseId);
+
+                // Update batch quantity
+                $productBatch->increment('quantity', $quantity);
+
+                // Update status to Active if it was Inactive
+                if ($productBatch->status == 2) {
+                    $productBatch->status = 1; // Active
+                    $productBatch->save();
+                }
+
+                // Add to warehouse inventory balance
+                $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
+                    [
+                        'warehouse_id' => $warehouseId,
+                        'product_id' => $productBatch->product_id,
+                        'batch_id' => $productBatch->id,
+                    ],
+                    ['quantity' => 0]
+                );
+                
+                $warehouseInventory->increaseQuantity($quantity);
+
+                // Create inventory transaction
+                InventoryTransaction::create([
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => $quantity,
+                    'type' => 1, // Stock In
+                    'remark' => ($request->remark ?? 'Stock in from barcode scan') . ' - Warehouse: ' . $warehouse->name,
+                    'date' => now(),
+                    'user' => Auth::user()->name ?? 'system'
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => $quantity . ' units added to batch in ' . $warehouse->name . ' successfully.',
+                    'new_quantity' => $productBatch->quantity,
+                    'batch_code' => $productBatch->batch_code
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error processing stock in: ' . $e->getMessage()
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function stockOut(Request $request, $id)
+    {
+        try {
+            $productBatch = $this->productBatchRepository->find($id);
+
+            if (empty($productBatch)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product Batch not found'
+                ], 404);
+            }
+
+            // Check if batch is expired
+            if ($productBatch->isExpired()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot remove stock from expired batch'
+                ], 422);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'quantity' => 'required|integer|min:1|max:' . $productBatch->quantity,
+                'warehouse_id' => 'required|exists:warehouses,id',
+                'remark' => 'nullable|string|max:255'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $validator->errors()->first()
+                ], 422);
+            }
+
+            DB::beginTransaction();
+            
+            try {
+                $quantity = $request->quantity;
+                $warehouseId = $request->warehouse_id;
+                $warehouse = Warehouse::find($warehouseId);
+
+                // Check if warehouse has this batch
+                $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+                    ->where('batch_id', $productBatch->id)
+                    ->first();
+
+                if (!$warehouseInventory || $warehouseInventory->quantity < $quantity) {
+                    $available = $warehouseInventory ? $warehouseInventory->quantity : 0;
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Insufficient quantity in ' . $warehouse->name . '. Available: ' . $available
+                    ], 422);
+                }
+
+                // Update batch quantity
+                $productBatch->decrement('quantity', $quantity);
+                
+                // Remove from warehouse inventory balance
+                $warehouseInventory->decreaseQuantity($quantity);
+                
+                // Update status based on remaining quantity
+                if ($productBatch->quantity <= 0) {
+                    $productBatch->status = 2; // Inactive
+                    $productBatch->save();
+                }
+
+                // Create inventory transaction
+                InventoryTransaction::create([
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => -$quantity,
+                    'type' => 2, // Stock Out
+                    'remark' => ($request->remark ?? 'Stock out from barcode scan') . ' - Warehouse: ' . $warehouse->name,
+                    'date' => now(),
+                    'user' => Auth::user()->name ?? 'system'
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => $quantity . ' units removed from batch in ' . $warehouse->name . ' successfully.',
+                    'new_quantity' => $productBatch->quantity,
+                    'batch_code' => $productBatch->batch_code
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error processing stock out: ' . $e->getMessage()
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -411,7 +605,7 @@ class ProductBatchController extends AppBaseController
     {
         $batches = ProductBatch::where('product_id', $productId)
             ->where('quantity', '>', 0)
-            ->where('expiry_date', '>', now())
+            ->whereDate('expiry_date', '>=', now()->toDateString())
             ->orderBy('expiry_date', 'asc')
             ->get(['id', 'batch_code', 'quantity', 'expiry_date']);
 
@@ -473,7 +667,7 @@ class ProductBatchController extends AppBaseController
         return response()->json([
             'success' => true,
             'batch_code' => $batchCode,
-            'barcode_image' => $cleanBarcode, // Send clean base64 without prefix
+            'barcode_image' => $cleanBarcode,
             'product_name' => $product->name
         ]);
     }

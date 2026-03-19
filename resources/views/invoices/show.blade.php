@@ -36,10 +36,10 @@
                                     <thead>
                                         <tr role="row">
                                             <th>{{ __('invoices.product') }}</th>
+                                            <th>{{ __('Batch Code') }}</th>
                                             <th>{{ __('invoices.quantity') }}</th>
                                             <th>{{ __('invoices.price') }}</th>
                                             <th>{{ __('invoices.total_price') }}</th>
-                                            <th>{{ __('invoices.remark') }}</th>
                                             <th>{{ __('invoices.action') }}</th>
                                         </tr>
                                     </thead>
@@ -54,10 +54,10 @@
 
                                                 <tr class="even">
                                                     <td>{{ $invoicedetail['product']['name'] }}</td>
+                                                    <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
-                                                    <td>{{ $invoicedetail['price'] }}</td>
-                                                    <td>{{ $invoicedetail['totalprice'] }}</td>
-                                                    <td>{{ $invoicedetail['remark'] }}</td>
+                                                    <td>{{ number_format($invoicedetail['price'], 2) }}</td>
+                                                    <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>
                                                     {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete']) !!}
                                                         <div class='btn-group'>
@@ -73,10 +73,10 @@
                                             @else
                                                 <tr class="odd">
                                                     <td>{{ $invoicedetail['product']['name'] }}</td>
+                                                    <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
-                                                    <td>{{ $invoicedetail['price'] }}</td>
-                                                    <td>{{ $invoicedetail['totalprice'] }}</td>
-                                                    <td>{{ $invoicedetail['remark'] }}</td>
+                                                    <td>{{ number_format($invoicedetail['price'], 2) }}</td>
+                                                    <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>
                                                     {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete']) !!}
                                                         <div class='btn-group'>
