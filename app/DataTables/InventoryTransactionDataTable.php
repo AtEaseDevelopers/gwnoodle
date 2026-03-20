@@ -79,7 +79,8 @@ class InventoryTransactionDataTable extends DataTable
                 'batch:id,batch_code',
                 'warehouse:id,name',
             ])
-            ->select('inventory_transactions.*');
+            ->select('inventory_transactions.*')
+            ->orderBy('inventory_transactions.date','desc');
     }
 
     /**

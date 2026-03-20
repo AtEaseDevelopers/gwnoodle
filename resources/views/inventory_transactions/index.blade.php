@@ -157,7 +157,7 @@
                                         <td>${transaction.batch ? transaction.batch.batch_code : '-'}</td>
                                     </tr>
                                     <tr>
-                                        <th>Lorry:</th>
+                                        <th>Van Plate:</th>
                                         <td>${transaction.lorry ? transaction.lorry.lorryno : '-'}</td>
                                     </tr>
                                     <tr>

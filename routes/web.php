@@ -453,7 +453,7 @@ Route::group(['middleware' => ['auth']], function() {
             // CRUD operations
             Route::post('/store', [App\Http\Controllers\InventoryCountController::class, 'store'])->name('store');
             Route::get('/show/{id}', [App\Http\Controllers\InventoryCountController::class, 'show'])->name('show');
-            Route::get('/{id}/with-batches', [App\Http\Controllers\InventoryCountController::class, 'getCountWithBatches'])->name('withBatches');
+            Route::get('/with-batches/{id}', [App\Http\Controllers\InventoryCountController::class, 'getCountWithBatches'])->name('withBatches');
             Route::put('/update/{id}', [App\Http\Controllers\InventoryCountController::class, 'update'])->name('update');
             Route::post('/update/{id}', [App\Http\Controllers\InventoryCountController::class, 'update']); // Alternative for form submissions
             

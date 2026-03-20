@@ -57,7 +57,6 @@ class InventoryCountDataTable extends DataTable
                     $quantity = $item['current_quantity'] ?? 0;
                     $unit = $product ? $product->unit : 'pcs';
                     $note = $item['note'] ?? '';
-                    
                     if ($product) {
                         $productNames[] = $product->name . ' (x' . $quantity . ')';
                         $tooltipItems[] = [
@@ -127,7 +126,11 @@ class InventoryCountDataTable extends DataTable
             
             if (is_array($items)) {
                 foreach ($items as $item) {
-                    $total += $item['current_quantity'] ?? 0;
+                     if (is_array($item['batches'])) {
+                        foreach ($item['batches'] as $batch) {
+                            $total += $batch['current_quantity'] ?? 0;
+                        }
+                    }
                 }
             }
             

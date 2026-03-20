@@ -823,7 +823,8 @@ class DriverController extends Controller
             }
             //process
             // $lorry = Lorry::where('status',1)->select('id','lorryno')->get()->toarray();
-            $lorry = DB::select("select l.id, l.lorryno from lorrys l left join ( select driver_id, type, lorry_id from trips where id in (select max(id) as id from trips group by driver_id) ) b on l.id = b.lorry_id and b.type = 1 where b.lorry_id is null;");
+            $lorry = Lorry::where('status',1)->select('id','lorryno')->get();
+
             if(count($lorry) != 0){
                 return response()->json([
                     'result' => true,
@@ -1874,6 +1875,7 @@ class DriverController extends Controller
             
             // Validate request
             $validator = Validator::make($request->all(), [
+                'invoiceno' => 'nullable|string|max:255|string|max:255',
                 'date' => 'date_format:Y-m-d',
                 'customer_id' => 'required|numeric',
                 'paymentterm' => 'required|numeric|gt:0|lt:6',
@@ -1935,7 +1937,11 @@ class DriverController extends Controller
             DB::beginTransaction();
             
             // Generate invoice number
-            $invoiceno = "INV" . str_pad($runningno->value, 7, '0', STR_PAD_LEFT);
+            if($data['invoiceno']){
+                $invoiceno = $data['invoiceno'];
+            }else{
+                $invoiceno = Invoice::generateInvoiceNumber($driver->id);
+            }
             
             // Create invoice
             $invoice = new Invoice();
@@ -1980,6 +1986,7 @@ class DriverController extends Controller
                 $inventoryTransaction->batch_id = $item['product_batch_id'];
                 $inventoryTransaction->quantity = -$item['quantity'];
                 $inventoryTransaction->date = now();
+                $inventoryTransaction->lorry_id = $trip->lorry_id;
                 $inventoryTransaction->user = $driver->name;
                 $inventoryTransaction->remark = 'Invoice #' . $invoice->invoiceno . ' - Sale of product';
                 $inventoryTransaction->save();
@@ -4232,6 +4239,7 @@ class DriverController extends Controller
 
         // Get driver's latest trip
         $latestTrip = Trip::where('driver_id', $driver->id)
+            ->where('uuid',$driver->trip_id)
             ->where('type', 1)
             ->orderBy('date', 'desc')
             ->first();
@@ -4299,6 +4307,7 @@ class DriverController extends Controller
                     'batch_code' => $batch->batch_code,
                     'current_quantity' => $availableQty,
                     'counted_quantity' => null, // Driver will update this later
+                    'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
                     'expiry_date' => $batch->expiry_date,
                     'formatted_expiry_date' => $batch->formatted_expiry_date,
                     'is_expiring_soon' => $batch->isExpiringSoon(),
@@ -4324,7 +4333,7 @@ class DriverController extends Controller
             // Create inventory count record
             $inventoryCount = InventoryCount::create([
                 'driver_id' => $driver->id,
-                'trip_id' => $latestTrip->id,
+                'trip_id' => $driver->trip_id,
                 'items' => $formattedItems,
                 'status' => InventoryCount::STATUS_PENDING,
                 'remarks' => 'Auto-generated stock count request from driver app', // Optional default remark
@@ -4370,34 +4379,45 @@ class DriverController extends Controller
         }
 
         try {
-            $inventoryCount = InventoryCount::where('driver_id', $driver->id)->first();
-
-            if($inventoryCount->status == InventoryCount::STATUS_APPROVED ){
-                return response()->json([
-                    'result' => true,
-                    'message' => __LINE__ . $this->message_separator . 'Stock Count Completed',
-                    'data' => [
-                        'isDone' => true
-                    ]
-                ], 200);
-            }elseif($inventoryCount->status == InventoryCount::STATUS_PENDING ){
-                return response()->json([
-                    'result' => true,
-                    'message' => __LINE__ . $this->message_separator . 'Stock Count is in Pending',
-                    'data' => [
-                        'isDone' => false
-                    ]
-                ], 200);
+            $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$driver->trip_id)->first();
             
+            if($inventoryCount){
+                if($inventoryCount->status == InventoryCount::STATUS_APPROVED ){
+                    return response()->json([
+                        'result' => true,
+                        'message' => __LINE__ . $this->message_separator . 'Stock Count Completed',
+                        'data' => [
+                            'isDone' => true
+                        ]
+                    ], 200);
+                }elseif($inventoryCount->status == InventoryCount::STATUS_PENDING ){
+                    return response()->json([
+                        'result' => true,
+                        'message' => __LINE__ . $this->message_separator . 'Stock Count is in Pending',
+                        'data' => [
+                            'isDone' => false
+                        ]
+                    ], 200);
+                
+                }else{
+                    return response()->json([
+                        'result' => true,
+                        'message' => __LINE__ . $this->message_separator . 'Stock Count Not Complete yet.',
+                        'data' => [
+                            'isDone' => false
+                        ]
+                    ], 200);
+                }
             }else{
                 return response()->json([
                     'result' => true,
-                    'message' => __LINE__ . $this->message_separator . 'Stock Count Not Complete yet.',
+                    'message' => __LINE__ . $this->message_separator . 'Stock Count Record Not found.',
                     'data' => [
                         'isDone' => false
                     ]
                 ], 200);
             }
+            
 
         } catch (\Exception $e) {
             return response()->json([

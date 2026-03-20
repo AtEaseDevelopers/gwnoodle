@@ -14,6 +14,7 @@ use App\Models\InventoryTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Warehouse;
 use Flash;
 
 class InventoryCountController extends Controller
@@ -27,6 +28,7 @@ class InventoryCountController extends Controller
         $drivers = Driver::all();
         $products = Product::all();
         $statuses = InventoryCount::getStatusOptions();
+        $warehouses = Warehouse::where('status', 'active')->orderBy('name')->get(); // Add this
 
         // Pass filter parameters to DataTable
         $dataTable = $dataTable
@@ -44,7 +46,7 @@ class InventoryCountController extends Controller
         }
 
         // Return view with DataTable for regular requests
-        return $dataTable->render('inventory_counts.index', compact('drivers', 'products', 'statuses'));
+        return $dataTable->render('inventory_counts.index', compact('drivers', 'products', 'statuses','warehouses'));
     }
 
     /**
@@ -257,7 +259,6 @@ class InventoryCountController extends Controller
             
             foreach ($productBatches as $batch) {
                 $availableQty = $inventoryBalance->batches[$batch->id] ?? 0;
-                
                 if ($availableQty > 0) {
                     $batches[] = [
                         'id' => $batch->id,
@@ -294,6 +295,8 @@ class InventoryCountController extends Controller
             'driver_id' => 'required|exists:drivers,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
+            'items.*.counted_quantity' => 'required|numeric|min:0',
+            'items.*.warehouse_id' => 'required|exists:warehouses,id', // Add warehouse validation
             'remarks' => 'nullable|string|max:500',
         ]);
         
@@ -354,6 +357,8 @@ class InventoryCountController extends Controller
             
             foreach ($request->items as $item) {
                 $productId = $item['product_id'];
+                $countedQuantity = $item['counted_quantity'];
+                $warehouseId = $item['warehouse_id']; // Get warehouse ID
                 $currentQuantity = 0;
                 $batchDetails = [];
                 
@@ -367,12 +372,12 @@ class InventoryCountController extends Controller
                     foreach ($productBatches as $batch) {
                         $batchQty = $inventoryBalance->batches[$batch->id] ?? 0;
                         if ($batchQty > 0) {
-
                             $batchDetails[] = [
                                 'batch_id' => $batch->id,
                                 'batch_code' => $batch->batch_code,
                                 'current_quantity' => $batchQty,
-                                'counted_quantity' => $item['counted_quantity']
+                                'counted_quantity' => $countedQuantity,
+                                'warehouse_id' => $warehouseId // Add warehouse ID to each batch
                             ];
                             $currentQuantity += $batchQty;
                         }
@@ -385,7 +390,8 @@ class InventoryCountController extends Controller
                         'batch_id' => null,
                         'batch_code' => 'N/A',
                         'current_quantity' => 0,
-                        'counted_quantity' => null
+                        'counted_quantity' => $countedQuantity,
+                        'warehouse_id' => $warehouseId // Add warehouse ID
                     ];
                 }
                 
@@ -393,6 +399,8 @@ class InventoryCountController extends Controller
                     'product_id' => $productId,
                     'product_name' => Product::find($productId)->name ?? 'Unknown',
                     'current_quantity' => $currentQuantity,
+                    'counted_quantity' => $countedQuantity, // Keep for backward compatibility
+                    'warehouse_id' => $warehouseId, // Add warehouse ID at product level
                     'batches' => $batchDetails
                 ];
             }
@@ -478,6 +486,14 @@ class InventoryCountController extends Controller
                         }
                         
                         $countedQty = $batch['counted_quantity'] ?? null;
+                        $warehouseId = $batch['warehouse_id'] ?? null;
+                        
+                        // Get warehouse name if exists
+                        $warehouseName = null;
+                        if ($warehouseId) {
+                            $warehouse = Warehouse::find($warehouseId);
+                            $warehouseName = $warehouse ? $warehouse->name : null;
+                        }
                         
                         // Check if there's a variance
                         if ($countedQty !== null && $countedQty != $currentQty) {
@@ -496,6 +512,8 @@ class InventoryCountController extends Controller
                         }
                         
                         $updatedBatches[] = [
+                            'warehouse_id' => $warehouseId,
+                            'warehouse' => $warehouseName ?? ($batch['warehouse'] ?? 'Not specified'),
                             'batch_id' => $batchId,
                             'batch_code' => $batchDetails ? $batchDetails->batch_code : ($batch['batch_code'] ?? 'N/A'),
                             'current_quantity' => $currentQty,
@@ -572,119 +590,78 @@ class InventoryCountController extends Controller
     {
         $inventoryCount = InventoryCount::findOrFail($id);
 
-        // Check if count can be updated - ONLY pending returns
-        if ($inventoryCount->status !== InventoryCount::STATUS_PENDING) {
+        // Check if count can be updated
+        if (!$inventoryCount->canBeUpdated()) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Only pending counts can be updated.'
-                ], 403);
+                    'message' => 'This count cannot be updated. It may not be in pending status.'
+                ], 422);
             }
-            
-            Flash::error('Only pending counts can be updated.');
+            Flash::error('This count cannot be updated.');
             return redirect()->back();
         }
 
-        // Validate the request
-        $validator = Validator::make($request->all(), [
-            'batches' => 'required|array|min:1',
-            'batches.*.batch_id' => 'nullable|exists:product_batches,id',
+        // Validate request
+        $request->validate([
+            'batches' => 'required|array',
+            'batches.*.batch_id' => 'required|exists:product_batches,id',
             'batches.*.product_id' => 'required|exists:products,id',
-            'batches.*.counted_quantity' => 'required|integer|min:0',
-            'remarks' => 'nullable|string|max:500',
+            'batches.*.counted_quantity' => 'required|numeric|min:0',
+            'batches.*.warehouse_id' => 'required|exists:warehouses,id', // Add warehouse validation
+            'remarks' => 'nullable|string|max:500'
         ]);
 
-        if ($validator->fails()) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-            
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
-        }
-
         try {
-            $batches = $request->batches;
+            // Get current items
+            $items = $inventoryCount->items ?? [];
+            $batchesData = $request->input('batches', []);
             
-            // Group batches by product
-            $items = [];
-            $productBatches = [];
-            
-            foreach ($batches as $batchData) {
-                $productId = $batchData['product_id'];
-                
-                if (!isset($productBatches[$productId])) {
-                    $productBatches[$productId] = [];
-                }
-                
-                $productBatches[$productId][] = [
-                    'batch_id' => $batchData['batch_id'],
-                    'counted_quantity' => (int)$batchData['counted_quantity']
-                ];
+            // Create a lookup for batch data by batch_id
+            $batchDataLookup = [];
+            foreach ($batchesData as $batchData) {
+                $key = $batchData['batch_id'];
+                $batchDataLookup[$key] = $batchData;
             }
             
-            // Get current inventory to include current quantities
-            $latestTrip = Trip::where('driver_id', $inventoryCount->driver_id)
-                ->where('type', 1)
-                ->orderBy('date', 'desc')
-                ->first();
-                
-            $currentInventory = [];
-            if ($latestTrip) {
-                $inventoryBalance = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)->first();
-                if ($inventoryBalance && !empty($inventoryBalance->batches)) {
-                    $currentInventory = $inventoryBalance->batches;
+            // Update items with counted quantities and warehouse IDs
+            foreach ($items as &$item) {
+                if (isset($item['batches']) && is_array($item['batches'])) {
+                    foreach ($item['batches'] as &$batch) {
+                        $batchId = $batch['batch_id'];
+                        
+                        if (isset($batchDataLookup[$batchId])) {
+                            $batchData = $batchDataLookup[$batchId];
+                            $batch['counted_quantity'] = $batchData['counted_quantity'];
+                            $batch['warehouse_id'] = $batchData['warehouse_id']; // Add warehouse ID
+                            
+                            // Add warehouse name for display purposes (optional)
+                            if (isset($warehousesLookup[$batchData['warehouse_id']])) {
+                                $batch['warehouse_name'] = $warehousesLookup[$batchData['warehouse_id']]['name'];
+                            }
+                            
+                            // Remove from lookup to track processed batches
+                            unset($batchDataLookup[$batchId]);
+                        }
+                    }
                 }
             }
             
-            // Build items array with batch details
-            foreach ($productBatches as $productId => $batches) {
-                $product = Product::find($productId);
-                $batchDetails = [];
-                
-                foreach ($batches as $batchData) {
-                    $batchId = $batchData['batch_id'];
-                    $currentQty = isset($currentInventory[$batchId]) ? $currentInventory[$batchId] : 0;
-                    
-                    $batch = ProductBatch::find($batchId);
-                    
-                    $batchDetails[] = [
-                        'batch_id' => $batchId,
-                        'batch_code' => $batch ? $batch->batch_code : null,
-                        'current_quantity' => $currentQty,
-                        'counted_quantity' => $batchData['counted_quantity']
-                    ];
-                }
-                
-                $items[] = [
-                    'product_id' => $productId,
-                    'product_name' => $product ? $product->name : null,
-                    'batches' => $batchDetails
-                ];
-            }
-            
-            $updateData = [
-                'items' => $items,
-                'remarks' => $request->remarks,
-            ];
-
-            $inventoryCount->update($updateData);
+            // Update remarks
+            $inventoryCount->remarks = $request->input('remarks', $inventoryCount->remarks);
+            $inventoryCount->items = $items;
+            $inventoryCount->save();
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Inventory count updated successfully.',
+                    'message' => 'Stock count updated successfully.',
                     'data' => $inventoryCount
                 ]);
             }
-            
-            Flash::success('Inventory count updated successfully.');
-            return redirect()->back();
 
+            Flash::success('Stock count updated successfully.');
+            return redirect()->back();
         } catch (\Exception $e) {
             \Log::error('Failed to update count: ' . $e->getMessage());
             
@@ -694,14 +671,13 @@ class InventoryCountController extends Controller
                     'message' => 'Failed to update count: ' . $e->getMessage()
                 ], 500);
             }
-            
             Flash::error('Failed to update count: ' . $e->getMessage());
-            return redirect()->back()->withInput();
+            return redirect()->back();
         }
     }
 
     /**
-     * Approve the specified inventory count.
+     * Approve the specified inventory count and return stock to warehouses.
      */
     public function approve(Request $request, $id)
     {
@@ -722,17 +698,37 @@ class InventoryCountController extends Controller
         try {
             $items = $inventoryCount->items ?? [];
             $missingCountedItems = [];
+            $missingWarehouseItems = [];
+            $processedBatches = [];
             
             foreach ($items as $item) {
                 $batches = $item['batches'] ?? [];
                 foreach ($batches as $batch) {
                     $countedQty = $batch['counted_quantity'] ?? null;
+                    $warehouseId = $batch['warehouse_id'] ?? null;
+                    $productName = $item['product_name'] ?? 'Unknown Product';
+                    $batchCode = $batch['batch_code'] ?? 'Unknown Batch';
                     
                     // Check if counted_quantity is empty/null/not set
                     if (empty($countedQty) && $countedQty !== '0' && $countedQty !== 0) {
-                        $productName = $item['product_name'] ?? 'Unknown Product';
-                        $batchCode = $batch['batch_code'] ?? 'Unknown Batch';
                         $missingCountedItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                    }
+                    
+                    // Check if warehouse is selected
+                    if (empty($warehouseId)) {
+                        $missingWarehouseItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                    }
+                    
+                    // Store for processing
+                    if (!empty($countedQty) && !empty($warehouseId)) {
+                        $processedBatches[] = [
+                            'batch_id' => $batch['batch_id'],
+                            'product_id' => $item['product_id'],
+                            'batch_code' => $batchCode,
+                            'counted_quantity' => $countedQty,
+                            'warehouse_id' => $warehouseId,
+                            'current_quantity' => $batch['current_quantity'] ?? 0
+                        ];
                     }
                 }
             }
@@ -753,23 +749,77 @@ class InventoryCountController extends Controller
                 Flash::error($errorMessage);
                 return redirect()->back();
             }
+            
+            // If there are items missing warehouse, return error
+            if (!empty($missingWarehouseItems)) {
+                $errorMessage = 'Cannot approve. Please select return warehouse for: ' . implode(', ', array_slice($missingWarehouseItems, 0, 5));
+                if (count($missingWarehouseItems) > 5) {
+                    $errorMessage .= ' and ' . (count($missingWarehouseItems) - 5) . ' more';
+                }
                 
-            // Update count status
-            $inventoryCount->update([
-                'status' => InventoryCount::STATUS_APPROVED,
-                'approved_by' => Auth::id(),
-                'approved_at' => now(),
-            ]);
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage
+                    ], 422);
+                }
+                Flash::error($errorMessage);
+                return redirect()->back();
+            }
+            
+            // Begin transaction
+            \DB::beginTransaction();
+            
+            try {
+                // Process each batch to return stock to warehouse
+                foreach ($processedBatches as $batchData) {
+                    // Find the product batch
+                    $productBatch = \App\Models\ProductBatch::find($batchData['batch_id']);
+                    
+                    if (!$productBatch) {
+                        throw new \Exception('Product batch not found: ' . $batchData['batch_code']);
+                    }
+                    
+                    // Calculate quantity difference
+                    $currentQty = $batchData['current_quantity'];
+                    $countedQty = $batchData['counted_quantity'];
+                    
+                    // Create inventory transaction for stock return
+                    $transaction = new \App\Models\InventoryTransaction();
+                    $transaction->product_id = $batchData['product_id'];
+                    $transaction->batch_id = $batchData['batch_id'];
+                    $transaction->warehouse_id = $batchData['warehouse_id'];
+                    $transaction->quantity = $countedQty; // Positive quantity for stock in
+                    $transaction->type = \App\Models\InventoryTransaction::TYPE_STOCK_IN;
+                    $transaction->date = now();
+                    $transaction->user = Auth::user() ? Auth::user()->name : 'System';
+                    $transaction->remark = 'Stock return from Stock Out -[' . $inventoryCount->driver->name. '] - Batch: [' . $batchData['batch_code'].']';
+                    $transaction->save();
+                    
+                }
+                
+                // Update count status
+                $inventoryCount->update([
+                    'status' => InventoryCount::STATUS_APPROVED,
+                    'approved_by' => Auth::id(),
+                    'approved_at' => now(),
+                ]);
+                
+                \DB::commit();
+            } catch (\Exception $e) {
+                \DB::rollBack();
+                throw $e;
+            }
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Inventory count approved successfully.',
+                    'message' => 'Inventory count approved successfully. Stock has been returned to selected warehouses.',
                     'data' => $inventoryCount
                 ]);
             }
 
-            Flash::success('Inventory count approved successfully.');
+            Flash::success('Inventory count approved successfully. Stock has been returned to selected warehouses.');
             return redirect()->back();
         } catch (\Exception $e) {
             \Log::error('Failed to approve count: ' . $e->getMessage());

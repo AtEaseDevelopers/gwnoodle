@@ -2,7 +2,7 @@
 
 @section('content')
     <ol class="breadcrumb">
-        <li class="breadcrumb-item">{{ __('Stock Count') }}</li>
+        <li class="breadcrumb-item">{{ __('Stock Out') }}</li>
     </ol>
     <div class="container-fluid">
         <div class="animated fadeIn">
@@ -12,7 +12,7 @@
                     <div class="card">
                         <div class="card-header">
                             <i class="fa fa-align-justify"></i>
-                            {{ __('Stock Count') }}
+                            {{ __('Stock Out') }}
                         </div>
                         <div class="card-body">
                             @include('inventory_counts.table')
@@ -60,6 +60,12 @@
                         </div>
                     </div>
                     
+                    <!-- Warehouse Selection Info -->
+                    <div class="alert alert-info mb-3">
+                        <i class="fa fa-info-circle"></i> 
+                        <strong>Note:</strong> After approval, stock will be returned to the selected warehouse. You can select a different warehouse for each product.
+                    </div>
+                    
                     <!-- Items Table -->
                     <div class="form-group">
                         <label class="col-form-label">{{ __('Items') }} <span class="text-danger">*</span>:</label>
@@ -68,10 +74,11 @@
                                 <thead>
                                     <tr>
                                         <th width="5%">#</th>
-                                        <th width="40%">Product <span class="text-danger">*</span></th>
-                                        <th width="20%">Current Quantity</th>
+                                        <th width="35%">Product <span class="text-danger">*</span></th>
+                                        <th width="15%">Current Quantity</th>
                                         <th width="15%">Counted Qty <span class="text-danger">*</span></th>
-                                        <th width="30%">Actions</th>
+                                        <th width="20%">Return Warehouse <span class="text-danger">*</span></th>
+                                        <th width="10%">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="itemsBody">
@@ -79,7 +86,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr>
-                                        <td colspan="5" class="text-right">
+                                        <td colspan="6" class="text-right">
                                             <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
                                                 <i class="fa fa-plus"></i> Add Item
                                             </button>
@@ -132,22 +139,26 @@
                         <textarea class="form-control" name="remarks" id="editCountRemarks" rows="2" placeholder="Any additional notes..."></textarea>
                     </div>
                     
+                    <!-- Warehouse Selection -->
+                    <div class="alert alert-info mb-3">
+                        <i class="fa fa-info-circle"></i> 
+                        <strong>Note:</strong> After approval, stock will be returned to the selected warehouse. You can select a different warehouse for each batch.
+                    </div>
+                    
                     <!-- Items Table for Counting by Batch -->
                     <div class="form-group">
                         <label class="col-form-label"><strong>Count Items by Batch:</strong></label>
-                        <div class="alert alert-info">
-                            <i class="fa fa-info-circle"></i> For each product, please count the actual quantities per batch and enter them below.
-                        </div>
                         <div class="table-responsive">
                             <table class="table table-bordered" id="editCountItemsTable">
                                 <thead>
                                     <tr>
                                         <th width="5%">#</th>
-                                        <th width="25%">Product</th>
-                                        <th width="20%">Batch Code</th>
-                                        <th width="10%">Current Qty</th>
-                                        <th width="20%">Counted Quantity *</th>
-                                        <th width="20%">Difference</th>
+                                        <th width="20%">Product</th>
+                                        <th width="15%">Batch Code</th>
+                                        <th width="8%">Current Qty</th>
+                                        <th width="12%">Counted Qty *</th>
+                                        <th width="8%">Difference</th>
+                                        <th width="20%">Return Warehouse *</th>
                                     </tr>
                                 </thead>
                                 <tbody id="editCountItemsBody">
@@ -274,96 +285,10 @@
             </div>
         </div>
     </div>
-
-@push('scripts')
-<script>
-    // Auto-open script for inventory counts
-    $(document).ready(function() {
-        console.log('Inventory Counts page loaded');
-        
-        // Check URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const viewCountId = urlParams.get('view_count');
-        
-        if (viewCountId) {
-            console.log('Found view_count parameter:', viewCountId);
-            localStorage.setItem('pendingInventoryCountModal', viewCountId);
-            
-            // Clean up URL
-            const newUrl = window.location.pathname;
-            window.history.replaceState({}, document.title, newUrl);
-        }
-        
-        // Hook into DataTable initialization
-        if (typeof $.fn.DataTable !== 'undefined') {
-            $(document).on('init.dt', function(e, settings) {
-                console.log('Inventory Counts DataTable initialized');
-                
-                // Get the DataTable instance
-                const table = $(settings.nTable).DataTable();
-                
-                // Hook into draw event
-                table.on('draw', function() {
-                    console.log('Inventory Counts DataTable draw event');
-                    
-                    // Check for pending modal
-                    const pendingId = localStorage.getItem('pendingInventoryCountModal');
-                    if (pendingId) {
-                        console.log('Attempting to open modal for count ID:', pendingId);
-                        
-                        // Try to find and click the button
-                        setTimeout(function() {
-                            const button = $('.view-request-btn[data-id="' + pendingId + '"]');
-                            if (button.length) {
-                                console.log('Found view button, clicking...');
-                                button.click();
-                                localStorage.removeItem('pendingInventoryCountModal');
-                            } else {
-                                console.log('View button not found yet, will retry...');
-                            }
-                        }, 1000);
-                    }
-                });
-            });
-        }
-        
-        // Also check after page load
-        setTimeout(function() {
-            const pendingId = localStorage.getItem('pendingInventoryCountModal');
-            if (pendingId) {
-                console.log('Page load check - Pending count ID:', pendingId);
-                
-                // Try multiple times
-                let attempts = 0;
-                const maxAttempts = 5;
-                
-                function tryOpenModal() {
-                    attempts++;
-                    console.log(`Attempt ${attempts} to find button for ID: ${pendingId}`);
-                    
-                    const button = $('.view-request-btn[data-id="' + pendingId + '"]');
-                    if (button.length) {
-                        console.log('Found button on attempt', attempts);
-                        button.click();
-                        localStorage.removeItem('pendingInventoryCountModal');
-                    } else if (attempts < maxAttempts) {
-                        setTimeout(tryOpenModal, 1000);
-                    } else {
-                        console.log('Could not find button after', maxAttempts, 'attempts');
-                    }
-                }
-                
-                tryOpenModal();
-            }
-        }, 2000);
-    });
-</script>
-@endpush
-
 @endsection
 
 @push('scripts')
-    <style>
+<style>
     /* Dropdown base styles - ONLY for driver dropdown */
     .driver-dropdown {
         position: relative;
@@ -851,12 +776,12 @@
         }
     }
 
-    </style>
+</style>
 
 <script>
     $(document).ready(function () {
         // Initialize DataTable
-         var table = window.LaravelDataTables["dataTableBuilder"] || $('.data-table').DataTable();
+        var table = window.LaravelDataTables["dataTableBuilder"] || $('.data-table').DataTable();
     
         if (table) {
             // Hide loading when DataTable initializes
@@ -873,6 +798,9 @@
                 setTimeout(function() {
                     HideLoad();
                 }, 100);
+                
+                // Re-attach click handlers after table redraw
+                attachModalHandlers();
             });
             
             // Force hide loading after DataTable is initialized
@@ -881,6 +809,268 @@
             }, 1000);
         }
         
+        // Function to attach modal handlers
+        function attachModalHandlers() {
+            console.log('Attaching modal handlers');
+            
+            // Remove any existing handlers to prevent duplicates
+            $(document).off('click', '.view-request-btn');
+            $(document).off('click', '.edit-count-btn');
+            
+            // Re-attach view modal handler
+            $(document).on('click', '.view-request-btn', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('View button clicked');
+                
+                var requestId = $(this).data('id');
+                var requestData = $(this).data('request');
+                
+                console.log('View request ID:', requestId);
+                console.log('View request data:', requestData);
+                
+                // Parse JSON string if needed
+                if (typeof requestData === 'string') {
+                    try {
+                        requestData = JSON.parse(requestData);
+                    } catch(e) {
+                        console.error('Error parsing request data:', e);
+                    }
+                }
+                
+                // Store current request info
+                currentRequestId = requestId;
+                currentRequestStatus = requestData ? requestData.status : 'pending';
+                
+                // Update modal title with request ID
+                $('#viewRequestId').text('(#' + requestId + ')');
+                $('#viewRequestIdText').text(requestId);
+                
+                // Fill view modal with data
+                $('#viewDriverName').text(requestData ? (requestData.driver_name || 'N/A') : 'N/A');
+                $('#viewRemarks').text(requestData ? (requestData.remarks || 'No remarks') : 'No remarks');
+                $('#viewCreatedAt').text(requestData ? (requestData.created_at || 'N/A') : 'N/A');
+                
+                // Set status with badge
+                var status = requestData ? requestData.status : 'pending';
+                var badgeClass = getStatusBadgeClass(status);
+                
+                $('#viewStatusBadge').html('<span class="badge ' + badgeClass + '">' + status.charAt(0).toUpperCase() + status.slice(1) + '</span>');
+                
+                // Show/hide sections based on initial status
+                updateStatusSections(status, requestData || {});
+                
+                // Show loading in items table
+                $('#viewItemsTable').html('<div class="text-center"><i class="fa fa-spinner fa-spin fa-3x"></i><p>Loading transaction details...</p></div>');
+                
+                // Fetch full request data with batch details
+                $.ajax({
+                    url: '{{ route("inventoryCounts.withBatches", "") }}/' + requestId,
+                    type: 'GET',
+                    success: function(response) {
+                        console.log('View data response:', response);
+                        if (response.success) {
+                            displayViewModalWithBatches(response.data);
+                            // Update status sections with the full data
+                            updateStatusSections(response.data.status, response.data);
+                        } else {
+                            displayViewModalBasic(requestData);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading view data:', error);
+                        $('#viewItemsTable').html('<div class="text-center text-danger">Error loading transaction details. Please try again.</div>');
+                        displayViewModalBasic(requestData);
+                    }
+                });
+                
+                // Show modal
+                $('#viewRequest').modal('show');
+            });
+            
+            // Re-attach edit modal handler
+            $(document).on('click', '.edit-count-btn', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Edit button clicked');
+                
+                var requestId = $(this).data('id');
+                var requestData = $(this).data('request');
+                
+                console.log('Edit request ID:', requestId);
+                console.log('Edit request data:', requestData);
+                
+                // Parse JSON string if needed
+                if (typeof requestData === 'string') {
+                    try {
+                        requestData = JSON.parse(requestData);
+                    } catch(e) {
+                        console.error('Error parsing request data:', e);
+                    }
+                }
+                
+                // Store current request ID
+                currentRequestId = requestId;
+                
+                // Update modal title
+                $('#editCountRequestId').text('(#' + requestId + ')');
+                
+                // Fill basic info
+                $('#editCountDriverName').text(requestData ? (requestData.driver_name || 'N/A') : 'N/A');
+                $('#editCountRequestedAt').text(requestData ? (requestData.requested_at || requestData.created_at || 'N/A') : 'N/A');
+                $('#editCountRemarks').val(requestData ? (requestData.remarks || '') : '');
+                
+                // Update form action
+                var formAction = '{{ route("inventoryCounts.update", "") }}/' + requestId;
+                $('#editCountForm').attr('action', formAction);
+                
+                // Clear and populate items table
+                $('#editCountItemsBody').empty();
+                $('#editCountItemsBody').html('<tr><td colspan="7" class="text-center"><i class="fa fa-spinner fa-spin"></i> Loading items...</td></tr>');
+                $('#editCountItemsError').text('');
+                
+                // Fetch full request data with batch details
+                $.ajax({
+                    url: '{{ route("inventoryCounts.withBatches", "") }}/' + requestId,
+                    type: 'GET',
+                    success: function(response) {
+                        console.log('Edit data response:', response);
+                        if (response.success && response.data && response.data.items) {
+                            var data = response.data;
+                            var itemIndex = 0;
+                            
+                            $('#editCountItemsBody').empty();
+                            
+                            data.items.forEach(function(item) {
+                                if (item.batches && Array.isArray(item.batches) && item.batches.length > 0) {
+                                    // Display each batch as a separate row
+                                    item.batches.forEach(function(batch) {
+                                        var countedQty = batch.counted_quantity !== null ? batch.counted_quantity : '';
+                                        var currentQty = batch.current_quantity || 0;
+                                        var difference = countedQty !== '' ? countedQty - currentQty : 0;
+                                        var diffClass = difference > 0 ? 'difference-positive' : (difference < 0 ? 'difference-negative' : 'difference-zero');
+                                        var diffSymbol = difference > 0 ? '+' : '';
+                                        
+                                        var expiryInfo = batch.expiry_date ? 
+                                            `<small class="text-muted d-block">Exp: ${formatDate(batch.expiry_date)}</small>` : '';
+                                        
+                                        var expiringClass = batch.is_expiring_soon ? 'expiring-soon' : '';
+                                        
+                                        // Get warehouse ID if already set
+                                        var warehouseId = batch.warehouse_id || '';
+                                        var warehouseSelectHtml = generateWarehouseDropdown(itemIndex, warehouseId);
+
+                                        var row = `
+                                            <tr>
+                                                <td class="align-middle text-center">${itemIndex + 1}</td>
+                                                <td class="align-middle">
+                                                    <strong>${getProductName(item.product_id)}</strong>
+                                                    ${expiryInfo}
+                                                </td>
+                                                <td class="align-middle">
+                                                    <span class="badge badge-info ${expiringClass}">${batch.batch_code}</span>
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    <span class="badge badge-secondary">${currentQty}</span>
+                                                </td>
+                                                <td class="align-middle">
+                                                    <input type="number" 
+                                                        min="0" 
+                                                        class="form-control counted-quantity-input" 
+                                                        name="batches[${itemIndex}][counted_quantity]" 
+                                                        value="${countedQty}"
+                                                        data-current-qty="${currentQty}"
+                                                        data-batch-id="${batch.batch_id}"
+                                                        placeholder="Enter counted qty"
+                                                        required>
+                                                    <input type="hidden" name="batches[${itemIndex}][batch_id]" value="${batch.batch_id}">
+                                                    <input type="hidden" name="batches[${itemIndex}][product_id]" value="${item.product_id}">
+                                                    <input type="hidden" name="batches[${itemIndex}][current_quantity]" value="${currentQty}">
+                                                    <input type="hidden" name="batches[${itemIndex}][batch_code]" value="${batch.batch_code}">
+                                                </td>
+                                                <td class="align-middle text-center">
+                                                    <span class="difference-display ${diffClass}">${countedQty !== '' ? diffSymbol + difference : '-'}</span>
+                                                </td>
+                                                <td class="align-middle">
+                                                    ${generateWarehouseDropdown(itemIndex, warehouseId)}
+                                                </td>
+                                            </tr>
+                                        `;
+                                        $('#editCountItemsBody').append(row);
+                                        itemIndex++;
+                                    });
+                                } else {
+                                    // If no batches found, create a placeholder row
+                                    var row = `
+                                        <tr>
+                                            <td class="align-middle text-center">${itemIndex + 1}</td>
+                                            <td class="align-middle">
+                                                <strong>${getProductName(item.product_id)}</strong>
+                                            </td>
+                                            <td class="align-middle">
+                                                <span class="badge badge-warning">No batches found</span>
+                                            </td>
+                                            <td class="align-middle text-center">
+                                                <span class="badge badge-secondary">${item.current_quantity || 0}</span>
+                                            </td>
+                                            <td class="align-middle" colspan="3">
+                                                <div class="text-muted">No batches available to count</div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                    $('#editCountItemsBody').append(row);
+                                    itemIndex++;
+                                }
+                            });
+                            
+                            // Initialize any Select2 for warehouse dropdowns if needed
+                            if ($('.warehouse-select').length > 0) {
+                                $('.warehouse-select').select2({
+                                    theme: 'bootstrap',
+                                    placeholder: 'Select Warehouse',
+                                    allowClear: true,
+                                    dropdownParent: $('#editCountModal .modal-content'),
+                                    width: '100%'
+                                });
+                            }
+                            
+                        } else {
+                            $('#editCountItemsBody').html('<tr><td colspan="7" class="text-center">No items found</td></tr>');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error loading edit data:', error);
+                        $('#editCountItemsBody').html('<tr><td colspan="7" class="text-center text-danger">Error loading data</td></tr>');
+                    }
+                });
+                
+                // Show modal
+                $('#editCountModal').modal('show');
+            });
+        }
+        
+        // Call attachModalHandlers initially
+        attachModalHandlers();
+        
+        var warehouses = {!! json_encode($warehouses ?? []) !!};
+        var warehousesLookup = {};
+
+        warehouses.forEach(function(warehouse) {
+            warehousesLookup[warehouse.id] = warehouse;
+        });
+
+        function generateWarehouseDropdown(index, selectedWarehouseId = '') {
+            var options = '<option value="">Select Warehouse</option>';
+            warehouses.forEach(function(warehouse) {
+                var selected = (warehouse.id == selectedWarehouseId) ? 'selected' : '';
+                options += `<option value="${warehouse.id}" ${selected}>${warehouse.name}</option>`;
+            });
+            
+            return `<select class="form-control warehouse-select" name="batches[${index}][warehouse_id]" data-index="${index}" required>
+                ${options}
+            </select>`;
+        }
+
         // Store current request ID for actions
         var currentRequestId = null;
         var currentRequestStatus = null;
@@ -1055,8 +1245,18 @@
                 $('#itemsBody').append(emptyRow);
             }
         }
+        function generateCreateWarehouseDropdown(index, selectedWarehouseId = '') {
+            var options = '<option value="">Select Warehouse</option>';
+            warehouses.forEach(function(warehouse) {
+                var selected = (warehouse.id == selectedWarehouseId) ? 'selected' : '';
+                options += `<option value="${warehouse.id}" ${selected}>${warehouse.name}</option>`;
+            });
+            
+            return `<select class="form-control warehouse-select-create" name="items[${index}][warehouse_id]" data-index="${index}" required>
+                ${options}
+            </select>`;
+        }
 
-        // Add item row to create modal
         function addItemRow(productData = null) {
             var rowIndex = itemCounter;
             var productId = productData ? productData.product_id : '';
@@ -1110,7 +1310,11 @@
                             name="items[${rowIndex}][counted_quantity]" 
                             id="countedQuantity${rowIndex}"
                             value=""
-                            placeholder="Enter counted qty">
+                            placeholder="Enter counted qty"
+                            required>
+                    </td>
+                    <td class="align-middle">
+                        ${generateCreateWarehouseDropdown(rowIndex, '')}
                     </td>
                     <td class="align-middle text-center">
                         <button type="button" class="btn btn-danger btn-sm remove-item-btn" ${rowIndex === 0 ? 'disabled' : ''}>
@@ -1126,6 +1330,15 @@
             $('#product_' + rowIndex).select2({
                 theme: 'bootstrap',
                 placeholder: 'Search and select a product...',
+                allowClear: true,
+                dropdownParent: $('#createRequest .modal-content'),
+                width: '100%'
+            });
+            
+            // Initialize Select2 for warehouse dropdown
+            $('.warehouse-select-create').select2({
+                theme: 'bootstrap',
+                placeholder: 'Select Warehouse',
                 allowClear: true,
                 dropdownParent: $('#createRequest .modal-content'),
                 width: '100%'
@@ -1206,8 +1419,9 @@
                 var row = $(this).closest('tr');
                 var rowIndex = parseInt(row.data('index'));
                 
-                // Destroy Select2 instance
+                // Destroy Select2 instances
                 $('#product_' + rowIndex).select2('destroy');
+                row.find('.warehouse-select-create').select2('destroy');
                 row.remove();
                 
                 // Renumber rows and update indices
@@ -1215,13 +1429,13 @@
                     $(this).find('td:first').text(index + 1);
                     $(this).attr('data-index', index);
                     
-                    // Update Select2 IDs
-                    var $select = $(this).find('.product-select');
-                    $select.attr('id', 'product_' + index);
-                    $select.data('index', index);
+                    // Update Select2 IDs for product
+                    var $productSelect = $(this).find('.product-select');
+                    $productSelect.attr('id', 'product_' + index);
+                    $productSelect.data('index', index);
                     
-                    // Reinitialize Select2
-                    $select.select2({
+                    // Reinitialize Select2 for product
+                    $productSelect.select2({
                         theme: 'bootstrap',
                         placeholder: 'Search and select a product...',
                         allowClear: true,
@@ -1229,7 +1443,25 @@
                         width: '100%'
                     });
                     
-                    // Update input names
+                    // Update warehouse select name
+                    var $warehouseSelect = $(this).find('.warehouse-select-create');
+                    var oldName = $warehouseSelect.attr('name');
+                    if (oldName) {
+                        var newName = oldName.replace(/items\[\d+\]/, 'items[' + index + ']');
+                        $warehouseSelect.attr('name', newName);
+                    }
+                    $warehouseSelect.attr('data-index', index);
+                    
+                    // Reinitialize Select2 for warehouse
+                    $warehouseSelect.select2({
+                        theme: 'bootstrap',
+                        placeholder: 'Select Warehouse',
+                        allowClear: true,
+                        dropdownParent: $('#createRequest .modal-content'),
+                        width: '100%'
+                    });
+                    
+                    // Update input names for product_id
                     $(this).find('.product-id-input').each(function() {
                         var name = $(this).attr('name');
                         if (name && name.includes('items[')) {
@@ -1238,9 +1470,16 @@
                         }
                     });
                     
-                    // Update current quantity IDs
+                    // Update counted quantity ID
+                    $(this).find('.counted-quantity-input').attr('id', 'countedQuantity' + index);
+                    
+                    // Update current quantity ID
                     $(this).find('.current-quantity').attr('id', 'currentQuantity' + index);
+                    
+                    // Update batch count ID
                     $(this).find('#batchCount' + rowIndex).attr('id', 'batchCount' + index);
+                    
+                    // Update batch details container ID
                     $(this).find('#batchDetails_' + rowIndex).attr('id', 'batchDetails_' + index);
                 });
                 
@@ -1256,125 +1495,110 @@
 
         // Clear create modal when opened
         $('#createRequest').on('show.bs.modal', function () {
-                selectedDriverId = null;
-                driverInventory = [];
-                $('#createCountForm')[0].reset();
-                $('#driver_id_create').val('').trigger('change');
-                $('#driverError, #itemsError').text('');
-                $('#remarks').val('');
-                
-                // Initialize with empty table showing message
-                initializeItemsTable();
-            });
+            selectedDriverId = null;
+            driverInventory = [];
+            $('#createCountForm')[0].reset();
+            $('#driver_id_create').val('').trigger('change');
+            $('#driverError, #itemsError').text('');
+            $('#remarks').val('');
+            
+            // Initialize with empty table showing message
+            initializeItemsTable();
+        });
 
-            // Validate create form
-            $('#createCountForm').submit(function(e) {
-        e.preventDefault();
-        
-        // Reset errors
-        $('#driverError, #itemsError').text('');
-        $('.product-error').text('');
-        $('.counted-quantity-input').removeClass('is-invalid');
-        
-        // Validate driver
-        var driverId = $('#driver_id_create').val();
-        if (!driverId) {
-            $('#driverError').text('Please select a driver');
-            return false;
-        }
-        
-        // Validate items
-        var hasErrors = false;
-        var items = [];
-        var productIds = new Set();
-        var hasAnyCountedQty = false;
-        var batchCombinations = new Set(); // To track unique batch entries
-        
-        $('#itemsBody tr.item-row').each(function(index) {
-            var productId = $(this).find('.product-select').val();
-            var $row = $(this);
-            var productError = $(this).find('.product-error');
+        // Validate create form
+        $('#createCountForm').submit(function(e) {
+            e.preventDefault();
             
             // Reset errors
-            productError.text('');
+            $('#driverError, #itemsError').text('');
+            $('.product-error').text('');
+            $('.counted-quantity-input').removeClass('is-invalid');
+            $('.warehouse-select-create').removeClass('is-invalid');
             
-            // Validate product
-            if (!productId) {
-                productError.text('Please select a product');
-                hasErrors = true;
-                return; // Skip further validation for this row
+            // Validate driver
+            var driverId = $('#driver_id_create').val();
+            if (!driverId) {
+                $('#driverError').text('Please select a driver');
+                return false;
             }
             
-            if (productIds.has(productId)) {
-                productError.text('Duplicate product selected');
-                hasErrors = true;
-                return; // Skip further validation for this row
-            }
+            // Validate items
+            var hasErrors = false;
+            var items = [];
+            var productIds = new Set();
+            var hasAnyCountedQty = false;
             
-            productIds.add(productId);
-            
-            // Get batch information from the batch details container
-            var batchDetails = [];
-            var batchItems = [];
-            
-            // Check if there are batch details displayed
-            var batchContainer = $('#batchDetails_' + index);
-            if (batchContainer.length && batchContainer.find('.batch-item').length > 0) {
-                // Get counted quantity for this product
+            $('#itemsBody tr.item-row').each(function(index) {
+                var productId = $(this).find('.product-select').val();
+                var warehouseId = $(this).find('.warehouse-select-create').val();
                 var countedQty = $(this).find('.counted-quantity-input').val();
+                var $row = $(this);
+                var productError = $(this).find('.product-error');
                 
-                // Find the product in driver inventory to get batch information
-                var productInventory = driverInventory.find(p => p.product_id == productId);
+                // Reset errors
+                productError.text('');
                 
-                if (productInventory && productInventory.batches && productInventory.batches.length > 0) {
-                    // Create batch entries
-                    productInventory.batches.forEach(function(batch, batchIndex) {
-                        var batchCountedQty = 0;
-                        
-                        // If there's a counted quantity for this product, we need to distribute it
-                        // For now, we'll store the batch info with the counted quantity
-                        // In a real scenario, you might want a separate input per batch
-                        
-                        batchItems.push({
-                            batch_id: batch.batch_id,
-                            batch_code: batch.batch_code,
-                            current_quantity: batch.quantity,
-                            counted_quantity: countedQty !== '' ? parseFloat(countedQty) : null
+                // Validate product
+                if (!productId) {
+                    productError.text('Please select a product');
+                    hasErrors = true;
+                    return;
+                }
+                
+                if (productIds.has(productId)) {
+                    productError.text('Duplicate product selected');
+                    hasErrors = true;
+                    return;
+                }
+                
+                productIds.add(productId);
+                
+                // Validate warehouse
+                if (!warehouseId) {
+                    $(this).find('.warehouse-select-create').addClass('is-invalid');
+                    hasErrors = true;
+                    return;
+                }
+                
+                // Validate counted quantity
+                if (countedQty === '' || parseFloat(countedQty) < 0) {
+                    $(this).find('.counted-quantity-input').addClass('is-invalid');
+                    hasErrors = true;
+                    return;
+                }
+                
+                if (parseFloat(countedQty) >= 0) {
+                    hasAnyCountedQty = true;
+                }
+                
+                // Get batch information from the batch details container
+                var batchItems = [];
+                var batchContainer = $('#batchDetails_' + index);
+                
+                if (batchContainer.length && batchContainer.find('.batch-item').length > 0) {
+                    // Find the product in driver inventory to get batch information
+                    var productInventory = driverInventory.find(p => p.product_id == productId);
+                    
+                    if (productInventory && productInventory.batches && productInventory.batches.length > 0) {
+                        // Create batch entries
+                        productInventory.batches.forEach(function(batch) {
+                            batchItems.push({
+                                batch_id: batch.batch_id,
+                                batch_code: batch.batch_code,
+                                current_quantity: batch.quantity,
+                                counted_quantity: parseFloat(countedQty)
+                            });
                         });
-                        
-                        // Track unique batch combinations
-                        var comboKey = productId + '_' + batch.batch_id;
-                        if (batchCombinations.has(comboKey)) {
-                            // This shouldn't happen with proper data structure
-                            console.warn('Duplicate batch combination:', comboKey);
-                        } else {
-                            batchCombinations.add(comboKey);
-                        }
-                    });
+                    }
                 }
-            }
-            
-            // Validate counted quantity
-            var countedQty = $(this).find('.counted-quantity-input').val();
-            if (countedQty !== '' && parseFloat(countedQty) >= 0) {
-                hasAnyCountedQty = true;
-            }
-            
-            if (countedQty !== '' && parseFloat(countedQty) < 0) {
-                $(this).find('.counted-quantity-input').addClass('is-invalid');
-                hasErrors = true;
-            }
-            
-            // Add to items array with batch information
-            if (productId) {
-                var itemData = {
-                    product_id: parseInt(productId)
-                };
                 
-                // Only include counted_quantity if it has a value
-                if (countedQty !== '') {
-                    itemData.counted_quantity = parseFloat(countedQty);
-                }
+                // Add to items array with warehouse_id
+                var itemData = {
+                    product_id: parseInt(productId),
+                    counted_quantity: parseFloat(countedQty),
+                    warehouse_id: parseInt(warehouseId) // Add warehouse_id to each product
+                };
                 
                 // Include batch information if available
                 if (batchItems.length > 0) {
@@ -1382,63 +1606,62 @@
                 }
                 
                 items.push(itemData);
+            });
+            
+            if (items.length === 0) {
+                $('#itemsError').text('Please add at least one product to count');
+                hasErrors = true;
             }
-        });
-        
-        if (items.length === 0) {
-            $('#itemsError').text('Please add at least one product to count');
-            hasErrors = true;
-        }
-        
-        if (!hasAnyCountedQty) {
-            $('#itemsError').text('Please enter at least one counted quantity.');
-            hasErrors = true;
-        }
-        
-        if (hasErrors) {
-            return false;
-        }
-        
-        // Prepare all form data
-        var postData = {
-            driver_id: driverId,
-            items: items,
-            remarks: $('#remarks').val(),
-            _token: '{{ csrf_token() }}'
-        };
-        
-        console.log('Sending data:', postData);
-        
-        // Submit via AJAX
-        ShowLoad();
-        $.ajax({
-            url: $(this).attr('action'),
-            type: 'POST',
-            data: postData,
-            dataType: 'json',
-            success: function(response) {
-                HideLoad();
-                if (response.success) {
-                    $('#createRequest').modal('hide');
-                    showNotification('success', response.message);
-                    if (table && typeof table.ajax !== 'undefined') {
-                        table.ajax.reload(null, false);
+            
+            if (!hasAnyCountedQty) {
+                $('#itemsError').text('Please enter at least one counted quantity.');
+                hasErrors = true;
+            }
+            
+            if (hasErrors) {
+                return false;
+            }
+            
+            // Prepare all form data
+            var postData = {
+                driver_id: driverId,
+                items: items,
+                remarks: $('#remarks').val(),
+                _token: '{{ csrf_token() }}'
+            };
+            
+            console.log('Sending data:', postData);
+            
+            // Submit via AJAX
+            ShowLoad();
+            $.ajax({
+                url: $(this).attr('action'),
+                type: 'POST',
+                data: postData,
+                dataType: 'json',
+                success: function(response) {
+                    HideLoad();
+                    if (response.success) {
+                        $('#createRequest').modal('hide');
+                        showNotification('success', response.message);
+                        if (table && typeof table.ajax !== 'undefined') {
+                            table.ajax.reload(null, false);
+                        }
+                    } else {
+                        showNotification('error', response.message || 'An error occurred');
                     }
-                } else {
-                    showNotification('error', response.message || 'An error occurred');
+                },
+                error: function(xhr) {
+                    HideLoad();
+                    var errorMsg = 'An error occurred';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    showNotification('error', errorMsg);
+                    console.error('Error:', xhr.responseJSON);
                 }
-            },
-            error: function(xhr) {
-                HideLoad();
-                var errorMsg = 'An error occurred';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    errorMsg = xhr.responseJSON.message;
-                }
-                showNotification('error', errorMsg);
-                console.error('Error:', xhr.responseJSON);
-            }
+            });
         });
-    });
         
         // ============================================
         // EDIT COUNT MODAL (Admin fills counted quantities by batch)
@@ -1459,130 +1682,6 @@
             var year = date.getFullYear();
             return day + '/' + month + '/' + year;
         }
-
-        // Handle edit count modal opening
-        $(document).on('click', '.edit-count-btn', function(e) {
-            e.preventDefault();
-            var requestId = $(this).data('id');
-            var requestData = $(this).data('request');
-            
-            // Parse JSON string if needed
-            if (typeof requestData === 'string') {
-                requestData = JSON.parse(requestData);
-            }
-            
-            // Store current request ID
-            currentRequestId = requestId;
-            
-            // Update modal title
-            $('#editCountRequestId').text('(#' + requestId + ')');
-            
-            // Fill basic info
-            $('#editCountDriverName').text(requestData.driver_name || 'N/A');
-            $('#editCountRequestedAt').text(requestData.requested_at || requestData.created_at || 'N/A');
-            $('#editCountRemarks').val(requestData.remarks || '');
-            
-            // Update form action
-            var formAction = '{{ route("inventoryCounts.update", ":id") }}'.replace(':id', requestId);
-            $('#editCountForm').attr('action', formAction);
-            
-            // Clear and populate items table
-            $('#editCountItemsBody').empty();
-            $('#editCountItemsError').text('');
-            
-            // Fetch full request data with batch details
-            $.ajax({
-                url: '{{ route("inventoryCounts.withBatches", ":id") }}'.replace(':id', requestId),
-                type: 'GET',
-                success: function(response) {
-                    if (response.success && response.data && response.data.items) {
-                        var data = response.data;
-                        var itemIndex = 0;
-                        
-                        data.items.forEach(function(item) {
-                            if (item.batches && Array.isArray(item.batches) && item.batches.length > 0) {
-                                // Display each batch as a separate row
-                                item.batches.forEach(function(batch) {
-                                    var countedQty = batch.counted_quantity !== null ? batch.counted_quantity : '';
-                                    var currentQty = batch.current_quantity || 0;
-                                    var difference = countedQty !== '' ? countedQty - currentQty : 0;
-                                    var diffClass = difference > 0 ? 'difference-positive' : (difference < 0 ? 'difference-negative' : 'difference-zero');
-                                    var diffSymbol = difference > 0 ? '+' : '';
-                                    
-                                    var expiryInfo = batch.expiry_date ? 
-                                        `<small class="text-muted">Exp: ${formatDate(batch.expiry_date)}</small>` : '';
-                                    
-                                    var expiringClass = batch.is_expiring_soon ? 'expiring-soon' : '';
-                                    
-                                    var row = `
-                                        <tr>
-                                            <td class="align-middle text-center">${itemIndex + 1}</td>
-                                            <td class="align-middle">
-                                                <strong>${getProductName(item.product_id)}</strong>
-                                                ${expiryInfo ? '<br>' + expiryInfo : ''}
-                                            </td>
-                                            <td class="align-middle">
-                                                <span class="badge badge-info ${expiringClass}">${batch.batch_code}</span>
-                                            </td>
-                                            <td class="align-middle text-center">
-                                                <span class="badge badge-secondary">${currentQty}</span>
-                                            </td>
-                                            <td class="align-middle">
-                                                <input type="number" 
-                                                    min="0" 
-                                                    class="form-control counted-quantity-input" 
-                                                    name="batches[${itemIndex}][counted_quantity]" 
-                                                    value="${countedQty}"
-                                                    data-current-qty="${currentQty}"
-                                                    data-batch-id="${batch.batch_id}"
-                                                    placeholder="Enter counted qty">
-                                                <input type="hidden" name="batches[${itemIndex}][batch_id]" value="${batch.batch_id}">
-                                                <input type="hidden" name="batches[${itemIndex}][product_id]" value="${item.product_id}">
-                                                <input type="hidden" name="batches[${itemIndex}][current_quantity]" value="${currentQty}">
-                                            </td>
-                                            <td class="align-middle text-center">
-                                                <span class="difference-display ${diffClass}">${countedQty !== '' ? diffSymbol + difference : '-'}</span>
-                                            </td>
-                                        </tr>
-                                    `;
-                                    $('#editCountItemsBody').append(row);
-                                    itemIndex++;
-                                });
-                            } else {
-                                // If no batches found, create a placeholder row
-                                var row = `
-                                    <tr>
-                                        <td class="align-middle text-center">${itemIndex + 1}</td>
-                                        <td class="align-middle">
-                                            <strong>${getProductName(item.product_id)}</strong>
-                                        </td>
-                                        <td class="align-middle">
-                                            <span class="badge badge-warning">No batches found</span>
-                                        </td>
-                                        <td class="align-middle text-center">
-                                            <span class="badge badge-secondary">${item.current_quantity || 0}</span>
-                                        </td>
-                                        <td class="align-middle" colspan="2">
-                                            <div class="text-muted">No batches available to count</div>
-                                        </td>
-                                    </tr>
-                                `;
-                                $('#editCountItemsBody').append(row);
-                                itemIndex++;
-                            }
-                        });
-                    } else {
-                        $('#editCountItemsBody').html('<tr><td colspan="6" class="text-center">No items found</td></tr>');
-                    }
-                },
-                error: function() {
-                    $('#editCountItemsBody').html('<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>');
-                }
-            });
-            
-            // Show modal
-            $('#editCountModal').modal('show');
-        });
 
         // Calculate difference when counted quantity changes
         $(document).on('input', '.counted-quantity-input', function() {
@@ -1610,7 +1709,7 @@
             // Reset error
             $('#editCountItemsError').text('');
             
-            // Validate counted quantities
+            // Validate counted quantities and warehouse selections
             var hasError = false;
             var hasAnyCountedQty = false;
             var batches = [];
@@ -1620,18 +1719,33 @@
                 var batchId = $(this).data('batch-id');
                 var productId = $(this).closest('tr').find('input[name*="[product_id]"]').val();
                 var currentQty = $(this).data('current-qty');
+                var batchCode = $(this).closest('tr').find('input[name*="[batch_code]"]').val();
                 
-                // Check if at least one counted quantity is provided
+                // Get warehouse selection
+                var $row = $(this).closest('tr');
+                var warehouseSelect = $row.find('.warehouse-select');
+                var warehouseId = warehouseSelect.val();
+                
+                // Validate warehouse selection if quantity is provided
                 if (val !== '' && parseFloat(val) >= 0) {
                     hasAnyCountedQty = true;
                     
-                    // Add to batches array
-                    batches.push({
-                        batch_id: batchId,
-                        product_id: parseInt(productId),
-                        counted_quantity: parseFloat(val),
-                        current_quantity: currentQty
-                    });
+                    if (!warehouseId) {
+                        warehouseSelect.addClass('is-invalid');
+                        hasError = true;
+                    } else {
+                        warehouseSelect.removeClass('is-invalid');
+                        
+                        // Add to batches array with warehouse_id
+                        batches.push({
+                            batch_id: batchId,
+                            product_id: parseInt(productId),
+                            counted_quantity: parseFloat(val),
+                            current_quantity: currentQty,
+                            warehouse_id: parseInt(warehouseId),
+                            batch_code: batchCode
+                        });
+                    }
                 }
                 
                 // Validate the value itself
@@ -1644,7 +1758,7 @@
             });
             
             if (hasError) {
-                $('#editCountItemsError').text('Counted quantities cannot be negative.');
+                $('#editCountItemsError').text('Please select a warehouse for each counted batch.');
                 return false;
             }
             
@@ -1726,61 +1840,6 @@
         // VIEW MODAL FUNCTIONS
         // ============================================
         
-        // Handle view modal opening
-        $(document).on('click', '.view-request-btn', function(e) {
-            e.preventDefault();
-            var requestId = $(this).data('id');
-            var requestData = $(this).data('request');
-            
-            // Parse JSON string if needed
-            if (typeof requestData === 'string') {
-                requestData = JSON.parse(requestData);
-            }
-            
-            // Store current request info
-            currentRequestId = requestId;
-            currentRequestStatus = requestData.status;
-            
-            // Update modal title with request ID
-            $('#viewRequestId').text('(#' + requestId + ')');
-            $('#viewRequestIdText').text(requestId);
-            
-            // Fill view modal with data
-            $('#viewDriverName').text(requestData.driver_name || 'N/A');
-            $('#viewRemarks').text(requestData.remarks || 'No remarks');
-            $('#viewCreatedAt').text(requestData.created_at || 'N/A');
-            
-            // Set status with badge
-            var status = requestData.status;
-            var badgeClass = getStatusBadgeClass(status);
-            
-            $('#viewStatusBadge').html('<span class="badge ' + badgeClass + '">' + status.charAt(0).toUpperCase() + status.slice(1) + '</span>');
-            
-            // Show/hide sections based on initial status
-            updateStatusSections(status, requestData);
-            
-            // Fetch full request data with batch details
-            $.ajax({
-                url: '{{ route("inventoryCounts.withBatches", ":id") }}'.replace(':id', requestId),
-                type: 'GET',
-                success: function(response) {
-                    if (response.success) {
-                        displayViewModalWithBatches(response.data);
-                        // Update status sections with the full data
-                        updateStatusSections(response.data.status, response.data);
-                    } else {
-                        displayViewModalBasic(requestData);
-                    }
-                },
-                error: function() {
-                    displayViewModalBasic(requestData);
-                }
-            });
-            
-            // Show modal
-            $('#viewRequest').modal('show');
-        });
-
         // Helper function to update status sections
         function updateStatusSections(status, data) {
             // Show/hide approval section
@@ -1831,9 +1890,9 @@
         }
 
         function displayViewModalWithBatches(data) {
-            // Show items table with batch details
+            // Show items table with batch details including warehouse
             var itemsHtml = '<div class="table-responsive"><table class="table table-sm table-bordered">';
-            itemsHtml += '<thead><tr><th>#</th><th>Product</th><th>Batch Code</th><th>Expiry Date</th><th>Current Qty</th><th>Counted Qty</th><th>Difference</th></tr></thead><tbody>';
+            itemsHtml += '<thead><tr><th>#</th><th>Product</th><th>Batch Code</th><th>Expiry Date</th><th>Current Qty</th><th>Counted Qty</th><th>Return Warehouse</th><th>Difference</th></tr></thead><tbody>';
             
             var totalCurrent = 0;
             var totalCounted = 0;
@@ -1850,6 +1909,10 @@
                             // Ensure we're working with numbers
                             var currentQty = parseFloat(batch.current_quantity) || 0;
                             var countedQty = batch.counted_quantity !== null && batch.counted_quantity !== undefined ? parseFloat(batch.counted_quantity) : null;
+                            console.log('batch item :', batch);
+                            // Get warehouse info
+                            var warehouseName = batch.warehouse;
+                          
                             
                             // Track if batch has been counted
                             if (countedQty !== null && !isNaN(countedQty)) {
@@ -1880,7 +1943,7 @@
                                     itemHasVariance = true;
                                 }
                                 
-                                // Add to totals (ensuring we're adding numbers, not strings)
+                                // Add to totals
                                 totalCounted += countedQty;
                             }
                             
@@ -1897,6 +1960,7 @@
                             itemsHtml += '<td>' + expiryDate + '</td>';
                             itemsHtml += '<td class="text-center">' + currentQty + '</td>';
                             itemsHtml += '<td class="text-center">' + (countedQty !== null && !isNaN(countedQty) ? countedQty : '-') + '</td>';
+                            itemsHtml += '<td><span class="badge badge-primary">' + warehouseName + '</span></td>';
                             itemsHtml += '<td class="text-center ' + diffClass + '">' + diffDisplay + '</td>';
                             itemsHtml += '</tr>';
                         });
@@ -1914,6 +1978,7 @@
                         itemsHtml += '<td>' + (item.product_name || 'Unknown Product') + '</td>';
                         itemsHtml += '<td colspan="2" class="text-center text-muted">No batch information</td>';
                         itemsHtml += '<td class="text-center">' + currentQty + '</td>';
+                        itemsHtml += '<td class="text-center">-</td>';
                         itemsHtml += '<td class="text-center">-</td>';
                         itemsHtml += '<td class="text-center">-</td>';
                         itemsHtml += '</tr>';
@@ -1946,9 +2011,9 @@
             // Add footer with totals
             itemsHtml += '<tfoot>';
             itemsHtml += '<tr class="table-info">';
-            itemsHtml += '<td colspan="4" class="text-right"><strong>Total:</strong></td>';
-            itemsHtml += '<td class="text-center"><strong>' + totalCurrent + '</strong></td>';
+            itemsHtml += '<td colspan="5" class="text-right"><strong>Total:</strong></td>';
             itemsHtml += '<td class="text-center"><strong>' + (totalCounted > 0 ? totalCounted : '-') + '</strong></td>';
+            itemsHtml += '<td></td>';
             itemsHtml += '<td class="text-center ' + totalDiffClass + '"><strong>' + totalDiffDisplay + '</strong></td>';
             itemsHtml += '</tr>';
             itemsHtml += '</tfoot>';
@@ -1959,11 +2024,38 @@
             // Show summary section
             $('#viewSummarySection').show();
             
-            // Create summary table with corrected calculations
+            // Update summary table to include warehouse distribution
+            var warehouseSummary = {};
+            if (data.items && Array.isArray(data.items)) {
+                data.items.forEach(function(item) {
+                    if (item.batches && Array.isArray(item.batches)) {
+                        item.batches.forEach(function(batch) {
+                            if (batch.counted_quantity && batch.warehouse_id) {
+                                var warehouseId = batch.warehouse_id;
+                                var warehouseName = warehousesLookup[warehouseId] ? warehousesLookup[warehouseId].name : 'Warehouse ' + warehouseId;
+                                
+                                if (!warehouseSummary[warehouseName]) {
+                                    warehouseSummary[warehouseName] = 0;
+                                }
+                                warehouseSummary[warehouseName] += batch.counted_quantity;
+                            }
+                        });
+                    }
+                });
+            }
+            
             var summaryHtml = '<div class="table-responsive"><table class="table table-sm table-bordered">';
             summaryHtml += '<thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
             summaryHtml += '<tr><td>Total Products</td><td>' + (data.items ? data.items.length : 0) + '</td></tr>';
             summaryHtml += '<tr><td>Batches Counted</td><td>' + batchesCounted + '</td></tr>';
+            
+            // Add warehouse distribution
+            if (Object.keys(warehouseSummary).length > 0) {
+                summaryHtml += '<tr><td colspan="2"><strong>Warehouse Distribution:</strong></td></tr>';
+                for (var warehouse in warehouseSummary) {
+                    summaryHtml += '<tr><td class="pl-4">' + warehouse + '</td><td>' + warehouseSummary[warehouse] + ' units</td></tr>';
+                }
+            }
             
             // Add variance percentage
             var variancePercentage = totalCurrent > 0 ? ((totalDifference / totalCurrent) * 100).toFixed(2) : 0;
@@ -1989,17 +2081,6 @@
             summaryHtml += '</tbody></table></div>';
             
             $('#viewSummaryTable').html(summaryHtml);
-        }
-
-        // Helper function to format date (make sure this exists)
-        function formatDate(dateString) {
-            if (!dateString) return 'N/A';
-            var date = new Date(dateString);
-            if (isNaN(date.getTime())) return 'N/A';
-            var day = date.getDate().toString().padStart(2, '0');
-            var month = (date.getMonth() + 1).toString().padStart(2, '0');
-            var year = date.getFullYear();
-            return day + '/' + month + '/' + year;
         }
 
         function displayViewModalBasic(requestData) {
