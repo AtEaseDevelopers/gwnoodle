@@ -20,6 +20,7 @@ use App\Models\Assign;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\ProductCost;
 use App\Models\SpecialPrice;
 use App\Models\Customer;
 use App\Models\InvoicePayment;
@@ -35,6 +36,10 @@ use App\Models\DriverLocation;
 use App\Models\Language;
 use App\Models\MobileTranslationVersion;
 use App\Models\MobileTranslation;
+use App\Models\Warehouse;
+use App\Models\WarehouseInventoryBalance;
+use Milon\Barcode\Facades\DNS1DFacade as DNS1D;
+
 use Illuminate\Support\Facades\Hash;
 
 class DriverController extends Controller
@@ -396,6 +401,7 @@ class DriverController extends Controller
             ]);
             //store lorry status to 0 when in use
             $lorry->status = 0;
+            $lorry->driver_id = $driver->id;
             $lorry->save();
 
             $driver->trip_id = $trip->uuid; 
@@ -551,7 +557,13 @@ class DriverController extends Controller
                 'data' => null
             ], 200);
         }
-        $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$driver->trip_id)->where('status', InventoryCount::STATUS_APPROVED)->first();
+
+        $latestTrip = Trip::where('driver_id', $driver->id)
+                ->where('uuid', $driver->trip_id)
+                ->where('type', Trip::START_TRIP)
+                ->first();
+
+        $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$latestTrip->id)->where('status', InventoryCount::STATUS_APPROVED)->first();
 
         if(!$inventoryCount ){
             return response()->json([
@@ -560,10 +572,6 @@ class DriverController extends Controller
                 'data' => null
             ], 200);
         }
-        $latestTrip = Trip::where('driver_id', $driver->id)
-                ->where('uuid', $driver->trip_id)
-                ->where('type', Trip::START_TRIP)
-                ->first();
 
         try {
 
@@ -577,6 +585,7 @@ class DriverController extends Controller
             $lorry = Lorry::where('id', $latestTrip->lorry_id)->first();
             //store lorry status to 0 when in use
             $lorry->status = 1;
+            $lorry->driver_id = NULL;
             $lorry->save();
 
             $driver->trip_id = NULL;
@@ -4576,7 +4585,10 @@ class DriverController extends Controller
                         'product_id' => $productId,
                         'product_name' => $batch->product->name,
                         'current_quantity' => 0,
-                        'batches' => []
+                        'batches' => [],
+                        'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
+                        'counted_quantity' => null, // Driver will update this later
+
                     ];
                 }
                 
@@ -4587,10 +4599,6 @@ class DriverController extends Controller
                     'current_quantity' => $availableQty,
                     'counted_quantity' => null, // Driver will update this later
                     'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
-                    'expiry_date' => $batch->expiry_date,
-                    'formatted_expiry_date' => $batch->formatted_expiry_date,
-                    'is_expiring_soon' => $batch->isExpiringSoon(),
-                    'days_to_expiry' => $batch->days_to_expiry
                 ];
                 
                 // Add to total product quantity
@@ -4814,7 +4822,7 @@ class DriverController extends Controller
         }
     }
 
-    public function getDriverProduct(Request $request)
+    public function getDriverProduct(Request $request, $id =null)
     {
         // Validate session
         $user = User::where('session', $request->header('session'))->first();
@@ -4827,68 +4835,409 @@ class DriverController extends Controller
         }
 
         try {
-
-            // Get inventory balances for all drivers
-            $allDriverInventory = InventoryBalance::whereIn('driver_id', $drivers->pluck('id'))
-                ->get()
-                ->groupBy('driver_id')
-                ->map(function($inventories) {
-                    return $inventories->pluck('quantity', 'product_id')->toArray();
-                })
-                ->toArray();
-
-            // Get all products with categories
-            $categories = ProductCategory::with(['products' => function($query) {
-                $query->select('id', 'name', 'category_id', 'price', 'status')
-                    ->where('status', 1)
-                    ->orderBy('name');
-            }])
-            ->where('status', 1)
-            ->orderBy('name')
-            ->get();
-
-            // Format the response for all drivers
-            $output = $drivers->map(function($driver) use ($categories, $allDriverInventory) {
-                $driverInventory = $allDriverInventory[$driver->id] ?? [];
+            // Get all inventory balances that have batches and are associated with active lorries
+            // First, get all active lorries (status = 0 / in use)
+            if($id){
+                $lorry = Lorry::find($id);
+                // Check if lorry exists
+                if (!$lorry) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Van not found',
+                        'data' => null
+                    ], 404);
+                }
                 
-                $driverProducts = $categories->map(function($category) use ($driverInventory) {
-                    return [
-                        'category_id' => $category->id,
-                        'category_name' => $category->name,
-                        'products' => $category->products->map(function($product) use ($driverInventory) {
-                            // Get quantity from driver's inventory, default to 0 if not found
-                            $quantity = $driverInventory[$product->id] ?? 0;
-                            
-                            return [
-                                'id' => $product->id,
-                                'name' => $product->name,
-                                'price' => $product->price,
-                                'quantity' => $quantity,
-                                'status' => $product->getStatusTextAttribute()
-                            ];
-                        })
+                // Check if lorry is active (status = 0 based on your logic)
+                if ($lorry->status != 0) {
+                    return response()->json([
+                        'result' => true,
+                        'message' => __LINE__ . $this->message_separator . 'This van is not in use.',
+                        'data' => []
+                    ], 200);
+                }
+                
+                $activeLorries = [$lorry->id];
+            }else{
+                $activeLorries = Lorry::where('status', 0) // Adjust status value as needed
+                    ->pluck('id')
+                    ->toArray();
+            }
+            
+            if (empty($activeLorries)) {
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__ . $this->message_separator . 'No active van found',
+                    'data' => []
+                ], 200);
+            }
+
+            // Get inventory balances only for active lorries
+            $inventoryBalances = InventoryBalance::whereIn('lorry_id', $activeLorries)
+                ->whereNotNull('batches')
+                ->where('batches', '!=', '[]')
+                ->where('batches', '!=', '{}')
+                ->get();
+
+            if ($inventoryBalances->isEmpty()) {
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__ . $this->message_separator . 'No active van with inventory found',
+                    'data' => []
+                ], 200);
+            }
+
+            $activeLorriesWithInventory = [];
+
+            foreach ($inventoryBalances as $inventoryBalance) {
+                $lorryId = $inventoryBalance->lorry_id;
+                
+                // Get the lorry details
+                $lorry = Lorry::find($lorryId);
+                if (!$lorry) {
+                    continue;
+                }
+                // Get the driver assigned to this lorry
+                $driver = Driver::find($lorry->driver_id);
+
+                // Get all batch IDs from the inventory
+                $batchIds = array_keys($inventoryBalance->batches);
+
+                // Fetch batch details with product information
+                $batches = ProductBatch::with('product')
+                    ->whereIn('id', $batchIds)
+                    ->where('quantity', '>', 0)
+                    ->where('status', ProductBatch::STATUS_ACTIVE)
+                    ->orderBy('expiry_date', 'asc')
+                    ->get();
+
+                if ($batches->isEmpty()) {
+                    continue;
+                }
+
+                // Group batches by product
+                $productsWithBatches = [];
+                
+                foreach ($batches as $batch) {
+                    $productId = $batch->product_id;
+                    $availableQty = $inventoryBalance->batches[$batch->id] ?? 0;
+                    
+                    // Skip if no quantity available
+                    if ($availableQty <= 0) {
+                        continue;
+                    }
+                    
+                    // Get product info
+                    $product = $batch->product;
+                    if (!$product) {
+                        continue;
+                    }
+                    
+                    // Initialize product entry if not exists
+                    if (!isset($productsWithBatches[$productId])) {
+                        $productsWithBatches[$productId] = [
+                            'product_id' => $productId,
+                            'product_name' => $product->name,
+                            'product_code' => $product->unit_code,
+                            'price' => $product->price,
+                            'unit_code' => $product->unit_code,
+                            'total_quantity' => 0,
+                            'batches' => []
+                        ];
+                    }
+                    
+                    // Add batch details
+                    $productsWithBatches[$productId]['batches'][] = [
+                        'batch_id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'quantity' => $availableQty,
+                        'expiry_date' => $batch->expiry_date,
+                        'formatted_expiry_date' => $batch->formatted_expiry_date,
+                        'days_to_expiry' => $batch->days_to_expiry,
+                        'is_expiring_soon' => $batch->isExpiringSoon(),
+                        'status' => $batch->status_text,
+                        'is_active' => $batch->isActive()
                     ];
+                    
+                    // Add to total quantity
+                    $productsWithBatches[$productId]['total_quantity'] += $availableQty;
+                }
+
+                if (empty($productsWithBatches)) {
+                    continue;
+                }
+
+                // Convert to array (reset keys)
+                $productsList = array_values($productsWithBatches);
+
+                // Sort products by name
+                usort($productsList, function($a, $b) {
+                    return strcasecmp($a['product_name'], $b['product_name']);
                 });
 
-                return [
-                    'driver_id' => $driver->id,
+                // Sort batches within each product by expiry date
+                foreach ($productsList as &$product) {
+                    usort($product['batches'], function($a, $b) {
+                        return strtotime($a['expiry_date']) - strtotime($b['expiry_date']);
+                    });
+                }
+
+                // Get latest trip info for display purposes (optional)
+                $latestTrip = Trip::where('lorry_id', $lorryId)
+                    ->orderBy('date', 'desc')
+                    ->first();
+
+                $activeLorriesWithInventory[] = [
+                    'lorry_id' => $lorryId,
+                    'lorry_number' => $lorry->lorryno,
+                    'lorry_status' => $lorry->status,
                     'driver_name' => $driver->name,
-                    'products' => $driverProducts
+                    'driver_code' => $driver->employeeid ?? null,
+                    'trip_info' => $latestTrip ? [
+                        'trip_id' => $latestTrip->id,
+                        'trip_date' => $latestTrip->date,
+                        'trip_status' => $latestTrip->status ?? null
+                    ] : null,
+                    'products' => $productsList,
+                    'summary' => [
+                        'total_products' => count($productsList),
+                        'total_batches' => $batches->count(),
+                        'total_quantity' => array_sum(array_column($productsList, 'total_quantity'))
+                    ]
                 ];
+            }
+
+            // Sort by driver name
+            usort($activeLorriesWithInventory, function($a, $b) {
+                return strcasecmp($a['driver_name'], $b['driver_name']);
             });
+
+            // Calculate overall summary
+            $overallSummary = [
+                'total_active_lorries_with_inventory' => count($activeLorriesWithInventory),
+                'total_products' => array_sum(array_column($activeLorriesWithInventory, 'summary.total_products')),
+                'total_batches' => array_sum(array_column($activeLorriesWithInventory, 'summary.total_batches')),
+                'total_quantity' => array_sum(array_column($activeLorriesWithInventory, 'summary.total_quantity'))
+            ];
 
             return response()->json([
                 'result' => true,
-                'message' => __LINE__ . $this->message_separator . 'Products for all drivers retrieved successfully',
-                'data' => $output
+                'message' => __LINE__ . $this->message_separator . 'Driver inventory retrieved successfully',
+                'data' => [
+                    'drivers' => $activeLorriesWithInventory,
+                    'overall_summary' => $overallSummary
+                ]
             ], 200);
 
         } catch (\Exception $e) {
+            \Log::error('Error in getDriverProduct: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
             return response()->json([
                 'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'Error getting driver products: ' . $e->getMessage(),
+                'message' => __LINE__ . $this->message_separator . 'Error getting driver inventory: ' . $e->getMessage(),
                 'data' => null
+            ], 500);
+        }
+    }
+
+    public function getWarehouseInventory(Request $request, $id =null)
+    {
+        // Validate session or authentication
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        try {
+            $warehouseId = $id;
+            
+            // If warehouse_id is provided, get specific warehouse
+            if ($warehouseId) {
+                $warehouse = Warehouse::where('id', $warehouseId)
+                    ->where('status', Warehouse::STATUS_ACTIVE)
+                    ->first();
+                    
+                if (!$warehouse) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Warehouse not found.',
+                        'data' => null
+                    ], 404);
+                }
+                
+                $warehouses = collect([$warehouse]);
+            } else {
+                // Get all active warehouses
+                $warehouses = Warehouse::orderBy('name')
+                    ->get();
+                    
+                if ($warehouses->isEmpty()) {
+                    return response()->json([
+                        'result' => true,
+                        'message' => __LINE__ . $this->message_separator . 'No active warehouses found',
+                        'data' => []
+                    ], 200);
+                }
+            }
+
+            $warehouseData = [];
+            
+            foreach ($warehouses as $warehouse) {
+                // Get inventory balances for this warehouse with batch details
+                $inventoryBalances = WarehouseInventoryBalance::with(['product', 'batch'])
+                    ->where('warehouse_id', $warehouse->id)
+                    ->where('quantity', '>', 0) // Only show items with stock
+                    ->orderBy('quantity', 'desc')
+                    ->get();
+                
+                if ($inventoryBalances->isEmpty()) {
+                    $warehouseData[] = [
+                        'warehouse_id' => $warehouse->id,
+                        'warehouse_name' => $warehouse->name,
+                        'warehouse_location' => $warehouse->location,
+                        'status' => $warehouse->status,
+                        'has_inventory' => false,
+                        'products' => [],
+                        'summary' => [
+                            'total_products' => 0,
+                            'total_batches' => 0,
+                            'total_quantity' => 0
+                        ]
+                    ];
+                    continue;
+                }
+                
+                // Group by product
+                $productsByBatch = [];
+                $totalQuantity = 0;
+                
+                foreach ($inventoryBalances as $balance) {
+                    $product = $balance->product;
+                    $batch = $balance->batch;
+                    
+                    if (!$product || !$batch) {
+                        continue;
+                    }
+                    
+                    $productId = $product->id;
+                    
+                    // Initialize product entry if not exists
+                    if (!isset($productsByBatch[$productId])) {
+                        $productsByBatch[$productId] = [
+                            'product_id' => $productId,
+                            'product_name' => $product->name,
+                            'product_code' => $product->unit_code,
+                            'price' => $product->price,
+                            'unit_code' => $product->unit_code,
+                            'total_quantity' => 0,
+                            'batches' => []
+                        ];
+                    }
+                    
+                    // Add batch details
+                    $batchQuantity = $balance->quantity;
+                    $totalQuantity += $batchQuantity;
+                    
+                    $productsByBatch[$productId]['batches'][] = [
+                        'batch_id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'quantity' => $batchQuantity,
+                        'expiry_date' => $batch->expiry_date,
+                        'formatted_expiry_date' => $batch->formatted_expiry_date,
+                        'days_to_expiry' => $batch->days_to_expiry,
+                        'is_expiring_soon' => $batch->isExpiringSoon(),
+                        'batch_status' => $batch->status_text,
+                        'is_active' => $batch->isActive(),
+                        'product_id' => $productId,
+                        'product_name' => $product->name
+                    ];
+                    
+                    // Add to total quantity for this product
+                    $productsByBatch[$productId]['total_quantity'] += $batchQuantity;
+                }
+                
+                // Convert to array and sort by product name
+                $productsList = array_values($productsByBatch);
+                usort($productsList, function($a, $b) {
+                    return strcasecmp($a['product_name'], $b['product_name']);
+                });
+                
+                // Sort batches within each product by expiry date (FEFO)
+                foreach ($productsList as &$product) {
+                    usort($product['batches'], function($a, $b) {
+                        return strtotime($a['expiry_date']) - strtotime($b['expiry_date']);
+                    });
+                }
+                
+                // Calculate summary
+                $totalBatches = $inventoryBalances->count();
+                $totalProducts = count($productsList);
+                
+                $warehouseData[] = [
+                    'warehouse_id' => $warehouse->id,
+                    'warehouse_name' => $warehouse->name,
+                    'warehouse_location' => $warehouse->location,
+                    'status' => $warehouse->status,
+                    'has_inventory' => true,
+                    'products' => $productsList,
+                    'summary' => [
+                        'total_products' => $totalProducts,
+                        'total_batches' => $totalBatches,
+                        'total_quantity' => $totalQuantity
+                    ]
+                ];
+            }
+            
+            // Calculate overall summary if multiple warehouses
+            $overallSummary = null;
+            if (count($warehouseData) > 1) {
+                $overallSummary = [
+                    'total_warehouses' => count($warehouseData),
+                    'total_warehouses_with_stock' => collect($warehouseData)->filter(function($w) {
+                        return $w['has_inventory'];
+                    })->count(),
+                    'total_products' => collect($warehouseData)->sum(function($w) {
+                        return $w['summary']['total_products'];
+                    }),
+                    'total_batches' => collect($warehouseData)->sum(function($w) {
+                        return $w['summary']['total_batches'];
+                    }),
+                    'total_quantity' => collect($warehouseData)->sum(function($w) {
+                        return $w['summary']['total_quantity'];
+                    })
+                ];
+            }
+            
+            $responseData = [
+                'warehouses' => $warehouseData,
+                'overall_summary' => $overallSummary
+            ];
+            
+            // If only one warehouse was requested, return simplified structure
+            if ($warehouseId && count($warehouseData) == 1) {
+                $responseData = $warehouseData[0];
+            }
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Warehouse inventory retrieved successfully',
+                'data' => $responseData
             ], 200);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error in getWarehouseInventory: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error getting warehouse inventory: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
         }
     }
 
@@ -4934,11 +5283,13 @@ class DriverController extends Controller
                 $formattedItems = array_map(function ($item) use ($products) {
                     $productId = $item['product_id'];
                     $product = $products[$productId] ?? null;
-                    
+
+                    $warehouse = Warehouse::find($item['warehouse_id']);
                     return [
                         'product_id' => $item['product_id'],
                         'product_name' => $product ? $product->name : null,
-                        'product_code' => $product ? $product->code : null, // Add other product fields if needed
+                        'batch_code' =>$item['batches'][0]['batch_code'],
+                        'warehouse'=> $warehouse ? $warehouse->name : null,
                         'counted_quantity' => $item['counted_quantity'],
                         'current_quantity' => $item['current_quantity']
                     ];
@@ -4971,11 +5322,10 @@ class DriverController extends Controller
 
         return response()->json([
             'result' => true,
-            'message' => __LINE__ . $this->message_separator . 'Stock Count list retrieved successfully',
+            'message' => __LINE__ . $this->message_separator . 'Stock Out list retrieved successfully',
             'data' => $formattedCounts
         ], 200);
     }
-
 
     public function approveStockCount(Request $request)
     {
@@ -4993,8 +5343,11 @@ class DriverController extends Controller
             'id' => 'required|exists:inventory_counts,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer|exists:products,id',
-            'items.*.counted_quantity' => 'required|numeric|min:0',
-            'items.*.current_quantity' => 'required|numeric|min:0',
+            'items.*.batches' => 'required|array',
+            'items.*.batches.*.batch_id' => 'required|exists:product_batches,id',
+            'items.*.batches.*.counted_quantity' => 'required|numeric|min:0',
+            'items.*.batches.*.current_quantity' => 'required|numeric|min:0',
+            'items.*.batches.*.warehouse_id' => 'required|exists:warehouses,id',
             'remarks' => 'nullable|string|max:500'
         ]);
 
@@ -5009,7 +5362,7 @@ class DriverController extends Controller
         $data = $request->all();
         $id = $data['id'];
 
-        $inventoryCount = InventoryCount::find($id);
+        $inventoryCount = InventoryCount::with(['driver', 'lorry'])->find($id);
 
         if (!$inventoryCount) {
             return response()->json([
@@ -5027,76 +5380,185 @@ class DriverController extends Controller
             ], 200);
         }
 
-        try{
-            // Validate that all items have counted_quantity filled
+        try {
+            // Check for missing counted quantities and warehouse selections
             $missingCountedItems = [];
-            $formattedItems = [];
+            $missingWarehouseItems = [];
+            $processedBatches = [];
             
             foreach ($data['items'] as $item) {
-                // Check if counted_quantity is provided and valid
-                if (!isset($item['counted_quantity']) || 
-                    (empty($item['counted_quantity']) && $item['counted_quantity'] !== '0' && $item['counted_quantity'] !== 0)) {
-                    $product = Product::find($item['product_id']);
-                    $missingCountedItems[] = $product ? $product->name : 'Product ID: ' . $item['product_id'];
+                if (isset($item['batches']) && is_array($item['batches'])) {
+                    foreach ($item['batches'] as $batch) {
+                        $productName = $item['product_name'] ?? 'Unknown Product';
+                        $batchCode = $batch['batch_code'] ?? 'Unknown Batch';
+                        $countedQty = $batch['counted_quantity'] ?? null;
+                        $warehouseId = $batch['warehouse_id'] ?? null;
+                        
+                        // Check if counted_quantity is empty/null/not set
+                        if (empty($countedQty) && $countedQty !== '0' && $countedQty !== 0) {
+                            $missingCountedItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                        }
+                        
+                        // Check if warehouse is selected
+                        if (empty($warehouseId)) {
+                            $missingWarehouseItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                        }
+                        
+                        // Store for processing
+                        if (!empty($countedQty) && !empty($warehouseId)) {
+                            $processedBatches[] = [
+                                'batch_id' => $batch['batch_id'],
+                                'product_id' => $item['product_id'],
+                                'product_name' => $productName,
+                                'batch_code' => $batchCode,
+                                'counted_quantity' => $countedQty,
+                                'warehouse_id' => $warehouseId,
+                                'current_quantity' => $batch['current_quantity'] ?? 0
+                            ];
+                        }
+                    }
                 }
-                
-                // Format the item with proper data types
-                $formattedItems[] = [
-                    'product_id' => (string) $item['product_id'],
-                    'counted_quantity' => (string) $item['counted_quantity'],
-                    'current_quantity' => (int) $item['current_quantity']
-                ];
             }
             
             // If there are items missing counted_quantity, return error
             if (!empty($missingCountedItems)) {
+                $errorMessage = 'Cannot approve. Please fill in counted quantity for: ' . implode(', ', array_slice($missingCountedItems, 0, 5));
+                if (count($missingCountedItems) > 5) {
+                    $errorMessage .= ' and ' . (count($missingCountedItems) - 5) . ' more';
+                }
+                
                 return response()->json([
                     'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 
-                        'Please provide counted quantity for: ' . implode(', ', $missingCountedItems),
+                    'message' => __LINE__ . $this->message_separator . $errorMessage,
                     'data' => null
                 ], 200);
             }
-
-            // Update the inventory count with new items and remarks
-            $updateData = [
-                'items' => $formattedItems,
-                'status' => InventoryCount::STATUS_APPROVED,
-                'approved_by' => $user->id,
-                'approved_at' => now(),
-            ];
-
-            // Add remarks if provided
-            if (!empty($data['remarks'])) {
-                $updateData['remarks'] = $data['remarks'];
+            
+            // If there are items missing warehouse, return error
+            if (!empty($missingWarehouseItems)) {
+                $errorMessage = 'Cannot approve. Please select return warehouse for: ' . implode(', ', array_slice($missingWarehouseItems, 0, 5));
+                if (count($missingWarehouseItems) > 5) {
+                    $errorMessage .= ' and ' . (count($missingWarehouseItems) - 5) . ' more';
+                }
+                
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . $errorMessage,
+                    'data' => null
+                ], 200);
+            }
+            
+            // Begin transaction
+            \DB::beginTransaction();
+            
+            try {
+                // Process each batch to return stock to warehouse
+                foreach ($processedBatches as $batchData) {
+                    // Find the product batch
+                    $productBatch = ProductBatch::find($batchData['batch_id']);
+                    
+                    if (!$productBatch) {
+                        throw new \Exception('Product batch not found: ' . $batchData['batch_code']);
+                    }
+                    
+                    // Update batch quantity (add back to batch)
+                    $productBatch->quantity += $batchData['counted_quantity'];
+                    $productBatch->save();
+                    
+                    // Create inventory transaction for stock return to warehouse
+                    InventoryTransaction::create([
+                        'product_id' => $batchData['product_id'],
+                        'batch_id' => $batchData['batch_id'],
+                        'warehouse_id' => $batchData['warehouse_id'],
+                        'quantity' => $batchData['counted_quantity'],
+                        'type' => InventoryTransaction::TYPE_STOCK_IN,
+                        'date' => now(),
+                        'user' => $user->name,
+                        'remark' => 'Stock return from Stock Out -[' . $inventoryCount->driver->name . '] - Batch: [' . $batchData['batch_code'] . ']',
+                    ]);
+                    
+                    // Update warehouse inventory balance
+                    $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $batchData['warehouse_id'])
+                        ->where('batch_id', $batchData['batch_id'])
+                        ->first();
+                    
+                    if ($warehouseInventory) {
+                        $warehouseInventory->increaseQuantity($batchData['counted_quantity']);
+                    } else {
+                        // Create new warehouse inventory balance if not exists
+                        WarehouseInventoryBalance::create([
+                            'warehouse_id' => $batchData['warehouse_id'],
+                            'batch_id' => $batchData['batch_id'],
+                            'product_id' => $batchData['product_id'],
+                            'quantity' => $batchData['counted_quantity']
+                        ]);
+                    }
+                }
+                
+                // Update inventory count status
+                $inventoryCount->update([
+                    'status' => InventoryCount::STATUS_APPROVED,
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                    'items' => $data['items'], // Update items with submitted data
+                    'remarks' => $data['remarks'] ?? $inventoryCount->remarks
+                ]);
+                
+                // Remove driver's inventory balance (lorry inventory)
+                $inventoryBalance = InventoryBalance::where('lorry_id', $inventoryCount->lorry_id)->first();
+                if ($inventoryBalance) {
+                    $inventoryBalance->delete();
+                }
+                
+                \DB::commit();
+                
+                // Load relationships for response
+                $inventoryCount->load(['driver', 'lorry', 'approver']);
+                
+                return response()->json([
+                    'result' => true,
+                    'message' => '' . __LINE__ . $this->message_separator . 'Stock Count approved successfully',
+                    'data' => [
+                        'id' => $inventoryCount->id,
+                        'driver_id' => $inventoryCount->driver_id,
+                        'driver_name' => $inventoryCount->driver->name ?? null,
+                        'lorry_id' => $inventoryCount->lorry_id,
+                        'lorry_number' => $inventoryCount->lorry->lorryno ?? null,
+                        'status' => $inventoryCount->status,
+                        'approved_by' => $inventoryCount->approver->name ?? null,
+                        'approved_at' => $inventoryCount->approved_at,
+                        'remarks' => $inventoryCount->remarks,
+                        'processed_batches' => count($processedBatches),
+                        'total_quantity_returned' => array_sum(array_column($processedBatches, 'counted_quantity'))
+                    ]
+                ], 200);
+                
+            } catch (\Exception $e) {
+                \DB::rollBack();
+                throw $e;
             }
 
-            $inventoryCount->update($updateData);
-
-            return response()->json([
-                'result' => true,
-                'message' => '' . __LINE__ . $this->message_separator . 'Stock Count approved successfully',
-                'data' => $inventoryCount
-            ], 200);
-
-        }catch (\Exception $e){
-
+        } catch (\Exception $e) {
+            \Log::error('Error in approveStockCount: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
             return response()->json([
                 'result' => false,
-                'message' => '' . __LINE__ . $this->message_separator . 'Stock Count Failed approved',
-                'data' =>null
+                'message' => '' . __LINE__ . $this->message_separator . 'Stock Count Failed approved: ' . $e->getMessage(),
+                'data' => null
             ], 200);
         }
-        
-
-
     }
 
-    public function getStockReturn(Request $request)
+
+    /**
+     * Stock In API - Distribute batch from warehouse to multiple lorries
+     */
+    public function Stockin(Request $request)
     {
         // Validate session
-        $driver = Driver::where('session', $request->header('session'))->first();
-        if(empty($driver)){
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
             return response()->json([
                 'result' => false,
                 'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
@@ -5104,79 +5566,1981 @@ class DriverController extends Controller
             ], 401);
         }
 
-        if($driver->trip_id == NULL){
+        $validator = Validator::make($request->all(), [
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'product_batch_id' => 'required|exists:product_batches,id',
+            'lorry_ids' => 'required|array',
+            'lorry_ids.*' => 'exists:lorrys,id',
+            'quantity_per_lorry' => 'required|integer|min:1'
+        ]);
+
+        if ($validator->fails()) {
             return response()->json([
                 'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'Driver have to start trip before perform any Action',
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        // Check if selected lorries are in use (status = 0)
+        $activeLorries = Lorry::whereIn('id', $request->lorry_ids)
+            ->where('status', 1) // 0 = in use/active
+            ->pluck('lorryno', 'id')
+            ->toArray();
+
+        if (!empty($activeLorries)) {
+            $activeLorryDetails = [];
+            foreach ($activeLorries as $id => $lorryno) {
+                $activeLorryDetails[] = $lorryno ;
+            }
+            $activeLorryNumbers = implode(', ', $activeLorryDetails);
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . "Cannot stock in to vans that are currently not in use: {$activeLorryNumbers}.",
                 'data' => null
             ], 200);
         }
         
+        $productBatch = ProductBatch::find($request->product_batch_id);
+        $warehouseId = $request->warehouse_id;
+        
+        // Check if warehouse has this batch
+        $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+            ->where('batch_id', $productBatch->id)
+            ->first();
+
+        if (!$warehouseInventory) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'This batch is not available in the selected warehouse.',
+                'data' => null
+            ], 200);
+        }
+
+        // Calculate total needed
+        $totalNeeded = $request->quantity_per_lorry * count($request->lorry_ids);
+
+        if ($warehouseInventory->quantity < $totalNeeded) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Insufficient batch quantity in warehouse. Available: ' . $warehouseInventory->quantity . ', Needed: ' . $totalNeeded,
+                'data' => null
+            ], 200);
+        }
+
+        DB::beginTransaction();
+        
         try {
-            $inventoryReturns = InventoryReturn::where('driver_id', $driver->id)
-                ->where('trip_id', $driver->trip_id)
-                ->get()
-                ->map(function ($inventoryReturn) {
-                    // Get approver and rejector names
-                    $approver = $inventoryReturn->approved_by ? User::find($inventoryReturn->approved_by) : null;
-                    $rejector = $inventoryReturn->rejected_by ? User::find($inventoryReturn->rejected_by) : null;
-                    
-                    // Process items array to add product names
-                    $itemsWithProductNames = [];
-                    if ($inventoryReturn->items && is_array($inventoryReturn->items)) {
-                        foreach ($inventoryReturn->items as $item) {
-                            $product = Product::find($item['product_id'] ?? null);
-                            $itemsWithProductNames[] = [
-                                'product_id' => $item['product_id'] ?? null,
-                                'product_name' => $product ? $product->name : 'Unknown Product',
-                                'quantity' => $item['quantity'] ?? 0
-                            ];
-                        }
-                    }
-                    
-                    // Return formatted data
-                    return [
-                        'id' => $inventoryReturn->id,
-                        'driver_id' => $inventoryReturn->driver_id,
-                        'trip_id' => $inventoryReturn->trip_id,
-                        'items' => $itemsWithProductNames,
-                        'status' => $inventoryReturn->status,
-                        'remarks' => $inventoryReturn->remarks,
-                        'rejection_reason' => $inventoryReturn->rejection_reason,
-                        'approved_by' => $inventoryReturn->approved_by,
-                        'approved_by_name' => $approver ? $approver->name : null,
-                        'rejected_by' => $inventoryReturn->rejected_by,
-                        'rejected_by_name' => $rejector ? $rejector->name : null,
-                        'approved_at' => $inventoryReturn->approved_at,
-                        'rejected_at' => $inventoryReturn->rejected_at,
-                        'created_at' => $inventoryReturn->created_at,
-                        'updated_at' => $inventoryReturn->updated_at,
-                        'item_count' => $inventoryReturn->item_count,
-                        'total_quantity' => $inventoryReturn->total_quantity,
-                    ];
-                });
+            // Remove from warehouse
+            $warehouseInventory->decreaseQuantity($totalNeeded);
+
+            $processedLorries = [];
+            
+            foreach ($request->lorry_ids as $lorryId) {
+                $lorry = Lorry::find($lorryId);
+                
+                // Get or create inventory balance for this lorry
+                $inventoryBalance = InventoryBalance::firstOrCreate(
+                    ['lorry_id' => $lorryId],
+                    ['batches' => []]
+                );
+
+                // Add batch to lorry's inventory
+                $inventoryBalance->updateBatchQuantity(
+                    $productBatch->id, 
+                    $request->quantity_per_lorry, 
+                    'add'
+                );
+                
+                // Create inventory transaction for lorry (stock in)
+                InventoryTransaction::create([
+                    'type' => InventoryTransaction::TYPE_STOCK_IN,
+                    'lorry_id' => $lorryId,
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => $request->quantity_per_lorry,
+                    'date' => now(),
+                    'user' => $user->name,
+                    'remark' => 'Received from warehouse'
+                ]);
+
+                // Create inventory transaction for warehouse (stock out)
+                InventoryTransaction::create([
+                    'type' => InventoryTransaction::TYPE_STOCK_OUT,
+                    'warehouse_id' => $warehouseId,
+                    'lorry_id' => $lorryId,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => -$request->quantity_per_lorry,
+                    'date' => now(),
+                    'user' => $user->name,
+                    'remark' => "Distributed to van #{$lorry->lorryno}."
+                ]);
+                
+                $processedLorries[] = [
+                    'lorry_id' => $lorryId,
+                    'lorry_number' => $lorry->lorryno,
+                    'quantity_received' => $request->quantity_per_lorry
+                ];
+            }
+            
+            // Update batch status if quantity becomes 0
+            $productBatch->refresh();
+            if ($productBatch->quantity <= 0) {
+                $productBatch->status = 2; // Inactive
+                $productBatch->save();
+            }
+            
+            DB::commit();
 
             return response()->json([
-                'success' => true,
-                'message' => 'Stock Return Record retrieved successfully.',
-                'data' => $inventoryReturns
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Successfully distributed ' . $totalNeeded . ' units to ' . count($request->lorry_ids) . ' van(s).',
+                'data' => [
+                    'total_units_distributed' => $totalNeeded,
+                    'total_lorries' => count($request->lorry_ids),
+                    'quantity_per_lorry' => $request->quantity_per_lorry,
+                    'batch' => [
+                        'id' => $productBatch->id,
+                        'batch_code' => $productBatch->batch_code,
+                        'product_id' => $productBatch->product_id,
+                        'remaining_quantity' => $productBatch->quantity
+                    ],
+                    'warehouse' => [
+                        'id' => $warehouseId,
+                        'remaining_quantity' => $warehouseInventory->fresh()->quantity
+                    ],
+                    'lorries' => $processedLorries
+                ]
             ], 200);
+
         } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Stock In Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
             return response()->json([
-                'success' => false,
-                'message' => 'Failed to get stock return record: ' . $e->getMessage()
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error processing stock in: ' . $e->getMessage(),
+                'data' => null
             ], 200);
         }
     }
 
+    /**
+     * Get batches for a specific warehouse (AJAX)
+     */
+    public function apiGetWarehouseBatches(Request $request, $id)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        if (!$id) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator .'Warehouse Id is required',
+                'data' => null
+            ], 200);
+        }
+        $warehouse = Warehouse::find($id);
+        if (!$warehouse) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator .'Warehouse not found.',
+                'data' => null
+            ], 200);
+        }
+        try {
+            
+            $inventory = WarehouseInventoryBalance::with(['product', 'batch'])
+                ->where('warehouse_id', $id)
+                ->where('quantity', '>', 0) // Only show batches with stock
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'id' => $item->id,
+                        'batch_id' => $item->batch_id,
+                        'batch_code' => $item->batch ? $item->batch->batch_code : 'Unknown',
+                        'product_id' => $item->product_id,
+                        'product_name' => $item->product ? $item->product->name : 'Unknown',
+                        'product_code' => $item->product ? $item->product->code : 'Unknown',
+                        'quantity' => $item->quantity,
+                        'expiry_date' => $item->batch ? $item->batch->expiry_date : null,
+                        'formatted_expiry_date' => $item->batch ? $item->batch->formatted_expiry_date : 'N/A',
+                        'is_expiring_soon' => $item->batch ? $item->batch->isExpiringSoon() : false,
+                        'days_to_expiry' => $item->batch ? $item->batch->days_to_expiry : null,
+                    ];
+                });
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Warehouse batches retrieved successfully',
+                'data' => [
+                    'warehouse_id' => $id,
+                    'warehouse_name' => $warehouse->name,
+                    'warehouse_location' => $warehouse->location ?? null,
+                    'total_batches' => $inventory->count(),
+                    'total_quantity' => $inventory->sum('quantity'),
+                    'inventory' => $inventory
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('API Get Warehouse Batches Error: ' . $e->getMessage());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error loading warehouse batches: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    /**
+     * Stock Out API - Return batch from lorry to warehouse
+     */
+    public function Stockout(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'lorry_id' => 'required|exists:lorrys,id',
+            'batch_id' => 'required|exists:product_batches,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'quantity' => 'required|integer|min:1'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        // Check if lorry is active (status = 0) before allowing stock out
+        $lorry = Lorry::find($request->lorry_id);
+        if ($lorry->status != 0) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Cannot process stock out. This van is not currently in use.',
+                'data' => null
+            ], 200);
+        }
+
+        $inventoryBalance = InventoryBalance::where('lorry_id', $request->lorry_id)->first();
+
+        if (!$inventoryBalance) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'No inventory found for this van',
+                'data' => null
+            ], 200);
+        }
+
+        $currentQuantity = $inventoryBalance->getBatchQuantity($request->batch_id);
+
+        if ($currentQuantity < $request->quantity) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Insufficient quantity. Available: ' . $currentQuantity . ', Requested: ' . $request->quantity,
+                'data' => null
+            ], 200);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            // Remove from lorry inventory
+            $inventoryBalance->updateBatchQuantity(
+                $request->batch_id,
+                $request->quantity,
+                'subtract'
+            );
+
+            $batch = ProductBatch::find($request->batch_id);
+            
+            // Update batch quantity
+            $batch->quantity += $request->quantity;
+            $batch->save();
+
+            // Add to warehouse inventory
+            $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
+                [
+                    'warehouse_id' => $request->warehouse_id,
+                    'product_id' => $batch->product_id,
+                    'batch_id' => $request->batch_id,
+                ],
+                ['quantity' => 0]
+            );
+            
+            $warehouseInventory->increaseQuantity($request->quantity);
+
+            // Create inventory transaction for lorry (stock out)
+            InventoryTransaction::create([
+                'type' => InventoryTransaction::TYPE_RETURN,
+                'lorry_id' => $request->lorry_id,
+                'product_id' => $batch->product_id,
+                'batch_id' => $request->batch_id,
+                'quantity' => -$request->quantity,
+                'date' => now(),
+                'user' => $user->name,
+                'remark' => 'Returned from van to warehouse'
+            ]);
+
+            // Create inventory transaction for warehouse (stock in)
+            InventoryTransaction::create([
+                'type' => InventoryTransaction::TYPE_STOCK_IN,
+                'warehouse_id' => $request->warehouse_id,
+                'lorry_id' => $request->lorry_id,
+                'product_id' => $batch->product_id,
+                'batch_id' => $request->batch_id,
+                'quantity' => $request->quantity,
+                'date' => now(),
+                'user' => $user->name,
+                'remark' => 'Received from van'
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . $request->quantity . ' units returned from van to warehouse successfully.',
+                'data' => [
+                    'quantity_returned' => $request->quantity,
+                    'van' => [
+                        'id' => $request->lorry_id,
+                        'lorry_number' => $lorry->lorryno,
+                        'remaining_quantity' => $inventoryBalance->fresh()->getBatchQuantity($request->batch_id)
+                    ],
+                    'batch' => [
+                        'id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'product_id' => $batch->product_id,
+                        'new_quantity' => $batch->quantity
+                    ],
+                    'warehouse' => [
+                        'id' => $request->warehouse_id,
+                        'name' => $warehouseInventory->warehouse->name ?? null,
+                        'new_quantity' => $warehouseInventory->fresh()->quantity
+                    ]
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Stock Out Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error processing stock out: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    /**
+     * Get batches for a specific lorry (AJAX)
+     */
+    public function apiGetLorryBatches(Request $request, $id)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        if (!$id) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Lorry Id is required.',
+                'data' => null
+            ], 200);
+        }
+
+        $lorry = Lorry::find($id);
+        if (!$lorry) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Van not found.',
+                'data' => null
+            ], 200);
+        }
+        $inventoryBalance = InventoryBalance::where('lorry_id', $id)->first();
+        
+        if (!$inventoryBalance || empty($inventoryBalance->batches)) {
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'No inventory found for this van',
+                'data' => [
+                    'lorry_id' => $id,
+                    'lorry_number' => $lorry->lorryno,
+                    'lorry_status' => $lorry->status,
+                    'total_batches' => 0,
+                    'total_quantity' => 0,
+                    'batches' => []
+                ]
+            ], 200);
+        }
+
+        $batches = $inventoryBalance->batches_with_details;
+        $totalQuantity = array_sum($inventoryBalance->batches ?? []);
+        
+        // Format batches with warehouse info if available
+        $formattedBatches = [];
+        foreach ($batches as $batch) {
+            $formattedBatches[] = [
+                'batch_id' => $batch['batch_id'],
+                'batch_code' => $batch['batch_code'],
+                'product_name' => $batch['product_name'],
+                'quantity' => $batch['quantity'],
+                'expiry_date' => $batch['expiry_date'],
+            ];
+        }
+
+        return response()->json([
+            'result' => true,
+            'message' => __LINE__ . $this->message_separator . 'Batches retrieved successfully',
+            'data' => [
+                'lorry_id' => $request->lorry_id,
+                'lorry_number' => $lorry->lorryno,
+                'lorry_status' => $lorry->status,
+                'total_batches' => count($formattedBatches),
+                'total_quantity' => $totalQuantity,
+                'batches' => $formattedBatches
+            ]
+        ], 200);
+    }
+
+       
+    public function apiCreateWarehouse(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255|unique:warehouses,name',
+            'location' => 'nullable|string|max:255',
+            'status' => 'nullable|in:active,inactive' // Optional, defaults to 'active'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            // Create warehouse with default status 'active' if not provided
+            $warehouse = Warehouse::create([
+                'name' => $request->name,
+                'location' => $request->location,
+                'status' => $request->status ?? 'active',
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Warehouse created successfully.',
+                'data' => [
+                    'id' => $warehouse->id,
+                    'name' => $warehouse->name,
+                    'location' => $warehouse->location,
+                    'status' => $warehouse->status,
+                    'created_at' => $warehouse->created_at,
+                    'updated_at' => $warehouse->updated_at
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Create Warehouse Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error creating warehouse: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
     
+    public function apiUpdateWarehouse(Request $request, $id)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        // Find warehouse
+        $warehouse = Warehouse::find($id);
+        
+        if (!$warehouse) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Warehouse not found',
+                'data' => null
+            ], 200);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|required|string|max:255|unique:warehouses,name,' . $id,
+            'location' => 'nullable|string|max:255',
+            'status' => 'nullable|in:active,inactive'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        try {
+            // Prepare update data
+            $updateData = [];
+            
+            if ($request->has('name')) {
+                $updateData['name'] = $request->name;
+            }
+            
+            if ($request->has('location')) {
+                $updateData['location'] = $request->location;
+            }
+            
+            if ($request->has('status')) {
+                $updateData['status'] = $request->status;
+            }
+            
+            // Update warehouse
+            $warehouse->update($updateData);
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Warehouse updated successfully.',
+                'data' => [
+                    'id' => $warehouse->id,
+                    'name' => $warehouse->name,
+                    'location' => $warehouse->location,
+                    'status' => $warehouse->status,
+                    'updated_at' => $warehouse->updated_at
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('API Update Warehouse Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error updating warehouse: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    public function apiTransferStock(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'from_warehouse_id' => 'required|exists:warehouses,id',
+            'to_warehouse_id' => 'required|exists:warehouses,id|different:from_warehouse_id',
+            'batch_id' => 'required|exists:product_batches,id',
+            'quantity' => 'required|integer|min:1',
+            'remarks' => 'nullable|string|max:500'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        // Get warehouse details
+        $fromWarehouse = Warehouse::find($request->from_warehouse_id);
+        $toWarehouse = Warehouse::find($request->to_warehouse_id);
+        $batch = ProductBatch::with('product')->find($request->batch_id);
+
+        if (!$fromWarehouse || !$toWarehouse || !$batch) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Invalid warehouse or batch information',
+                'data' => null
+            ], 200);
+        }
+
+        // Check if source warehouse has the inventory
+        $sourceInventory = WarehouseInventoryBalance::where('warehouse_id', $request->from_warehouse_id)
+            ->where('batch_id', $request->batch_id)
+            ->first();
+
+        if (!$sourceInventory) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Batch not found in source warehouse',
+                'data' => null
+            ], 200);
+        }
+
+        if ($sourceInventory->quantity < $request->quantity) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Insufficient quantity in source warehouse. Available: ' . $sourceInventory->quantity . ', Requested: ' . $request->quantity,
+                'data' => null
+            ], 200);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            // Remove from source warehouse
+            $sourceInventory->decreaseQuantity($request->quantity);
+
+            // Add to destination warehouse
+            $destInventory = WarehouseInventoryBalance::firstOrCreate(
+                [
+                    'warehouse_id' => $request->to_warehouse_id,
+                    'product_id' => $batch->product_id,
+                    'batch_id' => $request->batch_id,
+                ],
+                ['quantity' => 0]
+            );
+            $destInventory->increaseQuantity($request->quantity);
+
+            // Create inventory transaction for source warehouse (Stock Out)
+            InventoryTransaction::create([
+                'warehouse_id' => $request->from_warehouse_id,
+                'product_id' => $batch->product_id,
+                'batch_id' => $request->batch_id,
+                'quantity' => -$request->quantity, // Negative for outgoing
+                'type' => InventoryTransaction::TYPE_TRANSFER,
+                'remark' => 'Stock transferred to warehouse: ' . $toWarehouse->name . ($request->remarks ? ' - ' . $request->remarks : ''),
+                'date' => now(),
+                'user' => $user->name,
+            ]);
+
+            // Create inventory transaction for destination warehouse (Stock In)
+            InventoryTransaction::create([
+                'warehouse_id' => $request->to_warehouse_id,
+                'product_id' => $batch->product_id,
+                'batch_id' => $request->batch_id,
+                'quantity' => $request->quantity, // Positive for incoming
+                'type' => InventoryTransaction::TYPE_TRANSFER,
+                'remark' => 'Stock received from warehouse: ' . $fromWarehouse->name . ($request->remarks ? ' - ' . $request->remarks : ''),
+                'date' => now(),
+                'user' => $user->name,
+            ]);
+
+            DB::commit();
+
+            // Get updated inventory balances
+            $sourceInventory->refresh();
+            $destInventory->refresh();
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . $request->quantity . ' units of ' . $batch->batch_code . ' transferred from ' . $fromWarehouse->name . ' to ' . $toWarehouse->name . ' successfully.',
+                'data' => [
+                    'transfer_details' => [
+                        'quantity' => $request->quantity,
+                        'batch_id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'product_id' => $batch->product_id,
+                        'product_name' => $batch->product->name,
+                        'from_warehouse' => [
+                            'id' => $fromWarehouse->id,
+                            'name' => $fromWarehouse->name,
+                            'remaining_quantity' => $sourceInventory->quantity
+                        ],
+                        'to_warehouse' => [
+                            'id' => $toWarehouse->id,
+                            'name' => $toWarehouse->name,
+                            'new_quantity' => $destInventory->quantity
+                        ],
+                        'remarks' => $request->remarks,
+                        'transferred_at' => now()->toDateTimeString(),
+                        'transferred_by' => $user->name
+                    ]
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Transfer Stock Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error transferring stock: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }   
 
 
+    public function apiCreateProduct(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'unit_code' => 'required|string|max:255|unique:products,unit_code',
+            'name' => 'required|string|max:255',
+            'price' => 'required|numeric|min:0',
+            'cost' => 'nullable|numeric|min:0',
+            'status' => 'required|in:0,1', // 0=inactive, 1=active
+            'type' => 'nullable|integer',
+            'classification_code' => 'nullable|string|max:50',
+            'carton_enabled' => 'nullable|boolean',
+            'units_per_carton' => 'nullable|integer|min:1|required_if:carton_enabled,1'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        // Check for quotes in name
+        if (str_contains($request->name, '"') || str_contains($request->name, "'")) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'The name cannot contain quotes',
+                'data' => null
+            ], 200);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            // Create product
+            $product = Product::create([
+                'unit_code' => $request->unit_code,
+                'name' => $request->name,
+                'price' => $request->price,
+                'cost' => $request->cost,
+                'status' => $request->status,
+                'type' => $request->type,
+                'classification_code' => $request->classification_code,
+                'carton_enabled' => $request->carton_enabled ?? false,
+                'units_per_carton' => $request->carton_enabled ? $request->units_per_carton : null
+            ]);
+
+            // Save initial cost to history if cost is provided
+            if (!empty($request->cost)) {
+                ProductCost::create([
+                    'product_id' => $product->id,
+                    'cost' => $request->cost,
+                    'old_cost' => null,
+                    'changed_by' => $user->id,
+                    'remarks' => 'Initial cost',
+                    'created_at' => now()
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Product created successfully',
+                'data' => [
+                    'id' => $product->id,
+                    'unit_code' => $product->unit_code,
+                    'name' => $product->name,
+                    'price' => $product->price,
+                    'cost' => $product->cost,
+                    'status' => $product->status,
+                    'type' => $product->type,
+                    'classification_code' => $product->classification_code,
+                    'carton_enabled' => $product->carton_enabled,
+                    'units_per_carton' => $product->units_per_carton,
+                    'created_at' => $product->created_at,
+                    'updated_at' => $product->updated_at
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Create Product Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error creating product: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    public function apiUpdateProduct(Request $request, $id)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $product = Product::find($id);
+        
+        if (!$product) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Product not found',
+                'data' => null
+            ], 200);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'unit_code' => 'sometimes|required|string|max:255|unique:products,unit_code,' . $id,
+            'name' => 'sometimes|required|string|max:255',
+            'price' => 'sometimes|required|numeric|min:0',
+            'cost' => 'nullable|numeric|min:0',
+            'status' => 'sometimes|required|in:0,1',
+            'type' => 'nullable|integer',
+            'classification_code' => 'nullable|string|max:50',
+            'carton_enabled' => 'nullable|boolean',
+            'units_per_carton' => 'nullable|integer|min:1|required_if:carton_enabled,1',
+            'cost_remarks' => 'nullable|string|max:255'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        // Check for quotes in name
+        if ($request->has('name') && (str_contains($request->name, '"') || str_contains($request->name, "'"))) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'The name cannot contain quotes',
+                'data' => null
+            ], 200);
+        }
+
+        try {
+            // Store old cost for history
+            $oldCost = $product->cost;
+            
+            // Prepare update data
+            $updateData = [];
+            
+            if ($request->has('unit_code')) {
+                $updateData['unit_code'] = $request->unit_code;
+            }
+            if ($request->has('name')) {
+                $updateData['name'] = $request->name;
+            }
+            if ($request->has('price')) {
+                $updateData['price'] = $request->price;
+            }
+            if ($request->has('cost')) {
+                $updateData['cost'] = $request->cost;
+            }
+            if ($request->has('status')) {
+                $updateData['status'] = $request->status;
+            }
+            if ($request->has('type')) {
+                $updateData['type'] = $request->type;
+            }
+            if ($request->has('classification_code')) {
+                $updateData['classification_code'] = $request->classification_code;
+            }
+            if ($request->has('carton_enabled')) {
+                $updateData['carton_enabled'] = $request->carton_enabled;
+            }
+            if ($request->has('units_per_carton')) {
+                $updateData['units_per_carton'] = $request->carton_enabled ? $request->units_per_carton : null;
+            }
+            
+            // Update product
+            $product->update($updateData);
+            
+            // If cost changed, save to history
+            $newCost = $request->cost;
+            if ($request->has('cost') && $oldCost != $newCost && !is_null($newCost)) {
+                ProductCost::create([
+                    'product_id' => $product->id,
+                    'cost' => $newCost,
+                    'old_cost' => $oldCost,
+                    'changed_by' => $user->id,
+                    'remarks' => $request->cost_remarks ?? 'Cost updated via API',
+                    'created_at' => now()
+                ]);
+            }
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Product updated successfully',
+                'data' => [
+                    'id' => $product->id,
+                    'unit_code' => $product->unit_code,
+                    'name' => $product->name,
+                    'price' => $product->price,
+                    'cost' => $product->cost,
+                    'status' => $product->status,
+                    'type' => $product->type,
+                    'classification_code' => $product->classification_code,
+                    'carton_enabled' => $product->carton_enabled,
+                    'units_per_carton' => $product->units_per_carton,
+                    'updated_at' => $product->updated_at
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('API Update Product Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error updating product: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    public function apiGetProducts(Request $request, $id = null)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        try {
+            // If ID is provided, return single product
+            if ($id) {
+                $product = Product::with(['batches' => function($query) {
+                    $query->where('quantity', '>', 0)
+                        ->orderBy('expiry_date', 'asc');
+                }])->find($id);
+                
+                if (!$product) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Product not found',
+                        'data' => null
+                    ], 200);
+                }
+                
+                // Get cost history
+                $costHistory = ProductCost::where('product_id', $product->id)
+                    ->with('changer')
+                    ->orderBy('created_at', 'desc')
+                    ->get()
+                    ->map(function($item) {
+                        return [
+                            'date' => $item->created_at->format('Y-m-d H:i:s'),
+                            'old_cost' => $item->old_cost,
+                            'new_cost' => $item->cost,
+                            'changed_by' => $item->changer->name ?? 'System',
+                            'remarks' => $item->remarks
+                        ];
+                    });
+                
+                // Format batches
+                $batches = $product->batches->map(function($batch) {
+                    return [
+                        'id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'quantity' => $batch->quantity,
+                        'expiry_date' => $batch->expiry_date,
+                        'formatted_expiry_date' => $batch->formatted_expiry_date,
+                        'days_to_expiry' => $batch->days_to_expiry,
+                        'is_expiring_soon' => $batch->isExpiringSoon(),
+                        'status' => $batch->status_text
+                    ];
+                });
+                
+                return response()->json([ 
+                    'result' => true,
+                    'message' => __LINE__ . $this->message_separator . 'Product retrieved successfully',
+                    'data' => [
+                        'product' => [
+                            'id' => $product->id,
+                            'unit_code' => $product->unit_code,
+                            'name' => $product->name,
+                            'price' => $product->price,
+                            'cost' => $product->cost,
+                            'status' => $product->status,
+                            'type' => $product->type,
+                            'classification_code' => $product->classification_code,
+                            'carton_enabled' => $product->carton_enabled,
+                            'units_per_carton' => $product->units_per_carton,
+                            'total_quantity' => $product->total_quantity,
+                            'active_batches_count' => $product->active_batches_count,
+                            'total_batches_count' => $product->total_batches_count,
+                            'current_stock_value' => $product->current_stock_value,
+                            'expiring_soon_quantity' => $product->expiring_soon_quantity,
+                            'expired_quantity' => $product->expired_quantity,
+                            'profit_margin' => $product->profit_margin,
+                            'profit_amount' => $product->profit_amount,
+                            'created_at' => $product->created_at,
+                            'updated_at' => $product->updated_at
+                        ],
+                        'batches' => $batches,
+                        'cost_history' => $costHistory,
+                        'inventory_summary' => $product->inventory_summary
+                    ]
+                ], 200);
+            }
+            
+            // Otherwise, return all products with filters
+            $query = Product::query();
+            
+            // Apply filters
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+            
+            if ($request->has('type')) {
+                $query->where('type', $request->type);
+            }
+            
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('unit_code', 'LIKE', "%{$search}%");
+                });
+            }
+            
+            if ($request->has('has_stock')) {
+                if ($request->has_stock) {
+                    $query->has('batches', '>', 0);
+                } else {
+                    $query->doesntHave('batches');
+                }
+            }
+            
+            if ($request->has('expiring_soon')) {
+                $query->whereHas('batches', function($q) {
+                    $q->where('expiry_date', '<=', now()->addDays(30))
+                    ->where('expiry_date', '>', now())
+                    ->where('quantity', '>', 0);
+                });
+            }
+            
+            // Sorting
+            $sortBy = $request->get('sort_by', 'name');
+            $sortOrder = $request->get('sort_order', 'asc');
+            $query->orderBy($sortBy, $sortOrder);
+            
+            // Pagination
+            $perPage = $request->get('per_page', 15);
+            $products = $query->paginate($perPage);
+            
+            // Format products
+            $formattedProducts = $products->map(function($product) {
+                return [
+                    'id' => $product->id,
+                    'unit_code' => $product->unit_code,
+                    'name' => $product->name,
+                    'price' => $product->price,
+                    'cost' => $product->cost,
+                    'status' => $product->status,
+                    'type' => $product->type,
+                    'classification_code' => $product->classification_code,
+                    'carton_enabled' => $product->carton_enabled,
+                    'units_per_carton' => $product->units_per_carton,
+                    'total_quantity' => $product->total_quantity,
+                    'active_batches_count' => $product->active_batches_count,
+                    'total_batches_count' => $product->total_batches_count,
+                    'current_stock_value' => $product->current_stock_value,
+                    'expiring_soon_quantity' => $product->expiring_soon_quantity,
+                    'expired_quantity' => $product->expired_quantity,
+                    'profit_margin' => $product->profit_margin,
+                    'profit_amount' => $product->profit_amount,
+                    'created_at' => $product->created_at,
+                    'updated_at' => $product->updated_at
+                ];
+            });
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Products retrieved successfully',
+                'data' => [
+                    'data' => $formattedProducts,
+                ]
+            ], 200);
+            
+        } catch (\Exception $e) {
+            \Log::error('API Get Products Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error retrieving products: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    public function apiGetUnitCodeOptionsWithCount(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        try {
+            // Get unit codes with product count
+            $unitCodes = Product::whereNotNull('unit_code')
+                ->select('unit_code', \DB::raw('count(*) as product_count'))
+                ->groupBy('unit_code')
+                ->orderBy('unit_code')
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'unit_code' => $item->unit_code,
+                        'product_count' => $item->product_count,
+                        'display' => $item->unit_code . ' (' . $item->product_count . ' product(s))'
+                    ];
+                });
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Unit code options retrieved successfully',
+                'data' => [
+                    'total' => $unitCodes->count(),
+                    'unit_codes' => $unitCodes
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('API Get Unit Code Options Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error retrieving unit code options: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    public function apiGetClassificationCodes(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        try {
+            $classificationCodes = \App\Models\ClassificationCode::orderBy('code')
+                ->get()
+                ->map(function($code) {
+                    return [
+                        'code' => $code->code,
+                        'description' => $code->description,
+                        'display' => $code->code . ' - ' . $code->description
+                    ];
+                });
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Classification codes retrieved successfully',
+                'data' => [
+                    'total' => $classificationCodes->count(),
+                    'classification_codes' => $classificationCodes
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('API Get Classification Codes Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error retrieving classification codes: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
 
 
+    public function apiCreateProductBatch(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'product_id' => 'required|exists:products,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'batch_code' => 'required|string|unique:product_batches,batch_code',
+            'expiry_date' => 'required|date|after:today',
+            'quantity' => 'nullable|integer|min:0',
+            'status' => 'nullable|in:1,2,3' // 1=active, 2=expired, 3=inactive
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        $input = $request->all();
+        $input['status'] = $request->status ?? ProductBatch::STATUS_ACTIVE;
+        
+        DB::beginTransaction();
+        
+        try {
+            // Create product batch
+            $productBatch = ProductBatch::create($input);
+            
+            // If quantity is provided and > 0, add to warehouse inventory
+            if (isset($input['quantity']) && $input['quantity'] > 0) {
+                // Add to warehouse inventory balance
+                $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
+                    [
+                        'warehouse_id' => $request->warehouse_id,
+                        'product_id' => $productBatch->product_id,
+                        'batch_id' => $productBatch->id,
+                    ],
+                    ['quantity' => 0]
+                );
+                
+                $warehouseInventory->increaseQuantity($input['quantity']);
+                
+                // Create inventory transaction for warehouse stock in
+                InventoryTransaction::create([
+                    'warehouse_id' => $request->warehouse_id,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => $input['quantity'],
+                    'type' => InventoryTransaction::TYPE_STOCK_IN,
+                    'remark' => 'Initial stock for batch: ' . $productBatch->batch_code,
+                    'date' => now(),
+                    'user' => $user->name
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Product batch created successfully',
+                'data' => [
+                    'id' => $productBatch->id,
+                    'product_id' => $productBatch->product_id,
+                    'product_name' => $productBatch->product->name ?? null,
+                    'batch_code' => $productBatch->batch_code,
+                    'expiry_date' => $productBatch->expiry_date,
+                    'formatted_expiry_date' => $productBatch->formatted_expiry_date,
+                    'quantity' => $productBatch->quantity,
+                    'status' => $productBatch->status,
+                    'status_text' => $productBatch->status_text,
+                    'days_to_expiry' => $productBatch->days_to_expiry,
+                    'is_expiring_soon' => $productBatch->isExpiringSoon(),
+                    'is_active' => $productBatch->isActive(),
+                    'created_at' => $productBatch->created_at,
+                    'updated_at' => $productBatch->updated_at
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Create Product Batch Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error creating product batch: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
 
 
+    public function apiUpdateProductBatch(Request $request, $id)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $productBatch = ProductBatch::find($id);
+        
+        if (!$productBatch) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Product batch not found',
+                'data' => null
+            ], 200);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'expiry_date' => 'nullable|date|after:today',
+            'status' => 'nullable|in:1,2,3' // 1=active, 2=expired, 3=inactive
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        try {
+            $updateData = [];
+            
+            // Update expiry date if provided
+            if ($request->has('expiry_date')) {
+                $updateData['expiry_date'] = $request->expiry_date;
+            }
+            
+            // Update status if provided
+            if ($request->has('status')) {
+                $updateData['status'] = $request->status;
+            }
+            
+            // Only update if there are changes
+            if (!empty($updateData)) {
+                $productBatch->update($updateData);
+            }
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Product batch updated successfully',
+                'data' => [
+                    'id' => $productBatch->id,
+                    'product_id' => $productBatch->product_id,
+                    'product_name' => $productBatch->product->name ?? null,
+                    'batch_code' => $productBatch->batch_code,
+                    'expiry_date' => $productBatch->expiry_date,
+                    'formatted_expiry_date' => $productBatch->formatted_expiry_date,
+                    'quantity' => $productBatch->quantity,
+                    'status' => $productBatch->status,
+                    'status_text' => $productBatch->status_text,
+                    'days_to_expiry' => $productBatch->days_to_expiry,
+                    'is_expiring_soon' => $productBatch->isExpiringSoon(),
+                    'is_active' => $productBatch->isActive(),
+                    'updated_at' => $productBatch->updated_at
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('API Update Product Batch Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error updating product batch: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
 
 
+    /**
+     * API: Get product batches (single or all) with barcode image
+     */
+    public function apiGetProductBatches(Request $request, $id = null)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        try {
+            // Helper function to generate barcode image base64
+            $generateBarcodeImage = function($batchCode) {
+                try {
+                    // Generate barcode image using DNS1D
+                    $barcodeImage = DNS1D::getBarcodePNG($batchCode, 'C128');
+                    
+                    // Remove the data:image/png;base64, prefix if present
+                    if (strpos($barcodeImage, 'base64,') !== false) {
+                        return substr($barcodeImage, strpos($barcodeImage, 'base64,') + 7);
+                    }
+                    
+                    return $barcodeImage;
+                } catch (\Exception $e) {
+                    \Log::error('Barcode generation error for ' . $batchCode . ': ' . $e->getMessage());
+                    return null;
+                }
+            };
+            
+            // If ID is provided, return single batch
+            if ($id) {
+                $productBatch = ProductBatch::with(['product', 'inventoryTransactions' => function($query) {
+                    $query->orderBy('created_at', 'desc')->limit(50);
+                }])->find($id);
+                
+                if (!$productBatch) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Product batch not found',
+                        'data' => null
+                    ], 200);
+                }
+                
+                // Generate barcode image for this batch
+                $barcodeImage = $generateBarcodeImage($productBatch->batch_code);
+                
+                // Get warehouse balances for this batch
+                $warehouseBalances = WarehouseInventoryBalance::where('batch_id', $productBatch->id)
+                    ->with('warehouse')
+                    ->get()
+                    ->map(function($balance) {
+                        return [
+                            'warehouse_id' => $balance->warehouse_id,
+                            'warehouse_name' => $balance->warehouse->name ?? 'Unknown',
+                            'quantity' => $balance->quantity
+                        ];
+                    });
+  
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__ . $this->message_separator . 'Product batch retrieved successfully',
+                    'data' => [
+                        'batch' => [
+                            'id' => $productBatch->id,
+                            'product_id' => $productBatch->product_id,
+                            'product_name' => $productBatch->product->name ?? null,
+                            'product_code' => $productBatch->product->unit_code ?? null,
+                            'batch_code' => $productBatch->batch_code,
+                            'barcode_image' => $barcodeImage, // Base64 encoded barcode
+                            'barcode_image_url' => route('productBatches.download-barcode', ['batchCode' => $productBatch->batch_code]), 
+                            'expiry_date' => $productBatch->expiry_date,
+                            'formatted_expiry_date' => $productBatch->formatted_expiry_date,
+                            'quantity' => $productBatch->quantity,
+                            'status' => $productBatch->status,
+                            'status_text' => $productBatch->status_text,
+                            'status_badge_class' => $productBatch->status_badge_class,
+                            'days_to_expiry' => $productBatch->days_to_expiry,
+                            'is_expired' => $productBatch->isExpired(),
+                            'is_expiring_soon' => $productBatch->isExpiringSoon(),
+                            'is_active' => $productBatch->isActive(),
+                            'has_stock' => $productBatch->hasStock(),
+                            'created_at' => $productBatch->created_at,
+                            'updated_at' => $productBatch->updated_at
+                        ],
+                    ]
+                ], 200);
+            }
+            
+            // Otherwise, return all batches with filters
+            $query = ProductBatch::with('product');
+            
+            // Apply filters
+            if ($request->has('product_id')) {
+                $query->where('product_id', $request->product_id);
+            }
+            
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+            
+            if ($request->has('has_stock')) {
+                if ($request->has_stock) {
+                    $query->where('quantity', '>', 0);
+                } else {
+                    $query->where('quantity', '<=', 0);
+                }
+            }
+            
+            if ($request->has('expired')) {
+                if ($request->expired) {
+                    $query->expired();
+                } else {
+                    $query->where('expiry_date', '>', now());
+                }
+            }
+            
+            if ($request->has('expiring_soon')) {
+                $days = $request->get('expiring_soon_days', 30);
+                $query->where('expiry_date', '<=', now()->addDays($days))
+                    ->where('expiry_date', '>', now());
+            }
+            
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('batch_code', 'LIKE', "%{$search}%")
+                    ->orWhereHas('product', function($pq) use ($search) {
+                        $pq->where('name', 'LIKE', "%{$search}%")
+                            ->orWhere('unit_code', 'LIKE', "%{$search}%");
+                    });
+                });
+            }
+            
+            // Apply sorting
+            $sortBy = $request->get('sort_by', 'expiry_date');
+            $sortOrder = $request->get('sort_order', 'asc');
+            
+            if ($sortBy == 'product_name') {
+                $query->join('products', 'product_batches.product_id', '=', 'products.id')
+                    ->orderBy('products.name', $sortOrder)
+                    ->select('product_batches.*');
+            } else {
+                $query->orderBy($sortBy, $sortOrder);
+            }
+                        
+            // Pagination
+            $perPage = $request->get('per_page', 15);
+            $batches = $query->paginate($perPage);
+            
+            // Format batches
+            $formattedBatches = $batches->map(function($batch) use ($generateBarcodeImage) {
+                $batchData = [
+                    'id' => $batch->id,
+                    'product_id' => $batch->product_id,
+                    'product_name' => $batch->product->name ?? null,
+                    'product_code' => $batch->product->unit_code ?? null,
+                    'batch_code' => $batch->batch_code,
+                    'barcode_image' => $generateBarcodeImage($batch->batch_code),
+                    'expiry_date' => $batch->expiry_date,
+                    'formatted_expiry_date' => $batch->formatted_expiry_date,
+                    'quantity' => $batch->quantity,
+                    'status' => $batch->status,
+                    'status_text' => $batch->status_text,
+                    'days_to_expiry' => $batch->days_to_expiry,
+                    'is_expired' => $batch->isExpired(),
+                    'is_expiring_soon' => $batch->isExpiringSoon(),
+                    'is_active' => $batch->isActive(),
+                    'has_stock' => $batch->hasStock(),
+                    'created_at' => $batch->created_at,
+                    'updated_at' => $batch->updated_at
+                ];
+                
+                
+                return $batchData;
+            });
+            
+            $responseData = [
+                'data' => $formattedBatches,
+                'total' => $batches->total()
+            ];
+            
+            // Add summary statistics
+            if ($request->get('include_summary', false)) {
+                $responseData['summary'] = [
+                    'total_batches' => $batches->total(),
+                    'total_quantity' => $batches->sum('quantity'),
+                    'active_batches' => $batches->where('status', ProductBatch::STATUS_ACTIVE)->count(),
+                    'expired_batches' => $batches->where('status', ProductBatch::STATUS_EXPIRED)->count(),
+                    'inactive_batches' => $batches->where('status', ProductBatch::STATUS_INACTIVE)->count(),
+                    'expiring_soon_count' => $batches->filter(function($batch) {
+                        return $batch->isExpiringSoon();
+                    })->count()
+                ];
+            }
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Product batches retrieved successfully',
+                'data' => $responseData
+            ], 200);
+            
+        } catch (\Exception $e) {
+            \Log::error('API Get Product Batches Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error retrieving product batches: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+  
+    /**
+     * API: Stock in - Add quantity to product batch using batch code
+     * Mobile app scans barcode and sends batch_code in request
+     */
+    public function apiStockIn(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'batch_code' => 'required|string|exists:product_batches,batch_code',
+            'quantity' => 'required|integer|min:1',
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'remark' => 'nullable|string|max:255'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        // Find product batch by batch code
+        $productBatch = ProductBatch::where('batch_code', $request->batch_code)->first();
+        
+        if (!$productBatch) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Product batch not found with code: ' . $request->batch_code,
+                'data' => null
+            ], 200);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $quantity = $request->quantity;
+            $warehouseId = $request->warehouse_id;
+            $warehouse = Warehouse::find($warehouseId);
+
+            // Update batch quantity
+            $oldQuantity = $productBatch->quantity;
+            $productBatch->increment('quantity', $quantity);
+
+            // Update status to Active if it was Inactive
+            if ($productBatch->status == ProductBatch::STATUS_INACTIVE) {
+                $productBatch->status = ProductBatch::STATUS_ACTIVE;
+                $productBatch->save();
+            }
+
+            // Add to warehouse inventory balance
+            $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
+                [
+                    'warehouse_id' => $warehouseId,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                ],
+                ['quantity' => 0]
+            );
+            
+            $oldWarehouseQuantity = $warehouseInventory->quantity;
+            $warehouseInventory->increaseQuantity($quantity);
+
+            // Create inventory transaction
+            InventoryTransaction::create([
+                'warehouse_id' => $warehouseId,
+                'product_id' => $productBatch->product_id,
+                'batch_id' => $productBatch->id,
+                'quantity' => $quantity,
+                'type' => InventoryTransaction::TYPE_STOCK_IN,
+                'remark' => ($request->remark ?? 'Stock in from mobile app') . ' - Warehouse: ' . $warehouse->name,
+                'date' => now(),
+                'user' => $user->name
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . $quantity . ' units added to batch successfully',
+                'data' => [
+                    'batch' => [
+                        'id' => $productBatch->id,
+                        'batch_code' => $productBatch->batch_code,
+                        'product_id' => $productBatch->product_id,
+                        'product_name' => $productBatch->product->name ?? null,
+                        'product_code' => $productBatch->product->unit_code ?? null,
+                        'status' => $productBatch->status_text,
+                        'is_active' => $productBatch->isActive(),
+                        'expiry_date' => $productBatch->formatted_expiry_date,
+                        'days_to_expiry' => $productBatch->days_to_expiry,
+                        'is_expiring_soon' => $productBatch->isExpiringSoon()
+                    ],
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Stock In Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error processing stock in: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
+
+    /**
+     * API: Stock out - Remove quantity from product batch using batch code
+     * Mobile app scans barcode and sends batch_code in request
+     */
+    public function apiStockOut(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'batch_code' => 'required|string|exists:product_batches,batch_code',
+            'quantity' => 'required|integer|min:1',
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'remark' => 'nullable|string|max:255'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                'data' => null
+            ], 200);
+        }
+
+        // Find product batch by batch code
+        $productBatch = ProductBatch::where('batch_code', $request->batch_code)->first();
+        
+        if (!$productBatch) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Product batch not found with code: ' . $request->batch_code,
+                'data' => null
+            ], 200);
+        }
+
+        // Check if batch is expired
+        if ($productBatch->isExpired()) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Cannot remove stock from expired batch',
+                'data' => [
+                    'batch_code' => $productBatch->batch_code,
+                    'expiry_date' => $productBatch->formatted_expiry_date,
+                    'current_quantity' => $productBatch->quantity
+                ]
+            ], 200);
+        }
+
+        // Check if requested quantity is available
+        if ($productBatch->quantity < $request->quantity) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Insufficient stock. Available: ' . $productBatch->quantity . ', Requested: ' . $request->quantity,
+                'data' => [
+                    'batch_code' => $productBatch->batch_code,
+                    'available_quantity' => $productBatch->quantity,
+                    'requested_quantity' => $request->quantity
+                ]
+            ], 200);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $quantity = $request->quantity;
+            $warehouseId = $request->warehouse_id;
+            $warehouse = Warehouse::find($warehouseId);
+
+            // Check if warehouse has this batch with sufficient quantity
+            $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+                ->where('batch_id', $productBatch->id)
+                ->first();
+
+            if (!$warehouseInventory || $warehouseInventory->quantity < $quantity) {
+                $available = $warehouseInventory ? $warehouseInventory->quantity : 0;
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'Insufficient quantity in ' . $warehouse->name . '. Available: ' . $available,
+                    'data' => [
+                        'batch_code' => $productBatch->batch_code,
+                        'warehouse_name' => $warehouse->name,
+                        'available_in_warehouse' => $available,
+                        'requested_quantity' => $quantity
+                    ]
+                ], 200);
+            }
+
+            // Store old values for response
+            $oldQuantity = $productBatch->quantity;
+            $oldWarehouseQuantity = $warehouseInventory->quantity;
+            
+            // Update batch quantity
+            $productBatch->decrement('quantity', $quantity);
+            
+            // Remove from warehouse inventory balance
+            $warehouseInventory->decreaseQuantity($quantity);
+            
+            // Update status based on remaining quantity
+            $statusChanged = false;
+            $oldStatus = $productBatch->status_text;
+            
+            if ($productBatch->quantity <= 0) {
+                $productBatch->status = ProductBatch::STATUS_INACTIVE;
+                $productBatch->save();
+                $statusChanged = true;
+            }
+
+            // Create inventory transaction
+            InventoryTransaction::create([
+                'warehouse_id' => $warehouseId,
+                'product_id' => $productBatch->product_id,
+                'batch_id' => $productBatch->id,
+                'quantity' => -$quantity,
+                'type' => InventoryTransaction::TYPE_STOCK_OUT,
+                'remark' => ($request->remark ?? 'Stock out from mobile app') . ' - Warehouse: ' . $warehouse->name,
+                'date' => now(),
+                'user' => $user->name
+            ]);
+
+            DB::commit();
+
+            $responseData = [
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . $quantity . ' units removed from batch successfully',
+                'data' => [
+                    'batch' => [
+                        'id' => $productBatch->id,
+                        'batch_code' => $productBatch->batch_code,
+                        'product_id' => $productBatch->product_id,
+                        'product_name' => $productBatch->product->name ?? null,
+                        'product_code' => $productBatch->product->unit_code ?? null,
+                        'status' => $productBatch->status_text,
+                        'expiry_date' => $productBatch->formatted_expiry_date,
+                        'days_to_expiry' => $productBatch->days_to_expiry,
+                        'is_expiring_soon' => $productBatch->isExpiringSoon()
+                    ],
+                ]
+            ];
+
+            // Add warning if batch is now depleted
+            if ($productBatch->quantity <= 0) {
+                $responseData['data']['warning'] = 'Batch is now depleted and has been marked as inactive.';
+            }
+            
+            // Add warning if batch is expiring soon
+            if ($productBatch->isExpiringSoon()) {
+                $responseData['data']['warning'] = 'Warning: This batch is expiring in ' . $productBatch->days_to_expiry . ' days.';
+            }
+
+            return response()->json($responseData, 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('API Stock Out Error: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error processing stock out: ' . $e->getMessage(),
+                'data' => null
+            ], 200);
+        }
+    }
 
 }

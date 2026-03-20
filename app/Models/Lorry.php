@@ -45,6 +45,7 @@ class Lorry extends Model
 
     public $fillable = [
         'lorryno',
+        'driver_id',
         'status',
         'remark'
     ];
@@ -68,6 +69,7 @@ class Lorry extends Model
      */
     public static $rules = [
         'lorryno' => 'required|string|max:255|unique:lorrys,lorryno',
+        'driver_id' => 'nullable',
         'status' => 'required',
         'remark' => 'nullable|string|max:255'
     ];

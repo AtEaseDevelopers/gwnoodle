@@ -96,11 +96,9 @@ Route::group(['prefix' => 'v1'], function () {
 
 
     //manager
-    Route::get('/driver/get-driver-product', [App\Http\Controllers\Api\V1\DriverController::class, 'getDriverProduct']);
-    Route::get('/driver/stock-request-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockRequest']);
-    Route::get('/driver/stock-return-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockReturn']);
-    Route::post('/driver/stock-request-approve', [App\Http\Controllers\Api\V1\DriverController::class, 'approveStockRequest']);
-    Route::post('/driver/stock-request-reject', [App\Http\Controllers\Api\V1\DriverController::class, 'rejectStockRequest']);
+    Route::get('/driver/get-warehouse-balance/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getWarehouseInventory']);
+    Route::get('/driver/get-driver-product/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getDriverProduct']);
+
     Route::get('/driver/stock-count-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockCount']);
     Route::post('/driver/stock-count-approve', [App\Http\Controllers\Api\V1\DriverController::class, 'approveStockCount']);
     Route::post('/driver/stock-return', [App\Http\Controllers\Api\V1\DriverController::class, 'StockReturn']);
@@ -108,6 +106,35 @@ Route::group(['prefix' => 'v1'], function () {
     Route::post('/driver/manager-login', [App\Http\Controllers\Api\V1\DriverController::class, 'managerLogin']);
     Route::post('/driver/manager-logout', [App\Http\Controllers\Api\V1\DriverController::class, 'managerLogout']);
 
+    //stock in 
+    Route::post('/driver/stock-in', [App\Http\Controllers\Api\V1\DriverController::class, 'Stockin']);
+    Route::get('/driver/get-warehouse-batches/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetWarehouseBatches']);
+
+    // stock out
+    Route::post('/driver/stock-out', [App\Http\Controllers\Api\V1\DriverController::class, 'Stockout']);
+    Route::get('/driver/get-lorry-batches/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetLorryBatches']);
+
+    //warehouse
+    Route::post('/driver/create-warehouse', [App\Http\Controllers\Api\V1\DriverController::class, 'apiCreateWarehouse']);
+    Route::post('/driver/update-warehouse/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiUpdateWarehouse']);
+    //transfer stock
+    Route::post('/driver/stock-transfer', [App\Http\Controllers\Api\V1\DriverController::class, 'apiTransferStock']);
+
+    //product
+    Route::post('/driver/create-product', [App\Http\Controllers\Api\V1\DriverController::class, 'apiCreateProduct']);
+    Route::post('/driver/update-product/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiUpdateProduct']);
+    Route::get('/driver/get-product-listing/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetProducts']);
+    
+    Route::get('/driver/get-product-unit-code', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetUnitCodeOptionsWithCount']);
+    Route::get('/driver/get-classification-code', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetClassificationCodes']);
+
+    //productbatch
+    Route::post('/driver/create-product-batch', [App\Http\Controllers\Api\V1\DriverController::class, 'apiCreateProductBatch']);
+    Route::post('/driver/update-product-batch/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiUpdateProductBatch']);
+    Route::get('/driver/get-product-batch-listing/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetProductBatches']);
+
+    Route::post('/driver/stock-in-product-batch', [App\Http\Controllers\Api\V1\DriverController::class, 'apiCreateProductBatch']);
+    Route::post('/driver/stock-out-product-batch', [App\Http\Controllers\Api\V1\DriverController::class, 'apiUpdateProductBatch']);
 
 
 });

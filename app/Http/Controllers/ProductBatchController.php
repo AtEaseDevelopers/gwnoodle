@@ -554,7 +554,7 @@ class ProductBatchController extends AppBaseController
                     'batch_id' => $productBatch->id,
                     'quantity' => -$quantity,
                     'type' => 2, // Stock Out
-                    'remark' => ($request->remark ?? 'Stock out from barcode scan') . ' - Warehouse: ' . $warehouse->name,
+                    'remark' => ('Stock out from barcode scan') . ' - Warehouse: ' . $warehouse->name,
                     'date' => now(),
                     'user' => Auth::user()->name ?? 'system'
                 ]);

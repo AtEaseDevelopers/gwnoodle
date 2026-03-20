@@ -25,7 +25,7 @@
         $driver = $request->driver;
     @endphp
     
-    @if($request->status == 'pending' | $isAdmin)
+    @if($request->status == 'pending')
         <button type="button" class="btn btn-ghost-primary edit-count-btn" title="Edit Count"
                 data-id="{{ $request->id }}"
                 data-request='{

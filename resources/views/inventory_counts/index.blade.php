@@ -2042,11 +2042,16 @@
                             if (batch.counted_quantity && batch.warehouse_id) {
                                 var warehouseId = batch.warehouse_id;
                                 var warehouseName = warehousesLookup[warehouseId] ? warehousesLookup[warehouseId].name : 'Warehouse ' + warehouseId;
+
+                                var quantity = parseFloat(batch.counted_quantity);
+                                if (isNaN(quantity)) {
+                                    quantity = 0;
+                                }
                                 
                                 if (!warehouseSummary[warehouseName]) {
                                     warehouseSummary[warehouseName] = 0;
                                 }
-                                warehouseSummary[warehouseName] += batch.counted_quantity;
+                                warehouseSummary[warehouseName] += quantity;
                             }
                         });
                     }
@@ -2070,9 +2075,6 @@
             var variancePercentage = totalCurrent > 0 ? ((totalDifference / totalCurrent) * 100).toFixed(2) : 0;
             var percentageClass = totalDifference > 0 ? 'difference-positive' : (totalDifference < 0 ? 'difference-negative' : '');
             
-            summaryHtml += '<tr><td>Variance Percentage</td><td class="' + percentageClass + '">' + 
-                        (totalDifference !== 0 ? (totalDifference > 0 ? '+' : '') + variancePercentage + '%' : '0%') + '</td></tr>';
-            
             // Add status summary
             var statusSummary = '';
             if (totalDifference === 0) {
@@ -2083,7 +2085,6 @@
                 statusSummary = '<span class="badge badge-danger">Shortage (' + totalDifference + ')</span>';
             }
             
-            summaryHtml += '<tr><td>Overall Status</td><td>' + statusSummary + '</td></tr>';
             summaryHtml += '<tr><td>Total Current</td><td>' + totalCurrent + '</td></tr>';
             summaryHtml += '<tr><td>Total Counted</td><td>' + (totalCounted > 0 ? totalCounted : '-') + '</td></tr>';
             summaryHtml += '<tr><td>Net Difference</td><td class="' + totalDiffClass + '"><strong>' + totalDiffDisplay + '</strong></td></tr>';

@@ -377,7 +377,7 @@ Route::group(['middleware' => ['auth']], function() {
         // Utility routes
         Route::get('/productBatches/check-expiry', [App\Http\Controllers\ProductBatchController::class, 'checkExpiry'])->name('productBatches.check-expiry');
         Route::get('/productBatches/{id}/print-label', [App\Http\Controllers\ProductBatchController::class, 'printLabel'])->name('productBatches.print-label');
-    Route::get('/productBatches/by-product/{productId}', [App\Http\Controllers\ProductBatchController::class, 'getBatchesByProduct'])->name('productBatches.by-product');
+        Route::get('/productBatches/by-product/{productId}', [App\Http\Controllers\ProductBatchController::class, 'getBatchesByProduct'])->name('productBatches.by-product');
         
         // Barcode generation routes
         Route::post('/productBatches/generate-barcode-preview', [App\Http\Controllers\ProductBatchController::class, 'generateBarcodePreview'])->name('productBatches.generate-barcode-preview');

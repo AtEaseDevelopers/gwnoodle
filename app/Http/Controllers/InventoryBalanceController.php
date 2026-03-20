@@ -84,6 +84,17 @@ class InventoryBalanceController extends AppBaseController
                 ->withInput();
         }
 
+        $activeLorries = Lorry::whereIn('id', $request->lorry_ids)
+            ->where('status', 1) // Assuming 1 = active/in use
+            ->pluck('lorryno')
+            ->toArray();
+
+        if (!empty($activeLorries)) {
+            $activeLorryNumbers = implode(', ', $activeLorries);
+            Flash::error("Cannot stock in to vans: {$activeLorryNumbers}. The selected van currently not in use.");
+            return redirect()->back()->withInput();
+        }
+        
         $productBatch = ProductBatch::find($request->product_batch_id);
         $warehouseId = $request->warehouse_id;
         
