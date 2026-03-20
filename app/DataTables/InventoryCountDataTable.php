@@ -32,6 +32,13 @@ class InventoryCountDataTable extends DataTable
             return '<span class="badge ' . $badgeClass . '">' . ucfirst($request->status) . '</span>';
         });
 
+        $dataTable->addColumn('lorry', function($request) {
+            if ($request->lorry) {
+                return $request->lorry->lorryno;
+            }
+            return '-';
+        });
+        
         $dataTable->addColumn('approved_by', function($request) {
             if ($request->status === 'approved' && $request->approver) {
                 return $request->approver->name;
@@ -186,6 +193,7 @@ class InventoryCountDataTable extends DataTable
         $query = $model->newQuery()
             ->with([
                 'driver:id,name',
+                'lorry',
                 'approver:id,name',
                 'rejector:id,name'
             ])
@@ -460,6 +468,15 @@ class InventoryCountDataTable extends DataTable
                 'searchable' => true,
                 'orderable' => true,
                 'width' => '150px'
+            ],
+            [
+                'title' => 'Van',  
+                'data' => 'lorry',
+                'name' => 'lorry.license_plate',
+                'searchable' => true,
+                'orderable' => true,
+                'width' => '120px',
+                'defaultContent' => '-'
             ],
             [
                 'title' => 'Items',

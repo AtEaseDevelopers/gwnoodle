@@ -120,13 +120,19 @@
                     {!! Form::open(['route' => ['inventoryCounts.update', ':id'], 'method' => 'PUT', 'id' => 'editCountForm']) !!}
                     
                     <div class="row mb-4">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="form-group">
                                 <label class="col-form-label"><strong>Driver:</strong></label>
                                 <p id="editCountDriverName" class="form-control-static font-weight-bold"></p>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="col-form-label"><strong>Lorry:</strong></label>
+                                <p id="editCountLorryName" class="form-control-static"></p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <div class="form-group">
                                 <label class="col-form-label"><strong>Requested At:</strong></label>
                                 <p id="editCountRequestedAt" class="form-control-static"></p>
@@ -199,6 +205,10 @@
                                     <tr>
                                         <th>Driver:</th>
                                         <td id="viewDriverName"></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Van:</th>
+                                        <td id="viewLorryName"> </td>
                                     </tr>
                                     <tr>
                                         <th>Status:</th>
@@ -848,6 +858,7 @@
                 
                 // Fill view modal with data
                 $('#viewDriverName').text(requestData ? (requestData.driver_name || 'N/A') : 'N/A');
+                $('#viewLorryName').text(requestData ? (requestData.lorry_data || 'N/A') : 'N/A');
                 $('#viewRemarks').text(requestData ? (requestData.remarks || 'No remarks') : 'No remarks');
                 $('#viewCreatedAt').text(requestData ? (requestData.created_at || 'N/A') : 'N/A');
                 
@@ -870,7 +881,10 @@
                     success: function(response) {
                         console.log('View data response:', response);
                         if (response.success) {
+                            $('#viewLorryName').text(response.data.lorry_data || 'N/A');
+
                             displayViewModalWithBatches(response.data);
+                            
                             // Update status sections with the full data
                             updateStatusSections(response.data.status, response.data);
                         } else {
@@ -892,12 +906,10 @@
             $(document).on('click', '.edit-count-btn', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Edit button clicked');
                 
                 var requestId = $(this).data('id');
                 var requestData = $(this).data('request');
                 
-                console.log('Edit request ID:', requestId);
                 console.log('Edit request data:', requestData);
                 
                 // Parse JSON string if needed
@@ -914,7 +926,6 @@
                 
                 // Update modal title
                 $('#editCountRequestId').text('(#' + requestId + ')');
-                
                 // Fill basic info
                 $('#editCountDriverName').text(requestData ? (requestData.driver_name || 'N/A') : 'N/A');
                 $('#editCountRequestedAt').text(requestData ? (requestData.requested_at || requestData.created_at || 'N/A') : 'N/A');
@@ -934,11 +945,10 @@
                     url: '{{ route("inventoryCounts.withBatches", "") }}/' + requestId,
                     type: 'GET',
                     success: function(response) {
-                        console.log('Edit data response:', response);
                         if (response.success && response.data && response.data.items) {
                             var data = response.data;
                             var itemIndex = 0;
-                            
+                            $('#editCountLorryName').text(data.lorry_data || 'N/A');
                             $('#editCountItemsBody').empty();
                             
                             data.items.forEach(function(item) {
@@ -1909,7 +1919,6 @@
                             // Ensure we're working with numbers
                             var currentQty = parseFloat(batch.current_quantity) || 0;
                             var countedQty = batch.counted_quantity !== null && batch.counted_quantity !== undefined ? parseFloat(batch.counted_quantity) : null;
-                            console.log('batch item :', batch);
                             // Get warehouse info
                             var warehouseName = batch.warehouse;
                           

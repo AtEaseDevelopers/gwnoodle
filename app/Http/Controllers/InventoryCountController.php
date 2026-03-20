@@ -29,6 +29,7 @@ class InventoryCountController extends Controller
         $products = Product::all();
         $statuses = InventoryCount::getStatusOptions();
         $warehouses = Warehouse::where('status', 'active')->orderBy('name')->get(); // Add this
+        $lorries = Lorry::where('status', 1)->get(); // Add this
 
         // Pass filter parameters to DataTable
         $dataTable = $dataTable
@@ -46,7 +47,7 @@ class InventoryCountController extends Controller
         }
 
         // Return view with DataTable for regular requests
-        return $dataTable->render('inventory_counts.index', compact('drivers', 'products', 'statuses','warehouses'));
+        return $dataTable->render('inventory_counts.index', compact('drivers', 'products', 'statuses','warehouses','lorries'));
     }
 
     /**
@@ -317,8 +318,8 @@ class InventoryCountController extends Controller
 
         // Get driver's latest trip
         $latestTrip = Trip::where('driver_id', $request->driver_id)
-            ->where('type', 1)
-            ->orderBy('date', 'desc')
+            ->where('uuid', $driver->trip_id)
+            ->where('type', Trip::START_TRIP)
             ->first();
 
         if (!$latestTrip) {
@@ -331,7 +332,19 @@ class InventoryCountController extends Controller
             Flash::error('Driver does not have an active trip.');
             return redirect(route('inventoryCounts.index'));
         }
-
+        if ($latestTrip) {
+            $inventoryCountRecord = InventoryCount::where('trip_id',$latestTrip->id)->first();
+            if($inventoryCountRecord && $inventoryCountRecord->status == InventoryCount::STATUS_APPROVED){
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This Driver already have complete Stock Out record, can proceed to End Trip.'
+                    ], 422);
+                }
+                Flash::error('This Driver already have complete Stock Out record, can proceed to End Trip.');
+                return redirect(route('inventoryCounts.index'));
+            }
+        }
         // Check for existing pending count for this driver and trip
         $existingCount = InventoryCount::where('driver_id', $request->driver_id)
             ->where('trip_id', $latestTrip->id)
@@ -409,6 +422,7 @@ class InventoryCountController extends Controller
                 'driver_id' => $request->driver_id,
                 'trip_id' => $latestTrip->id,
                 'items' => $formattedItems,
+                'lorry_id'=> $latestTrip->lorry_id,
                 'status' => InventoryCount::STATUS_PENDING,
                 'remarks' => $request->remarks,
             ]);
@@ -444,7 +458,7 @@ class InventoryCountController extends Controller
     public function getCountWithBatches($id)
     {
         try {
-            $inventoryCount = InventoryCount::with(['driver', 'approver', 'rejector'])->findOrFail($id);
+            $inventoryCount = InventoryCount::with(['driver', 'lorry','approver', 'rejector'])->findOrFail($id);
 
             // Get driver's latest trip for lorry info
             $latestTrip = Trip::where('driver_id', $inventoryCount->driver_id)
@@ -535,11 +549,16 @@ class InventoryCountController extends Controller
                 }
             }
 
+            $lorryData = null;
+            if ($inventoryCount->lorry_id) {
+                $lorryData = $inventoryCount->lorry->lorryno;
+            }
             $responseData = [
                 'id' => $inventoryCount->id,
                 'driver_id' => $inventoryCount->driver_id,
                 'driver_name' => $inventoryCount->driver->name ?? 'N/A',
                 'trip_id' => $inventoryCount->trip_id,
+                'lorry_data' => $lorryData,  // Add lorry data
                 'status' => $inventoryCount->status,
                 'remarks' => $inventoryCount->remarks,
                 'created_at' => $inventoryCount->created_at ? $inventoryCount->created_at->format('Y-m-d H:i:s') : null,
@@ -578,7 +597,7 @@ class InventoryCountController extends Controller
      */
     public function show($id)
     {
-        $count = InventoryCount::with(['driver', 'approver', 'rejector'])->findOrFail($id);
+        $count = InventoryCount::with(['driver','lorry', 'approver', 'rejector'])->findOrFail($id);
 
         return view('inventory_counts.show', compact('count'));
     }
@@ -805,6 +824,12 @@ class InventoryCountController extends Controller
                     'approved_at' => now(),
                 ]);
                 
+                //remove driver inventory balance
+                $inventoryBalance = InventoryBalance::where('lorry_id', $inventoryCount->lorry_id)->first();
+                if ($inventoryBalance) {
+                    $inventoryBalance->delete();
+                }                
+
                 \DB::commit();
             } catch (\Exception $e) {
                 \DB::rollBack();

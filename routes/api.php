@@ -55,6 +55,7 @@ Route::group(['prefix' => 'v1'], function () {
     //Invoice
     Route::get('/driver/get-invoice-list/{customer_id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getInvoice']);
     Route::get('/driver/get-invoice-detail/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'getInvoiceById']);
+    Route::get('/driver/get-invoice-no', [App\Http\Controllers\Api\V1\DriverController::class, 'getInvoiceNo']);
 
     Route::post('/driver/invoice', [App\Http\Controllers\Api\V1\DriverController::class, 'addinvoice']);
     Route::post('/driver/invoice/pdf', [App\Http\Controllers\Api\V1\DriverController::class, 'invoicepdf']);
@@ -79,9 +80,6 @@ Route::group(['prefix' => 'v1'], function () {
     //dashboard
     Route::post('/driver/dashboard', [App\Http\Controllers\Api\V1\DriverController::class, 'dashboard']);
 
-
-
-
     Route::get('/driver/inventory-balance', [App\Http\Controllers\Api\V1\DriverController::class, 'getInventoryBalance']);
     Route::get('/driver/stock/transaction', [App\Http\Controllers\Api\V1\DriverController::class, 'getInventoryTransaction']);
 
@@ -91,6 +89,8 @@ Route::group(['prefix' => 'v1'], function () {
     Route::get('/driver/stock-count-status', [App\Http\Controllers\Api\V1\DriverController::class, 'StockCountStatus']);
     Route::get('/driver/driver-stock-request-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockRequestRecord']);
     Route::get('/driver/driver-stock-return-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockReturnRecord']);
+
+
 
 
 

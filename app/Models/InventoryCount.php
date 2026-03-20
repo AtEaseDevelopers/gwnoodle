@@ -21,6 +21,7 @@ class InventoryCount extends Model
     public $fillable = [
         'driver_id',
         'items', // Changed from product_id, quantity to JSON field
+        'lorry_id',
         'status',
         'approved_by',
         'rejected_by',
@@ -131,6 +132,11 @@ class InventoryCount extends Model
     public function approver()
     {
         return $this->belongsTo(\App\Models\User::class, 'approved_by', 'id');
+    }
+
+    public function lorry()
+    {
+        return $this->belongsTo(\App\Models\Lorry::class, 'lorry_id', 'id');
     }
 
     public function rejector()

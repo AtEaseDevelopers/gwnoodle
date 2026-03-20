@@ -35,6 +35,7 @@ use App\Models\DriverLocation;
 use App\Models\Language;
 use App\Models\MobileTranslationVersion;
 use App\Models\MobileTranslation;
+use Illuminate\Support\Facades\Hash;
 
 class DriverController extends Controller
 {
@@ -849,203 +850,442 @@ class DriverController extends Controller
     }
 
     //Task
-    public function gettask(Request $request){
-        try{
+    public function gettask(Request $request)
+    {
+        try {
             $data = $request->all();
-            //check session
+            
+            // Check session
             $driver = Driver::where('session', $request->header('session'))->first();
-            if(empty($driver)){
+            if (empty($driver)) {
                 return response()->json([
                     'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
+                    'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
                     'data' => null
                 ], 401);
             }
-            //validate
-            $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
-            if(!empty($trip)){
-                if($trip->type == 2){
+            
+            // Validate trip
+            $trip = Trip::where('driver_id', $driver->id)->orderBy('date', 'desc')->first();
+            if (!empty($trip)) {
+                if ($trip->type == Trip::END_TRIP) {
                     return response()->json([
                         'result' => false,
-                        'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
+                        'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
                         'data' => null
                     ], 400);
                 }
-            }else{
+            } else {
                 return response()->json([
                     'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
+                    'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
                     'data' => null
                 ], 400);
             }
-            //process
-            $task = Task::where('driver_id', $driver->id)
-                ->where('date',date('Y-m-d'))
+            
+            // Process tasks
+            $tasks = Task::where('driver_id', $driver->id)
+                ->where('date', now()->format('Y-m-d'))
                 ->where(function ($query) use ($trip) {
                     $query->where('trip_id', $trip->id)
-                        ->orWhere('trip_id', null);
+                        ->orWhereNull('trip_id');
                 })
-                // ->whereIn('trip_id',[NULL,$trip->id])
-                ->with('customer.activefoc')
-                ->with('invoice.invoicedetail.product:id,code,name')
-                ->get()->toarray();
-            if(count($task) != 0){
-                $message = true;
-                foreach($task as $c=>$t){
-                    if(asset($t['customer']['id'])){
-                        $task[$c]['customer']['credit'] = round(  (DB::select('call ice_spGetCustomerCreditByDate("'.date('Y-m-d H:i:s').'",'.$t['customer']['id'].');')[0]->credit ?? 0) ,2);
-                        // $task[$c]['customer']['credit'] = $t['customer']['id'];
-                        $task[$c]['customer']['product'] = DB::table('products')
-                            ->leftJoin('special_prices', function($join) use($t)
-                                {
-                                    $join->on('special_prices.customer_id','=',DB::raw("'".$t['customer']['id']."'"));
-                                    $join->on('special_prices.product_id', '=', 'products.id');
-                                    $join->on('special_prices.status', '=', DB::raw("'1'"));
-                                })
-                            ->where('products.status','1')
-                            ->select('products.id','products.code','products.name',DB::raw('coalesce(special_prices.price,products.price) as "price"'))
-                            ->get();
-                        $task[$c]['customer']['groupcompany'] = DB::table('companies')
-                            ->where('companies.group_id',explode(',',$t['customer']['group'])[0])
+                ->with(['customer' => function($query) {
+                    $query->with(['activefoc', 'specialprice']);
+                }])
+                ->with(['invoice' => function($query) {
+                    $query->with(['invoicedetail.product']);
+                }])
+                ->get();
+
+            // Prepare task data
+            $taskData = [];
+            foreach ($tasks as $task) {
+                $customer = $task->customer;
+                
+                if ($customer && $customer->id) {
+                    // Calculate customer credit
+                    $creditData = $this->calculateCustomerCredit(
+                        $customer->id, 
+                        now()
+                    );
+                    
+                    // Get products with special prices
+                    $products = Product::where('status', 1)
+                        ->with(['batches' => function($query) {
+                            $query->active()
+                                ->fefo()
+                                ->select('id', 'product_id', 'batch_code', 'expiry_date', 'quantity');
+                        }])
+                        ->get()
+                        ->map(function($product) use ($customer) {
+                            // Check for special price
+                            $specialPrice = SpecialPrice::where('customer_id', $customer->id)
+                                ->where('product_id', $product->id)
+                                ->where('status', 1)
+                                ->first();
+                            
+                            $availableBatches = $product->batches->map(function($batch) {
+                                return [
+                                    'id' => $batch->id,
+                                    'batch_code' => $batch->batch_code,
+                                    'expiry_date' => $batch->expiry_date,
+                                    'quantity' => $batch->quantity,
+                                    'days_to_expiry' => $batch->days_to_expiry
+                                ];
+                            });
+                            
+                            return [
+                                'id' => $product->id,
+                                'code' => $product->unit_code,
+                                'name' => $product->name,
+                                'price' => $specialPrice ? $specialPrice->price : $product->price,
+                                'has_special_price' => !empty($specialPrice),
+                                'available_batches' => $availableBatches,
+                                'total_available' => $availableBatches->sum('quantity')
+                            ];
+                        });
+                    
+                    // Get group company info
+                    $groupCompany = null;
+                    if ($customer->group && is_array($customer->group) && count($customer->group) > 0) {
+                        $groupCompany = \DB::table('companies')
+                            ->where('companies.group_id', $customer->group[0])
                             ->select('companies.*')
-                            ->first() ?? null;
+                            ->first();
                     }
+                    
+                    $taskData[] = [
+                        'id' => $task->id,
+                        'date' => $task->date,
+                        'sequence' => $task->sequence,
+                        'status' => $task->status,
+                        'based' => $task->based,
+                        'invoice' => $task->invoice ? [
+                            'id' => $task->invoice->id,
+                            'invoiceno' => $task->invoice->invoiceno,
+                            'date' => $task->invoice->date,
+                            'paymentterm' => $task->invoice->paymentterm,
+                            'details' => $task->invoice->invoicedetail->map(function($detail) {
+                                return [
+                                    'id' => $detail->id,
+                                    'product_id' => $detail->product_id,
+                                    'product_name' => $detail->product->name ?? null,
+                                    'quantity' => $detail->quantity,
+                                    'price' => $detail->price,
+                                    'totalprice' => $detail->totalprice,
+                                    'batch_id' => $detail->product_batch_id,
+                                    'batch_code' => $detail->batch->batch_code ?? null
+                                ];
+                            })
+                        ] : null,
+                        'customer' => [
+                            'id' => $customer->id,
+                            'code' => $customer->code,
+                            'company' => $customer->company,
+                            'phone' => $customer->phone,
+                            'billing_address' => $customer->billing_address,
+                            'delivery_address' => $customer->delivery_address,
+                            'credit' => $creditData['credit'],
+                            'paid' => $creditData['paid'],
+                            'total_invoiced' => $creditData['totalprice'],
+                            'group' => $customer->group,
+                            'group_description' => $customer->group_description,
+                            'groupcompany' => $groupCompany,
+                            'products' => $products,
+                            'active_foc' => $customer->activefoc->map(function($foc) {
+                                return [
+                                    'id' => $foc->id,
+                                    'product_id' => $foc->product_id,
+                                    'quantity' => $foc->quantity,
+                                    'achievequantity' => $foc->achievequantity,
+                                    'remaining' => $foc->quantity - $foc->achievequantity,
+                                    'startdate' => $foc->startdate,
+                                    'enddate' => $foc->enddate
+                                ];
+                            })
+                        ]
+                    ];
                 }
-            }else{
-                $message = false;
-            }
-            $inventorybalance = InventoryBalance::where('lorry_id',$trip->lorry_id)->with('product')->get()->toarray();
-            if($message){
-                return response()->json([
-                    'result' => true,
-                    'message' => __LINE__.$this->message_separator.'api.message.task_found',
-                    'data' => [
-                        'task' => $task,
-                        'stock' => $inventorybalance
-                    ]
-                ], 200);
-            }else{
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.task_not_found',
-                    'data' => [
-                        'task' => null,
-                        'stock' => $inventorybalance
-                    ]
-                ], 200);
-
             }
 
-        }
-        catch(Exception $e){
+            // Get inventory balance for the lorry
+            $inventoryBalance = InventoryBalance::where('lorry_id', $trip->lorry_id)
+                ->first();
+            
+            $stockData = [];
+            if ($inventoryBalance && $inventoryBalance->batches) {
+                $batchIds = array_keys($inventoryBalance->batches);
+                $batches = ProductBatch::with('product')
+                    ->whereIn('id', $batchIds)
+                    ->get();
+                
+                foreach ($batches as $batch) {
+                    $stockData[] = [
+                        'batch_id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'product_id' => $batch->product_id,
+                        'product_name' => $batch->product->name ?? null,
+                        'product_code' => $batch->product->unit_code ?? null,
+                        'quantity' => $inventoryBalance->batches[$batch->id],
+                        'expiry_date' => $batch->expiry_date,
+                        'days_to_expiry' => $batch->days_to_expiry
+                    ];
+                }
+            }
+
+            $hasTasks = count($taskData) > 0;
+            
+            return response()->json([
+                'result' => $hasTasks,
+                'message' => __LINE__ . $this->message_separator . 
+                    ($hasTasks ? 'api.message.task_found' : 'api.message.task_not_found'),
+                'data' => [
+                    'task' => $hasTasks ? $taskData : null,
+                    'stock' => $stockData,
+                    'trip' => [
+                        'id' => $trip->id,
+                        'date' => $trip->date,
+                        'lorry_id' => $trip->lorry_id,
+                        'cash' => $trip->cash
+                    ]
+                ]
+            ], 200);
+
+        } catch (Exception $e) {
+            \Log::error('gettask error: ' . $e->getMessage());
             return response()->json([
                 'result' => false,
-                'message' => __LINE__.$this->message_separator.$e->getMessage(),
+                'message' => __LINE__ . $this->message_separator . $e->getMessage(),
                 'data' => null
             ], 500);
         }
     }
 
-    public function gettaskpage(Request $request){
-        try{
+    public function gettaskpage(Request $request)
+    {
+        try {
             $data = $request->all();
-            $size = 20;
-            if(isset($data['size']))
-            {
-                $size = $data['size'];
-            }
-            //check session
+            $size = $data['size'] ?? 20;
+            
+            // Check session
             $driver = Driver::where('session', $request->header('session'))->first();
-            if(empty($driver)){
+            if (empty($driver)) {
                 return response()->json([
                     'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
+                    'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
                     'data' => null
                 ], 401);
             }
-            //validate
-            $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
-            if(!empty($trip)){
-                if($trip->type == 2){
+            
+            // Validate trip
+            $trip = Trip::where('driver_id', $driver->id)->orderBy('date', 'desc')->first();
+            if (!empty($trip)) {
+                if ($trip->type == Trip::END_TRIP) {
                     return response()->json([
                         'result' => false,
-                        'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
+                        'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
                         'data' => null
                     ], 400);
                 }
-            }else{
+            } else {
                 return response()->json([
                     'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
+                    'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
                     'data' => null
                 ], 400);
             }
-            //process
-            $task = Task::where('driver_id', $driver->id)
-                ->where('date',date('Y-m-d'))
-                //->where('status','!=',9)
-                //->where('status','!=',0)
+            
+            // Process tasks with pagination
+            $tasks = Task::where('driver_id', $driver->id)
+                ->where('date', now()->format('Y-m-d'))
                 ->where(function ($query) use ($trip) {
                     $query->where('trip_id', $trip->id)
-                        ->orWhere('trip_id', null);
+                        ->orWhereNull('trip_id');
                 })
-                // ->whereIn('trip_id',[NULL,$trip->id])
-                ->with('customer.activefoc')
-                ->with('invoice.invoicedetail.product:id,code,name')
+                ->with(['customer' => function($query) {
+                    $query->with(['activefoc', 'specialprice']);
+                }])
+                ->with(['invoice' => function($query) {
+                    $query->with(['invoicedetail' => function($q) {
+                        $q->with(['product:id,name,price', 'batch:id,batch_code,expiry_date']);
+                    }]);
+                }])
                 ->paginate($size);
 
-            if(count($task) != 0){
-                $message = true;
-                foreach($task as $c=>$t){
-                    if(asset($t['customer']['id'])){
-                        $task[$c]['customer']['credit'] = round(  (DB::select('call ice_spGetCustomerCreditByDate("'.date('Y-m-d H:i:s').'",'.$t['customer']['id'].');')[0]->credit ?? 0) ,2);
-                        // $task[$c]['customer']['credit'] = $t['customer']['id'];
-                        $task[$c]['customer']['product'] = DB::table('products')
-                            ->leftJoin('special_prices', function($join) use($t)
-                                {
-                                    $join->on('special_prices.customer_id','=',DB::raw("'".$t['customer']['id']."'"));
-                                    $join->on('special_prices.product_id', '=', 'products.id');
-                                    $join->on('special_prices.status', '=', DB::raw("'1'"));
-                                })
-                            ->where('products.status','1')
-                            ->select('products.id','products.code','products.name',DB::raw('coalesce(special_prices.price,products.price) as "price"'))
-                            ->get();
-                        $task[$c]['customer']['groupcompany'] = DB::table('companies')
-                            ->where('companies.group_id',explode(',',$t['customer']['group'])[0])
+            // Prepare task data
+            $taskData = [];
+            foreach ($tasks as $task) {
+                $customer = $task->customer;
+                
+                if ($customer && $customer->id) {
+                    // Calculate customer credit
+                    $creditData = $this->calculateCustomerCredit(
+                        $customer->id, 
+                        now()
+                    );
+                    
+                    // Get products with special prices and batch info
+                    $products = Product::where('status', 1)
+                        ->with(['batches' => function($query) {
+                            $query->active()
+                                ->fefo()
+                                ->select('id', 'product_id', 'batch_code', 'expiry_date', 'quantity');
+                        }])
+                        ->get()
+                        ->map(function($product) use ($customer) {
+                            $specialPrice = SpecialPrice::where('customer_id', $customer->id)
+                                ->where('product_id', $product->id)
+                                ->where('status', 1)
+                                ->first();
+                            
+                            $availableBatches = $product->batches->map(function($batch) {
+                                return [
+                                    'id' => $batch->id,
+                                    'batch_code' => $batch->batch_code,
+                                    'expiry_date' => $batch->expiry_date,
+                                    'quantity' => $batch->quantity,
+                                    'days_to_expiry' => $batch->days_to_expiry
+                                ];
+                            });
+                            
+                            return [
+                                'id' => $product->id,
+                                'unit_code' => $product->unit_code,
+                                'name' => $product->name,
+                                'price' => $specialPrice ? $specialPrice->price : $product->price,
+                                'has_special_price' => !empty($specialPrice),
+                                'available_batches' => $availableBatches,
+                                'total_available' => $availableBatches->sum('quantity')
+                            ];
+                        });
+                    
+                    // Get group company info
+                    $groupCompany = null;
+                    if ($customer->group && is_array($customer->group) && count($customer->group) > 0) {
+                        $groupCompany = \DB::table('companies')
+                            ->where('companies.group_id', $customer->group[0])
                             ->select('companies.*')
-                            ->first() ?? null;
+                            ->first();
                     }
+                    
+                    $taskData[] = [
+                        'id' => $task->id,
+                        'date' => $task->date,
+                        'sequence' => $task->sequence,
+                        'status' => $task->status,
+                        'based' => $task->based,
+                        'invoice' => $task->invoice ? [
+                            'id' => $task->invoice->id,
+                            'invoiceno' => $task->invoice->invoiceno,
+                            'date' => $task->invoice->date,
+                            'paymentterm' => $task->invoice->paymentterm,
+                            'chequeno' => $task->invoice->chequeno,
+                            'remark' => $task->invoice->remark,
+                            'details' => $task->invoice->invoicedetail->map(function($detail) {
+                                return [
+                                    'id' => $detail->id,
+                                    'product_id' => $detail->product_id,
+                                    'product_code' => $detail->product->code ?? null,
+                                    'product_name' => $detail->product->name ?? null,
+                                    'quantity' => $detail->quantity,
+                                    'price' => $detail->price,
+                                    'totalprice' => $detail->totalprice,
+                                    'batch_id' => $detail->product_batch_id,
+                                    'batch_code' => $detail->batch->batch_code ?? null,
+                                    'remark' => $detail->remark
+                                ];
+                            })
+                        ] : null,
+                        'customer' => [
+                            'id' => $customer->id,
+                            'code' => $customer->code,
+                            'company' => $customer->company,
+                            'phone' => $customer->phone,
+                            'billing_address' => $customer->billing_address,
+                            'delivery_address' => $customer->delivery_address,
+                            'credit' => $creditData['credit'],
+                            'paid' => $creditData['paid'],
+                            'total_invoiced' => $creditData['totalprice'],
+                            'group' => $customer->group,
+                            'group_description' => $customer->group_description,
+                            'groupcompany' => $groupCompany,
+                            'products' => $products,
+                            'active_foc' => $customer->activefoc->map(function($foc) {
+                                return [
+                                    'id' => $foc->id,
+                                    'product_id' => $foc->product_id,
+                                    'quantity' => $foc->quantity,
+                                    'achievequantity' => $foc->achievequantity,
+                                    'remaining' => $foc->quantity - $foc->achievequantity,
+                                    'startdate' => $foc->startdate,
+                                    'enddate' => $foc->enddate
+                                ];
+                            })
+                        ]
+                    ];
                 }
-            }else{
-                $message = false;
-            }
-            $inventorybalance = InventoryBalance::where('lorry_id',$trip->lorry_id)->with('product')->get()->toarray();
-            if($message){
-                return response()->json([
-                    'result' => true,
-                    'message' => __LINE__.$this->message_separator.'api.message.task_found',
-                    'data' => [
-                        'task' => $task,
-                        'stock' => $inventorybalance
-                    ]
-                ], 200);
-            }else{
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.task_not_found',
-                    'data' => [
-                        'task' => null,
-                        'stock' => $inventorybalance
-                    ]
-                ], 200);
-
             }
 
-        }
-        catch(Exception $e){
+            // Get inventory balance for the lorry
+            $inventoryBalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
+            
+            $stockData = [];
+            if ($inventoryBalance && $inventoryBalance->batches) {
+                $batchIds = array_keys($inventoryBalance->batches);
+                $batches = ProductBatch::with('product')
+                    ->whereIn('id', $batchIds)
+                    ->get();
+                
+                foreach ($batches as $batch) {
+                    $stockData[] = [
+                        'batch_id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'product_id' => $batch->product_id,
+                        'product_name' => $batch->product->name ?? null,
+                        'product_code' => $batch->product->unit_code ?? null,
+                        'quantity' => $inventoryBalance->batches[$batch->id],
+                        'expiry_date' => $batch->expiry_date,
+                        'days_to_expiry' => $batch->days_to_expiry
+                    ];
+                }
+            }
+
+            $hasTasks = count($taskData) > 0;
+            
+            // Prepare pagination data
+            $paginationData = [
+                'current_page' => $tasks->currentPage(),
+                'per_page' => $tasks->perPage(),
+                'total' => $tasks->total(),
+                'last_page' => $tasks->lastPage(),
+                'from' => $tasks->firstItem(),
+                'to' => $tasks->lastItem(),
+                'has_more_pages' => $tasks->hasMorePages()
+            ];
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 
+                    ($hasTasks ? 'api.message.task_found' : 'api.message.task_not_found'),
+                'data' => [
+                    'tasks' => $taskData,
+                    'pagination' => $paginationData,
+                    'stock' => $stockData,
+                    'trip' => [
+                        'id' => $trip->id,
+                        'date' => $trip->date,
+                        'lorry_id' => $trip->lorry_id,
+                        'cash' => $trip->cash
+                    ]
+                ]
+            ], 200);
+
+        } catch (Exception $e) {
+            \Log::error('gettaskpage error: ' . $e->getMessage());
             return response()->json([
                 'result' => false,
-                'message' => __LINE__.$this->message_separator.$e->getMessage(),
+                'message' => __LINE__ . $this->message_separator . $e->getMessage(),
                 'data' => null
             ], 500);
         }
@@ -2056,6 +2296,36 @@ class DriverController extends Controller
         }
     }
     
+    public function getInvoiceNo(Request $request)
+    {
+        try{
+            $data = $request->all();
+            //check session
+            $driver = Driver::where('session', $request->header('session'))->first();
+            if(empty($driver)){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
+                    'data' => null
+                ], 401);
+            }
+            //validation
+            $invoiceno = Invoice::getNextInvoiceNumber($driver->id);
+
+            return response()->json([
+                    'result' => true,
+                    'message' => __LINE__.$this->message_separator.'Invoice No retrieved.',
+                    'data' => $invoiceno
+                ], 200);
+        }
+        catch(Exception $e){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__.$this->message_separator.$e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
     private function calculateCustomerCredit($customerId, $asOfDate)
     {
         try {
@@ -4224,19 +4494,6 @@ class DriverController extends Controller
             ], 401);
         }
 
-        // Check if there's already a pending inventory count for this driver
-        $inventoryCount = InventoryCount::where('driver_id', $driver->id)
-            ->where('status','!=', InventoryCount::STATUS_APPROVED)
-            ->first();
-
-        if($inventoryCount){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'You have request for Stock Count, please Contact your Stock Manager to approved.',
-                'data' => null
-            ], 200);
-        }
-
         // Get driver's latest trip
         $latestTrip = Trip::where('driver_id', $driver->id)
             ->where('uuid',$driver->trip_id)
@@ -4250,6 +4507,28 @@ class DriverController extends Controller
                 'message' => __LINE__ . $this->message_separator . 'Driver start trip record not found.',
                 'data' => null
             ], 200);
+        }
+
+        // Check if there's already a pending inventory count for this driver
+        $inventoryCount = InventoryCount::where('driver_id', $driver->id)
+            ->where('trip_id',$latestTrip->id)
+            ->where('status','!=', InventoryCount::STATUS_APPROVED)
+            ->first();
+
+        if($inventoryCount){
+            if($inventoryCount->status = InventoryCount::STATUS_APPROVED ){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'You have done for Stock out, can proceed to End Trip.',
+                    'data' => null
+                ], 200);
+            }elseif($inventoryCount->status = InventoryCount::STATUS_PENDING ){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'You have request for Stock Count, please Contact your Stock Manager to approved.',
+                    'data' => null
+                ], 200);
+            }
         }
 
         $lorryId = $latestTrip->lorry_id;
@@ -4333,8 +4612,9 @@ class DriverController extends Controller
             // Create inventory count record
             $inventoryCount = InventoryCount::create([
                 'driver_id' => $driver->id,
-                'trip_id' => $driver->trip_id,
+                'trip_id' => $latestTrip->id,
                 'items' => $formattedItems,
+                'lorry_id'=>$lorryId,
                 'status' => InventoryCount::STATUS_PENDING,
                 'remarks' => 'Auto-generated stock count request from driver app', // Optional default remark
             ]);
@@ -4433,6 +4713,107 @@ class DriverController extends Controller
 
 
     //Manager mobile side API
+
+    public function managerLogin(Request $request){
+        try{
+            //validation
+            $validator = Validator::make($request->all(), [
+                'employeeid' => 'required|string',
+                'password' => 'required|string'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.$validator->errors()->first(),
+                    'data' => null
+                ], 400);
+            }
+            //process
+            $data = $request->all();
+            $user = User::where('email', $data['employeeid'])->first();
+
+            if (empty($user) || !$user) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'User not found.',
+                    'data' => null
+                ], 200);
+            }
+          
+            if (Hash::check($data['password'], $user->password)) {
+                
+                $session = $user->session;
+                $user->session = session_create_id();
+                $user->save();
+
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__.$this->message_separator.'api.message.login_successfully',
+                    'data' => [
+                        'manager' => $user,
+                    ]
+                ], 200);
+
+            }else{
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'api.message.invalid_credential',
+                    'data' => null
+                ], 401);
+            }
+        }
+        catch(Exception $e){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__.$this->message_separator.$e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
+    public function managerLogout(Request $request){
+        try{
+            //validation
+            $validator = Validator::make($request->all(), [
+                'session' => 'required|string'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.$validator->errors()->first(),
+                    'data' => null
+                ], 400);
+            }
+            //process
+            $data = $request->all();
+            $user = User::where('session', $data['session'])->first();
+            if(!empty($user)){
+                $user->session = NULL;
+                $user->save();
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__.$this->message_separator.'api.message.logout_successfully',
+                    'data' => null
+                ], 200);
+            }else{
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
+                    'data' => null
+                ], 401);
+            }
+        }
+        catch(Exception $e){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__.$this->message_separator.$e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
     public function getDriverProduct(Request $request)
     {
         // Validate session
@@ -4446,18 +4827,6 @@ class DriverController extends Controller
         }
 
         try {
-            // Get all drivers
-            $drivers = Driver::where('status', 1) // Assuming you have a status field
-                ->orderBy('name')
-                ->get(['id', 'name']); // Select necessary fields
-            
-            if ($drivers->isEmpty()) {
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 'No drivers found',
-                    'data' => null
-                ], 200);
-            }
 
             // Get inventory balances for all drivers
             $allDriverInventory = InventoryBalance::whereIn('driver_id', $drivers->pluck('id'))
@@ -4723,109 +5092,6 @@ class DriverController extends Controller
 
     }
 
-    public function managerLogin(Request $request){
-        try{
-            //validation
-            $validator = Validator::make($request->all(), [
-                'employeeid' => 'required|string',
-                'password' => 'required|string'
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.$validator->errors()->first(),
-                    'data' => null
-                ], 400);
-            }
-            //process
-            $data = $request->all();
-            $user = User::where('email', $data['employeeid'])->first();
-
-            if (empty($user) || !$user) {
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 'User not found.',
-                    'data' => null
-                ], 200);
-            }
-          
-            if (Hash::check($data['password'], $user->password)) {
-                
-                $session = $user->session;
-                $user->session = session_create_id();
-                $user->save();
-
-                return response()->json([
-                    'result' => true,
-                    'message' => __LINE__.$this->message_separator.'api.message.login_successfully',
-                    'data' => [
-                        'manager' => $user,
-                    ]
-                ], 200);
-
-            }else{
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.invalid_credential',
-                    'data' => null
-                ], 401);
-            }
-        }
-        catch(Exception $e){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__.$this->message_separator.$e->getMessage(),
-                'data' => null
-            ], 500);
-        }
-    }
-
-    public function managerLogout(Request $request){
-        try{
-            //validation
-            $validator = Validator::make($request->all(), [
-                'session' => 'required|string'
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.$validator->errors()->first(),
-                    'data' => null
-                ], 400);
-            }
-            //process
-            $data = $request->all();
-            $user = User::where('session', $data['session'])->first();
-            if(!empty($user)){
-                $user->session = NULL;
-                $user->save();
-                return response()->json([
-                    'result' => true,
-                    'message' => __LINE__.$this->message_separator.'api.message.logout_successfully',
-                    'data' => null
-                ], 200);
-            }else{
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
-                    'data' => null
-                ], 401);
-            }
-        }
-        catch(Exception $e){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__.$this->message_separator.$e->getMessage(),
-                'data' => null
-            ], 500);
-        }
-    }
-
-
-
-    
     public function getStockReturn(Request $request)
     {
         // Validate session
