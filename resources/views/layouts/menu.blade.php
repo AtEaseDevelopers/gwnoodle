@@ -387,7 +387,7 @@
         </ul>
     @endcan
 
-    @can('foc')
+    <!-- @can('foc')
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('focs*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('focs*') ? 'active' : '' }}" href="{{ route('focs.index') }}">
@@ -395,7 +395,7 @@
                 </a>
             </li>
         </ul>
-    @endcan
+    @endcan -->
 
     @can('assign')
         <ul class="nav-dropdown-items">
