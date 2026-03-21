@@ -133,8 +133,8 @@ Route::group(['prefix' => 'v1'], function () {
     Route::post('/driver/update-product-batch/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiUpdateProductBatch']);
     Route::get('/driver/get-product-batch-listing/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetProductBatches']);
 
-    Route::post('/driver/stock-in-product-batch', [App\Http\Controllers\Api\V1\DriverController::class, 'apiCreateProductBatch']);
-    Route::post('/driver/stock-out-product-batch', [App\Http\Controllers\Api\V1\DriverController::class, 'apiUpdateProductBatch']);
+    Route::post('/driver/stock-in-product-batch', [App\Http\Controllers\Api\V1\DriverController::class, 'apiStockIn']);
+    Route::post('/driver/stock-out-product-batch', [App\Http\Controllers\Api\V1\DriverController::class, 'apiStockOut']);
 
 
 });

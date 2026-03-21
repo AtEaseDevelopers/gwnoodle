@@ -6858,11 +6858,8 @@ class DriverController extends Controller
 
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:products,id',
-            'warehouse_id' => 'required|exists:warehouses,id',
             'batch_code' => 'required|string|unique:product_batches,batch_code',
             'expiry_date' => 'required|date|after:today',
-            'quantity' => 'nullable|integer|min:0',
-            'status' => 'nullable|in:1,2,3' // 1=active, 2=expired, 3=inactive
         ]);
 
         if ($validator->fails()) {
@@ -6874,7 +6871,7 @@ class DriverController extends Controller
         }
 
         $input = $request->all();
-        $input['status'] = $request->status ?? ProductBatch::STATUS_ACTIVE;
+        $input['status'] = ProductBatch::STATUS_ACTIVE;
         
         DB::beginTransaction();
         
@@ -6882,33 +6879,6 @@ class DriverController extends Controller
             // Create product batch
             $productBatch = ProductBatch::create($input);
             
-            // If quantity is provided and > 0, add to warehouse inventory
-            if (isset($input['quantity']) && $input['quantity'] > 0) {
-                // Add to warehouse inventory balance
-                $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
-                    [
-                        'warehouse_id' => $request->warehouse_id,
-                        'product_id' => $productBatch->product_id,
-                        'batch_id' => $productBatch->id,
-                    ],
-                    ['quantity' => 0]
-                );
-                
-                $warehouseInventory->increaseQuantity($input['quantity']);
-                
-                // Create inventory transaction for warehouse stock in
-                InventoryTransaction::create([
-                    'warehouse_id' => $request->warehouse_id,
-                    'product_id' => $productBatch->product_id,
-                    'batch_id' => $productBatch->id,
-                    'quantity' => $input['quantity'],
-                    'type' => InventoryTransaction::TYPE_STOCK_IN,
-                    'remark' => 'Initial stock for batch: ' . $productBatch->batch_code,
-                    'date' => now(),
-                    'user' => $user->name
-                ]);
-            }
-
             DB::commit();
 
             return response()->json([
@@ -6921,14 +6891,11 @@ class DriverController extends Controller
                     'batch_code' => $productBatch->batch_code,
                     'expiry_date' => $productBatch->expiry_date,
                     'formatted_expiry_date' => $productBatch->formatted_expiry_date,
-                    'quantity' => $productBatch->quantity,
                     'status' => $productBatch->status,
                     'status_text' => $productBatch->status_text,
                     'days_to_expiry' => $productBatch->days_to_expiry,
                     'is_expiring_soon' => $productBatch->isExpiringSoon(),
                     'is_active' => $productBatch->isActive(),
-                    'created_at' => $productBatch->created_at,
-                    'updated_at' => $productBatch->updated_at
                 ]
             ], 200);
 
