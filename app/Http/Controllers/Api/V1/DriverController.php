@@ -4067,6 +4067,7 @@ class DriverController extends Controller
         }
         
         $latestTrip = Trip::where('driver_id', $driver->id)
+                ->where('uuid',$driver->trip_id)
                 ->where('type', 1)
                 ->orderBy('date', 'desc')
                 ->first();
@@ -5959,9 +5960,104 @@ class DriverController extends Controller
         }
     }
 
-    /**
-     * Get batches for a specific lorry (AJAX)
-     */
+    public function apiGetAvailableLorry(Request $request)
+    {
+        // Validate session
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        $lorries = Lorry::where('status',0)->get();
+         
+        $lorriesWithInventory = [];
+        $grandTotalBatches = 0;
+        $grandTotalQuantity = 0;
+        
+        foreach ($lorries as $lorry) {
+            $inventoryBalance = InventoryBalance::where('lorry_id', $lorry->id)->first();
+            
+            if (!$inventoryBalance || empty($inventoryBalance->batches)) {
+                if (!$hasInventoryOnly) {
+                    // Include lorries without inventory if requested
+                    $lorriesWithInventory[] = [
+                        'lorry_id' => $lorry->id,
+                        'lorry_number' => $lorry->lorryno,
+                        'lorry_status' => $lorry->status,
+                        'lorry_status_text' => $lorry->status == 0 ? 'Active/In Use' : 'Inactive/Available',
+                        'total_batches' => 0,
+                        'total_quantity' => 0,
+                        'batches' => []
+                    ];
+                }
+                continue;
+            }
+            
+            $batches = $inventoryBalance->batches_with_details;
+            $totalQuantity = array_sum($inventoryBalance->batches ?? []);
+            
+            // Format batches
+            $formattedBatches = [];
+            foreach ($batches as $batch) {
+                $formattedBatches[] = [
+                    'batch_id' => $batch['batch_id'],
+                    'batch_code' => $batch['batch_code'],
+                    'unit_code' => $batch['unit_code'],
+                    'product_name' => $batch['product_name'],
+                    'quantity' => $batch['quantity'],
+                    'expiry_date' => $batch['expiry_date'],
+                ];
+            }
+            
+            $lorriesWithInventory[] = [
+                'lorry_id' => $lorry->id,
+                'lorry_number' => $lorry->lorryno,
+                'lorry_status' => $lorry->status,
+                'lorry_status_text' => $lorry->status == 0 ? 'Active/In Use' : 'Inactive/Available',
+                'total_batches' => count($formattedBatches),
+                'total_quantity' => $totalQuantity,
+                'batches' => $formattedBatches
+            ];
+            
+            $grandTotalBatches += count($formattedBatches);
+            $grandTotalQuantity += $totalQuantity;
+        }
+        
+        // Prepare response
+        $responseData = [
+            'total_lorries' => count($lorriesWithInventory),
+            'total_batches' => $grandTotalBatches,
+            'total_quantity' => $grandTotalQuantity,
+            'lorries' => $lorriesWithInventory
+        ];
+        
+        // Add summary if requested
+        if ($request->get('include_summary', false)) {
+            $responseData['summary'] = [
+                'by_status' => [
+                    'active' => $lorries->where('status', 0)->count(),
+                    'inactive' => $lorries->where('status', 1)->count()
+                ],
+                'average_batches_per_lorry' => count($lorriesWithInventory) > 0 
+                    ? round($grandTotalBatches / count($lorriesWithInventory), 2) 
+                    : 0,
+                'average_quantity_per_lorry' => count($lorriesWithInventory) > 0 
+                    ? round($grandTotalQuantity / count($lorriesWithInventory), 2) 
+                    : 0
+            ];
+        }
+        
+        return response()->json([
+            'result' => true,
+            'message' => __LINE__ . $this->message_separator . 'Vans retrieved successfully',
+            'data' => $responseData
+        ], 200);
+    }
+
     public function apiGetLorryBatches(Request $request, $id)
     {
         // Validate session
@@ -6351,7 +6447,6 @@ class DriverController extends Controller
             'price' => 'required|numeric|min:0',
             'cost' => 'nullable|numeric|min:0',
             'status' => 'required|in:0,1', // 0=inactive, 1=active
-            'type' => 'nullable|integer',
             'classification_code' => 'nullable|string|max:50',
             'carton_enabled' => 'nullable|boolean',
             'units_per_carton' => 'nullable|integer|min:1|required_if:carton_enabled,1'

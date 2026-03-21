@@ -113,6 +113,7 @@ Route::group(['prefix' => 'v1'], function () {
     // stock out
     Route::post('/driver/stock-out', [App\Http\Controllers\Api\V1\DriverController::class, 'Stockout']);
     Route::get('/driver/get-lorry-batches/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetLorryBatches']);
+    Route::get('/driver/get-available-lorry', [App\Http\Controllers\Api\V1\DriverController::class, 'apiGetAvailableLorry']);
 
     //warehouse
     Route::post('/driver/create-warehouse', [App\Http\Controllers\Api\V1\DriverController::class, 'apiCreateWarehouse']);
