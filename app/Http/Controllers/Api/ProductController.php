@@ -17,19 +17,19 @@ class ProductController extends Controller
         $products = Product::with("category")->select("*");
         $products->where('status', '!=', Product::$status['removed']);
 
-        if($request->input('branch_id')){
-            $branchEmail = $request->input('branch_id');
-            $products->whereHas('branch', function ($query) use ($branchEmail) {
-                $query->where('service_configs', 'LIKE', "%".$branchEmail."%");
-            });
-        }
+        // if($request->input('branch_id')){
+        //     $branchEmail = $request->input('branch_id');
+        //     $products->whereHas('branch', function ($query) use ($branchEmail) {
+        //         $query->where('service_configs', 'LIKE', "%".$branchEmail."%");
+        //     });
+        // }
 
-        if($filter_category = $request->input('category_id')){
-            $products->where('category_id', "$filter_category");
-        }
-        if($filter_sku = $request->input('sku')){
-            $products->where('sku', 'LIKE', "%$filter_sku%");
-        }
+        // if($filter_category = $request->input('category_id')){
+        //     $products->where('category_id', "$filter_category");
+        // }
+        // if($filter_sku = $request->input('sku')){
+        //     $products->where('sku', 'LIKE', "%$filter_sku%");
+        // }
         if($filter_name = $request->input('name')){
             $products->where('name', 'LIKE', "%$filter_name%");
         }
@@ -52,7 +52,7 @@ class ProductController extends Controller
         return $products;
     }
 
-    public function saveProduct(Request $request)
+    public function update(Request $request)
     {
         $data = $request->all(); // Retrieve all product records from the request
         $processedResults = []; // Store results for each record

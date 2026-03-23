@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Agent;
-//use App\Models\AgentCustomer;
-use App\Helper;
+use App\Models\Agent;
+use App\Models\AgentCustomer;
+use App\Models\Helper;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-
+//use App\Models\Branch;
 use Illuminate\Support\Facades\Log;
 
 class CustomerController extends Controller
@@ -95,7 +95,9 @@ class CustomerController extends Controller
         ];
         $process_data = $request->all();
 
-        $default_password = "gsmart12345";
+        $default_password = "gw-noodle-888";
+        $branch = (object)[];//\App\Models\Branch::where('service_configs', 'LIKE', "%".$request->input('branch_id')."%")->first();
+        
         foreach ($process_data as $key => $customer_data) {
             $user = User::where('api_id', $customer_data['Id'])->where('branch_id', $branch->id)->first();
             
@@ -159,9 +161,9 @@ class CustomerController extends Controller
                                 ->where('name', $customer_data['SalesAgent'])
                                 ->first();
             
-                if($agent){
-                    AgentCustomer::assign_user_to_user($agent, $user);
-                }
+                // if($agent){
+                //     AgentCustomer::assign_user_to_user($agent, $user);
+                // }
             }
         }
     }
