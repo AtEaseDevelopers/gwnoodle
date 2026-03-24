@@ -4,10 +4,13 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Agent;
 use App\Models\AgentCustomer;
+use App\Models\Customer;
+use App\Models\StateCode;
 use App\Models\Helper;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\ApiLog;
 //use App\Models\Branch;
 use Illuminate\Support\Facades\Log;
 
@@ -89,82 +92,90 @@ class CustomerController extends Controller
     
     public function update(Request $request)
     {
-        $credit_terms_to_payment_method = [
-            'C.O.D.' => 'cod',
-            'term' => 'term',
-        ];
-        $process_data = $request->all();
+        // 1. Create the log the second the request hits
+        $apiLog = ApiLog::createLog($request);
 
-        $default_password = "gw-noodle-888";
-        $branch = (object)[];//\App\Models\Branch::where('service_configs', 'LIKE', "%".$request->input('branch_id')."%")->first();
-        
-        foreach ($process_data as $key => $customer_data) {
-            $user = User::where('api_id', $customer_data['Id'])->where('branch_id', $branch->id)->first();
+        try {
+            // Get the payload array we sent from C# (wrapped in a 'debtors' key)
+            $process_data = $request->input('debtors', []);
             
-            $full_address = $customer_data['InvoiceAddress']['Address1'].$customer_data['InvoiceAddress']['Address2'].$customer_data['InvoiceAddress']['Address3'].$customer_data['InvoiceAddress']['Address4'];
-            if(empty($user)){
-                // generate login code for specific user, unique for every user
-                do{
-                    $login_code = Helper::generateRandomString(100);
-                    $exist = User::where('login_code', $login_code)->exists();
-                }while($exist);
-    
-                $user = User::create([
-                    'api_account_no' => $customer_data['AccNo'],
-                    'api_id' => $customer_data['Id'],
-                    'api_data' => json_encode($customer_data),
-                    "branch_id" => $branch->id,
-                    // "category" => $customer_data['PriceCategory'],
-                    "name" => $customer_data['CompanyName'],
-                    "email" => null,
-                    "attn_name" => "",
-                    "attn_contact" => "",
-                    "payment_method" => $customer_data['CreditTerm'] == 'C.O.D.'? json_encode([$credit_terms_to_payment_method[$customer_data['CreditTerm']]]) : json_encode([$credit_terms_to_payment_method['term']]),
-                    "terms_remark" => $customer_data['CreditTerm'] != 'C.O.D.'? $customer_data['CreditTerm'] : null,
-                    "login_code" => $login_code,
-                    "phone_no" => $customer_data['InvoiceAddress']['Phone'],
-                    "billing_address" => $full_address,
-                    "billing_postcode" => "",
-                    "billing_state" => "",
-                    "shipping_address" => "",
-                    "shipping_postcode" => "",
-                    "shipping_state" => "",
-                    "password" => Hash::make($default_password),
-                    'status' => $customer_data['IsActive']? User::$user_status['active'] : User::$user_status['inactive'],
+            foreach ($process_data as $customer_data) {
+                
+                if (empty($customer_data['AccNo'])) continue;
+
+                $addressParts = array_filter([
+                    $customer_data['Address1'] ?? null,
+                    $customer_data['Address2'] ?? null,
+                    $customer_data['Address3'] ?? null,
+                    $customer_data['Address4'] ?? null
                 ]);
-            }else{
-                $user->update([
-                    'api_account_no' => $customer_data['AccNo'],
-                    'api_data' => json_encode($customer_data),
-                    "branch_id" => $branch->id,
-                    // "category" => $customer_data['PriceCategory'],
-                    "name" => $customer_data['CompanyName'],
-                    "email" => null,
-                    "attn_name" => "",
-                    "attn_contact" => "",
-                    "payment_method" => $customer_data['CreditTerm'] == 'C.O.D.'? json_encode([$credit_terms_to_payment_method[$customer_data['CreditTerm']]]) : json_encode([$credit_terms_to_payment_method['term']]),
-                    "terms_remark" => $customer_data['CreditTerm'] != 'C.O.D.'? $customer_data['CreditTerm'] : null,
-                    "phone_no" => $customer_data['InvoiceAddress']['Phone'],
-                    "billing_address" => $full_address,
-                    "billing_postcode" => "",
-                    "billing_state" => "",
-                    "shipping_address" => "",
-                    "shipping_postcode" => "",
-                    "shipping_state" => "",
-                    "password" => Hash::make($default_password),
-                    'status' => $customer_data['IsActive']? User::$user_status['active'] : User::$user_status['inactive'],
-                ]);
+                $full_address = implode(', ', $addressParts);
+
+                $status   = (isset($customer_data['IsActive']) && $customer_data['IsActive'] === 'T') ? 1 : 0;
+                $postcode = isset($customer_data['ZipCode']) ? (int)preg_replace('/\D/', '', $customer_data['ZipCode']) : 0;
+
+                // Use Laravel's updateOrCreate to automatically Insert OR Update
+                $customer = Customer::updateOrCreate(
+                    ['code' => $customer_data['AccNo']], 
+                    [
+                        'company'                  => $customer_data['CompanyName'] ?? '',
+                        'customer_type'            => $customer_data['DebtorType'] ?? null,
+                        'chinese_name'             => $customer_data['Name2'] ?? null,
+                        'phone'                    => $customer_data['Phone1'] ?? null,
+                        'address'                  => $full_address,
+                        'status'                   => $status,
+                        'tin'                      => $customer_data['TIN'] ?? null,
+                        'sst_registration_no'      => $customer_data['TaxRegNo'] ?? null,
+                        'registration_no'          => $customer_data['BRN'] ?? null,
+                        'tourism_tax_registration' => $customer_data['TourismTaxRegNo'] ?? null,
+                        'msic'                     => $customer_data['MSIC'] ?? null,
+                        'city'                     => $customer_data['City'] ?? null,
+                        'country'                  => $customer_data['Country'] ?? null,
+                        'postcode'                 => $postcode,
+                        'email'                    => $customer_data['EmailAddress'] ?? null,
+                        'group'                    => $customer_data['Area'] ?? null,
+                        
+                        'paymentterm'              => null,
+                        'state'                    => StateCode::where('state', $customer_data['State'])->value('id') ?? null,
+                        'agent_id'                 => Agent::where('employeeid', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
+                        'supervisor_id'            => Agent::where('employeeid', $customer_data['Supervisor'] ?? null)->value('id') ?? null,
+                        'driver_id'                => Agent::where('employeeid', $customer_data['Driver'] ?? null)->value('id') ?? null,
+                        'kelindan_id'              => Agent::where('employeeid', $customer_data['Kelindan'] ?? null)->value('id') ?? null,
+                    ]
+                );
+
+                // (Optional) Handle Agent Assignment if needed
+                /*
+                if (!empty($customer_data['SalesAgent'])) {
+                    $agent = Agent::where('name', $customer_data['SalesAgent'])->first();
+                    if ($agent) {
+                        // Assign agent logic...
+                    }
+                }
+                */
             }
 
-            if($customer_data['SalesAgent']){
-                $agent = Agent::where('branch_id', $branch->id)
-                                ->where('name', $customer_data['SalesAgent'])
-                                ->first();
+            // 2. Prepare Success Response
+            $responseData = [
+                'status'  => 'success',
+                'message' => 'Customers synced successfully'
+            ];
+            $statusCode = 200;
+
+        } catch (\Exception $e) {
             
-                // if($agent){
-                //     AgentCustomer::assign_user_to_user($agent, $user);
-                // }
-            }
+            // 3. Prepare Error Response if something breaks (e.g., DB connection fails)
+            $responseData = [
+                'status'  => 'error',
+                'message' => 'Error syncing customers: ' . $e->getMessage(),
+                'line'    => $e->getLine()
+            ];
+            $statusCode = 500;
         }
+
+        // 4. Update the exact same log record with the final response payload and status
+        $apiLog->updateResponse($responseData, $statusCode);
+
+        return response()->json($responseData, $statusCode);
     }
 }
