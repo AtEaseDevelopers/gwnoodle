@@ -43,4 +43,6 @@ return [
     'status' => '状态',
     'supervisor' => '主管',
     'total_price' => '总价',
+    'autocount_status' => 'Autocount 状态',
+
 ];

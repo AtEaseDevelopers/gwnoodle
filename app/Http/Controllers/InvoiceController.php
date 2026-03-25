@@ -763,23 +763,37 @@ class InvoiceController extends AppBaseController
         }
     }
 
-    public function submitAutocountInvoices()
+    public function submitAutocountInvoices(Request $request)
     {
         try {
-            // Update only invoices where status = 1 and autocount_status = 'pending'
-            $updated = \App\Models\Invoice::where('status', 1)->update(['autocount_status' => '']);
+            // Extract only IDs from objects sent by JS
+            $invoiceIds = collect($request->invoices)->pluck('id')->toArray();
 
-            if ($updated === 0) {
-                Flash::info('No invoices to sync.');
-            } else {
-                Flash::success("$updated invoice(s) updated successfully.");
+            if (empty($invoiceIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No invoices selected'
+                ], 400);
             }
+
+            $updated = \App\Models\Invoice::whereIn('id', $invoiceIds)
+                ->where('status', 1)
+                ->update(['autocount_status' => 'pending']);
+
+            return response()->json([
+                'success' => true,
+                'results' => [
+                    'successful' => $invoiceIds,
+                    'failed' => []
+                ]
+            ]);
 
         } catch (\Throwable $th) {
             report($th);
-            Flash::error('Something went wrong. Please contact administrator.');
+            return response()->json([
+                'success' => false,
+                'message' => $th->getMessage()
+            ], 500);
         }
-
-        return redirect(route('invoices.index'));
     }
 }

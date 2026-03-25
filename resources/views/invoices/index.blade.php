@@ -228,7 +228,7 @@
         function submitAutocountInvoicesRequest(invoices, currencyRate){
             ShowLoad();
             $.ajax({
-                url: "{{ url('/autocount/submit-invoices') }}",
+                url: "{{ url('/invoices/submitAutocountInvoices') }}",        
                 type: "POST",
                 data: {
                     invoices: invoices,
@@ -339,6 +339,8 @@
                     }
                 },
                 error: function(error) {
+                        console.log(error); // 👈 VERY IMPORTANT
+
                     HideLoad();
                     noti('e','Error', error.responseJSON?.message || 'Failed to submit e-invoices');
                 }

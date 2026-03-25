@@ -13,8 +13,7 @@ return new class extends Migration
     {
         Schema::table('invoices', function (Blueprint $table) {
             // Add the column after 'status' and make it nullable
-            $table->string('autocount_status', 50)->nullable()->after('status');
-
+            $table->string('autocount_status', 50)->default('pending')->after('status');
             // Add index
             $table->index('autocount_status');
         });

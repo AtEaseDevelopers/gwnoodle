@@ -442,7 +442,8 @@ Route::group(['middleware' => ['auth']], function() {
         Route::resource('invoices', App\Http\Controllers\InvoiceController::class);
         Route::post('/invoices/massdestroy', [App\Http\Controllers\InvoiceController::class, 'massdestroy']);
         Route::post('/invoices/massupdatestatus', [App\Http\Controllers\InvoiceController::class, 'massupdatestatus']);
-        //Invoice Detail
+        Route::post('/invoices/submitAutocountInvoices', [App\Http\Controllers\InvoiceController::class, 'submitAutocountInvoices']);              
+         //Invoice Detail
         Route::get('invoiceDetails/getprice/{invoice_id}/{product_id}', [App\Http\Controllers\InvoiceDetailController::class, 'getprice']);
         Route::resource('invoiceDetails', App\Http\Controllers\InvoiceDetailController::class);
         Route::post('/invoiceDetails/massdestroy', [App\Http\Controllers\InvoiceDetailController::class, 'massdestroy']);

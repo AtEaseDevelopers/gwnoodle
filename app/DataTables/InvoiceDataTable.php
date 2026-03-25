@@ -154,8 +154,7 @@ class InvoiceDataTable extends DataTable
                     [
                     'targets' => 10,
                     'render' => 'function(data, type){return data == 1 ? "Completed" : "New";}'
-                    ],
-                  
+                    ],                  
                 ],
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
@@ -260,6 +259,13 @@ class InvoiceDataTable extends DataTable
                 'title' => trans('invoices.status'),
                 'data' => 'status',
                 'name' => 'invoices.status'
+            ]),
+
+            'autocount_status' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('invoices.autocount_status'),
+                'data' => 'autocount_status',
+                'name' => 'invoices.autocount_status',
+                'searchable' => false               
             ]),
         ];
 
