@@ -140,7 +140,6 @@ class CustomerController extends Controller
                         'agent_id'                 => Agent::where('employeeid', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
                         'supervisor_id'            => Agent::where('employeeid', $customer_data['Supervisor'] ?? null)->value('id') ?? null,
                         'driver_id'                => Agent::where('employeeid', $customer_data['Driver'] ?? null)->value('id') ?? null,
-                        'kelindan_id'              => Agent::where('employeeid', $customer_data['Kelindan'] ?? null)->value('id') ?? null,
                     ]
                 );
 

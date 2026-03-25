@@ -29,30 +29,22 @@ class ProductController extends Controller
             }
 
             foreach ($data as $record) {
-                
-                // Perform manual validation for the record
                 $validationErrors = $this->manualValidation($record);
 
                 if (!empty($validationErrors)) {
-                    // Add validation errors for this record to the results array
                     $processedResults[] = [
                         'classification_code' => $record['ItemCode'] ?? null,
                         'status'              => 'validation_error',
                         'errors'              => $validationErrors,
                     ];
-                    continue; // Skip processing this record and move to the next
+                    continue;
                 }
 
                 // 2. Clean 'updateOrCreate' logic (Replaces the big if/else block)
                 Product::updateOrCreate(
-                    
-                    // CONDITION: Look for existing product by classification_code
                     ['classification_code' => $record['ItemCode']],
-                    
-                    // DATA: If found, update these. If not found, insert these along with the condition above.
                     [
-                        // Uses Description, falls back to ItemDetail, defaults to 'Unknown' if both are missing
-                        'name'      => $record['Description'] ?? ($record['ItemDetail'] ?? 'Unknown Item'),
+                        'name'      => $record['Description'] ?? null,
                         'price'     => $record['Price'] ?? 0,
                         'cost'      => $record['Cost'] ?? 0,
                         'unit_code' => $record['UOM'] ?? null,
@@ -71,8 +63,6 @@ class ProductController extends Controller
             $statusCode = 200;
 
         } catch (\Exception $e) {
-            
-            // Prepare Error Response if a massive failure occurs
             $responseData = [
                 'status'  => 'error',
                 'message' => 'Error processing batch: ' . $e->getMessage(),
@@ -81,7 +71,6 @@ class ProductController extends Controller
             $statusCode = 500;
         }
 
-        // 3. Update the exact same log record with the final response payload and status
         $apiLog->updateResponse($responseData, $statusCode);
 
         return response()->json($responseData, $statusCode);
