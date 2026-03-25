@@ -33,23 +33,23 @@ class ProductController extends Controller
 
                 if (!empty($validationErrors)) {
                     $processedResults[] = [
-                        'classification_code' => $record['ItemCode'] ?? null,
-                        'status'              => 'validation_error',
-                        'errors'              => $validationErrors,
+                        'unit_code ' => $record['ItemCode'] ?? null,
+                        'status'     => 'validation_error',
+                        'errors'     => $validationErrors,
                     ];
                     continue;
                 }
 
                 // 2. Clean 'updateOrCreate' logic (Replaces the big if/else block)
                 Product::updateOrCreate(
-                    ['classification_code' => $record['ItemCode']],
+                    ['unit_code ' => $record['ItemCode']],
                     [
-                        'name'      => $record['Description'] ?? null,
-                        'price'     => $record['Price'] ?? 0,
-                        'cost'      => $record['Cost'] ?? 0,
-                        'unit_code' => $record['UOM'] ?? null,
-                        'status'    => !empty($record['IsActive']) ? 1 : 0,
-                        'type'      => 1,
+                        'name'                => $record['Description'] ?? null,
+                        'price'               => $record['Price'] ?? 0,
+                        'cost'                => $record['Cost'] ?? 0,
+                        'classification_code' => $record['UOM'] ?? null,
+                        'status'              => !empty($record['IsActive']) ? 1 : 0,
+                        'type'                => 1,
                     ]
                 );
             }

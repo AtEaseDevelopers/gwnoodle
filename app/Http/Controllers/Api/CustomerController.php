@@ -135,23 +135,11 @@ class CustomerController extends Controller
                         'email'                    => $customer_data['EmailAddress'] ?? null,
                         'group'                    => $customer_data['Area'] ?? null,
                         
-                        'paymentterm'              => null,
+                        'paymentterm'              => ($customer_data['DisplayTerm'] === 'Cash') ? 1 : 3, // Assuming 'Cash' = 1, others = 3 (Credit Note) - adjust as needed
                         'state'                    => StateCode::where('state', $customer_data['State'])->value('id') ?? null,
-                        'agent_id'                 => Agent::where('employeeid', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
-                        'supervisor_id'            => Agent::where('employeeid', $customer_data['Supervisor'] ?? null)->value('id') ?? null,
-                        'driver_id'                => Agent::where('employeeid', $customer_data['Driver'] ?? null)->value('id') ?? null,
+                        'driver_id'                => Agent::where('employeeid', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
                     ]
                 );
-
-                // (Optional) Handle Agent Assignment if needed
-                /*
-                if (!empty($customer_data['SalesAgent'])) {
-                    $agent = Agent::where('name', $customer_data['SalesAgent'])->first();
-                    if ($agent) {
-                        // Assign agent logic...
-                    }
-                }
-                */
             }
 
             // 2. Prepare Success Response
