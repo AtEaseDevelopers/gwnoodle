@@ -261,12 +261,6 @@ class InvoiceDataTable extends DataTable
                 'name' => 'invoices.status'
             ]),
 
-            'autocount_status' => new \Yajra\DataTables\Html\Column([
-                'title' => trans('invoices.autocount_status'),
-                'data' => 'autocount_status',
-                'name' => 'invoices.autocount_status',
-                'searchable' => false               
-            ]),
         ];
 
         if (config('services.e_invoice.enabled', false)) {

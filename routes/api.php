@@ -87,6 +87,8 @@ Route::namespace('API')->group(function () {
     // invoices
     Route::get('/invoice/pending', 'InvoiceController@syncPending');
     Route::post('/invoice/update', 'InvoiceController@update');
+    Route::post('/invoice/update-log', 'InvoiceController@updateLog');
+
 
 });
 

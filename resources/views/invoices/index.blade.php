@@ -228,7 +228,7 @@
         function submitAutocountInvoicesRequest(invoices, currencyRate){
             ShowLoad();
             $.ajax({
-                url: "{{ url('/invoices/submitAutocountInvoices') }}",        
+                url: "{{ url('/autocount/submit-invoices') }}",
                 type: "POST",
                 data: {
                     invoices: invoices,

@@ -180,4 +180,10 @@ class InvoiceController extends Controller
 
         return response()->json($responseData, $statusCode);
     }
+
+    public function updateLog(Request $request)
+    {
+        // update error log for invoice sync
+        $apiLog = ApiLog::createLog($request);
+    }
 }
