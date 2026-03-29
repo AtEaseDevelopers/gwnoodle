@@ -323,7 +323,7 @@ class DriverController extends Controller
             //process
             $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
             if(!empty($trip)){
-                if($trip->type == 2){
+                if($trip->type == 0){
                     return response()->json([
                         'result' => true,
                         'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -399,6 +399,21 @@ class DriverController extends Controller
                 'driver_id' => $driver->id,
                 'type' => Trip::START_TRIP,
             ]);
+             //generate task
+                $assigns = Assign::where('driver_id', $driver->id)->orderby('sequence','asc')->pluck('customer_id')->unique()->values()->all();
+                $count = 1;
+                foreach($assigns as $assign){
+                    $task = new Task();
+                    $task->date = date("Y-m-d");
+                    $task->driver_id = $driver->id;
+                    $task->customer_id = $assign;
+                    $task->sequence = $count;
+                    $task->status = 0;
+                    $task->trip_id = $trip->id;
+                    $task->save();
+                    $count = $count + 1;
+                }
+
             //store lorry status to 0 when in use
             $lorry->status = 0;
             $lorry->driver_id = $driver->id;
@@ -563,15 +578,33 @@ class DriverController extends Controller
                 ->where('type', Trip::START_TRIP)
                 ->first();
 
-        $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$latestTrip->id)->where('status', InventoryCount::STATUS_APPROVED)->first();
-
-        if(!$inventoryCount ){
+        if (empty($latestTrip)) {
             return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Start trip record not found.',
+                'data' => null
+            ], 200);
+        }
+
+    	 $inventoryBalances = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)
+                ->whereNotNull('batches')
+                ->where('batches', '!=', '[]')
+                ->where('batches', '!=', '{}')
+                ->get();
+
+            if (!$inventoryBalances->isEmpty()) {
+ 					$inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$latestTrip->id)->where('status', InventoryCount::STATUS_APPROVED)->first();
+
+        			if(!$inventoryCount ){
+           			 return response()->json([
                 'result' => false,
                 'message' => __LINE__ . $this->message_separator . 'Driver have to complete Stock Out before end trip.',
                 'data' => null
             ], 200);
         }
+            }
+    
+       
 
         try {
 
@@ -4668,8 +4701,13 @@ class DriverController extends Controller
         }
 
         try {
-            $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$driver->trip_id)->first();
-            
+ 			$trip = Trip::where('driver_id', $driver->id)
+                    ->where('uuid',$driver->trip_id)
+                    ->where('type', 1)
+                    ->orderBy('date', 'desc')
+                    ->first();
+            $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$trip->id)->first();
+                        
             if($inventoryCount){
                 if($inventoryCount->status == InventoryCount::STATUS_APPROVED ){
                     return response()->json([
@@ -4899,7 +4937,7 @@ class DriverController extends Controller
                     continue;
                 }
                 // Get the driver assigned to this lorry
-                $driver = Driver::find($lorry->driver_id);
+                $driver = $lorry->driver_id ? Driver::find($lorry->driver_id) : null;
 
                 // Get all batch IDs from the inventory
                 $batchIds = array_keys($inventoryBalance->batches);
@@ -4982,6 +5020,7 @@ class DriverController extends Controller
                         return strtotime($a['expiry_date']) - strtotime($b['expiry_date']);
                     });
                 }
+                unset($product);
 
                 // Get latest trip info for display purposes (optional)
                 $latestTrip = Trip::where('lorry_id', $lorryId)
@@ -4992,7 +5031,7 @@ class DriverController extends Controller
                     'lorry_id' => $lorryId,
                     'lorry_number' => $lorry->lorryno,
                     'lorry_status' => $lorry->status,
-                    'driver_name' => $driver->name,
+                    'driver_name' => $driver ? $driver->name : null,
                     'driver_code' => $driver->employeeid ?? null,
                     'trip_info' => $latestTrip ? [
                         'trip_id' => $latestTrip->id,
@@ -5010,7 +5049,7 @@ class DriverController extends Controller
 
             // Sort by driver name
             usort($activeLorriesWithInventory, function($a, $b) {
-                return strcasecmp($a['driver_name'], $b['driver_name']);
+                return strcasecmp($a['driver_name'] ?? '', $b['driver_name'] ?? '');
             });
 
             // Calculate overall summary
@@ -5174,6 +5213,7 @@ class DriverController extends Controller
                         return strtotime($a['expiry_date']) - strtotime($b['expiry_date']);
                     });
                 }
+                unset($product);
                 
                 // Calculate summary
                 $totalBatches = $inventoryBalances->count();
@@ -5242,7 +5282,7 @@ class DriverController extends Controller
         }
     }
 
-    public function getStockCount(Request $request)
+     public function getStockCount(Request $request)
     {
         // Validate session
         $user = User::where('session', $request->header('session'))->first();
@@ -5284,15 +5324,17 @@ class DriverController extends Controller
                 $formattedItems = array_map(function ($item) use ($products) {
                     $productId = $item['product_id'];
                     $product = $products[$productId] ?? null;
+                    $firstBatch = $item['batches'][0] ?? [];
 
-                    $warehouse = Warehouse::find($item['warehouse_id']);
+                    //$warehouse = Warehouse::find($item['warehouse_id']);
                     return [
                         'product_id' => $item['product_id'],
                         'product_name' => $product ? $product->name : null,
-                        'batch_code' =>$item['batches'][0]['batch_code'],
-                        'warehouse'=> $warehouse ? $warehouse->name : null,
-                        'counted_quantity' => $item['counted_quantity'],
-                        'current_quantity' => $item['current_quantity']
+                        'batch_id' => $firstBatch['batch_id'] ?? null,
+                        'batch_code' => $firstBatch['batch_code'] ?? null,
+                        //'warehouse'=> $warehouse ? $warehouse->name : null,
+                        'counted_quantity' => $item['counted_quantity'] ?? 0,
+                        'current_quantity' => $item['current_quantity'] ?? 0
                     ];
                 }, $items);
             }
@@ -5982,7 +6024,7 @@ class DriverController extends Controller
             $inventoryBalance = InventoryBalance::where('lorry_id', $lorry->id)->first();
             
             if (!$inventoryBalance || empty($inventoryBalance->batches)) {
-                if (!$hasInventoryOnly) {
+                
                     // Include lorries without inventory if requested
                     $lorriesWithInventory[] = [
                         'lorry_id' => $lorry->id,
@@ -5993,7 +6035,7 @@ class DriverController extends Controller
                         'total_quantity' => 0,
                         'batches' => []
                     ];
-                }
+               
                 continue;
             }
             

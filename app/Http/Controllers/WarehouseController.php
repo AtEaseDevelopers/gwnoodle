@@ -466,9 +466,12 @@ class WarehouseController extends Controller
         $validator = Validator::make($request->all(), [
             'from_warehouse_id' => 'required|exists:warehouses,id',
             'to_warehouse_id' => 'required|exists:warehouses,id|different:from_warehouse_id',
-            'batch_id' => 'required|exists:product_batches,id',
-            'quantity' => 'required|integer|min:1',
             'remarks' => 'nullable|string|max:500',
+            'items' => 'nullable|array|min:1',
+            'items.*.batch_id' => 'required_with:items|exists:product_batches,id',
+            'items.*.quantity' => 'required_with:items|integer|min:1',
+            'batch_id' => 'required_without:items|exists:product_batches,id',
+            'quantity' => 'required_without:items|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -479,63 +482,93 @@ class WarehouseController extends Controller
 
         $fromWarehouse = Warehouse::findOrFail($request->from_warehouse_id);
         $toWarehouse = Warehouse::findOrFail($request->to_warehouse_id);
-        $batch = ProductBatch::with('product')->findOrFail($request->batch_id);
+        $items = collect($request->input('items', []));
 
-        // Check if source warehouse has the inventory
-        $sourceInventory = WarehouseInventoryBalance::where('warehouse_id', $request->from_warehouse_id)
-            ->where('batch_id', $request->batch_id)
-            ->first();
+        if ($items->isEmpty()) {
+            $items = collect([[
+                'batch_id' => (int) $request->batch_id,
+                'quantity' => (int) $request->quantity,
+            ]]);
+        } else {
+            $items = $items
+                ->groupBy('batch_id')
+                ->map(function ($group, $batchId) {
+                    return [
+                        'batch_id' => (int) $batchId,
+                        'quantity' => (int) $group->sum('quantity'),
+                    ];
+                })
+                ->values();
+        }
 
-        if (!$sourceInventory || $sourceInventory->quantity < $request->quantity) {
-            $available = $sourceInventory ? $sourceInventory->quantity : 0;
-            Flash::error('Insufficient quantity in source warehouse. Available: ' . $available . ', Requested: ' . $request->quantity);
-            return redirect()->back()->withInput();
+        $batchIds = $items->pluck('batch_id')->all();
+        $batches = ProductBatch::with('product')->whereIn('id', $batchIds)->get()->keyBy('id');
+        $sourceInventories = WarehouseInventoryBalance::where('warehouse_id', $request->from_warehouse_id)
+            ->whereIn('batch_id', $batchIds)
+            ->get()
+            ->keyBy('batch_id');
+
+        foreach ($items as $item) {
+            $sourceInventory = $sourceInventories->get($item['batch_id']);
+            $batch = $batches->get($item['batch_id']);
+
+            if (!$batch || !$sourceInventory || $sourceInventory->quantity < $item['quantity']) {
+                $available = $sourceInventory ? $sourceInventory->quantity : 0;
+                $batchCode = $batch ? $batch->batch_code : ('#' . $item['batch_id']);
+                Flash::error('Insufficient quantity for batch ' . $batchCode . '. Available: ' . $available . ', Requested: ' . $item['quantity']);
+                return redirect()->back()->withInput();
+            }
         }
 
         DB::beginTransaction();
         
         try {
-            // Remove from source warehouse
-            $sourceInventory->decreaseQuantity($request->quantity);
+            $totalUnits = 0;
 
-            // Add to destination warehouse
-            $destInventory = WarehouseInventoryBalance::firstOrCreate(
-                [
+            foreach ($items as $item) {
+                $batch = $batches->get($item['batch_id']);
+                $sourceInventory = $sourceInventories->get($item['batch_id']);
+
+                $sourceInventory->decreaseQuantity($item['quantity']);
+
+                $destInventory = WarehouseInventoryBalance::firstOrCreate(
+                    [
+                        'warehouse_id' => $request->to_warehouse_id,
+                        'product_id' => $batch->product_id,
+                        'batch_id' => $batch->id,
+                    ],
+                    ['quantity' => 0]
+                );
+                $destInventory->increaseQuantity($item['quantity']);
+
+                \App\Models\InventoryTransaction::create([
+                    'warehouse_id' => $request->from_warehouse_id,
+                    'product_id' => $batch->product_id,
+                    'batch_id' => $batch->id,
+                    'quantity' => -$item['quantity'],
+                    'type' => InventoryTransaction::TYPE_TRANSFER,
+                    'remark' => 'Stock transferred to warehouse: -[' . $toWarehouse->name. ']',
+                    'date' => now(),
+                    'user' => Auth::user()->name ?? 'System',
+                ]);
+
+                \App\Models\InventoryTransaction::create([
                     'warehouse_id' => $request->to_warehouse_id,
                     'product_id' => $batch->product_id,
-                    'batch_id' => $request->batch_id,
-                ],
-                ['quantity' => 0]
-            );
-            $destInventory->increaseQuantity($request->quantity);
+                    'batch_id' => $batch->id,
+                    'quantity' => $item['quantity'],
+                    'type' => InventoryTransaction::TYPE_TRANSFER,
+                    'remark' => 'Stock received from warehouse: -[' . $fromWarehouse->name.']  ',
+                    'date' => now(),
+                    'user' => Auth::user()->name ?? 'System',
+                ]);
 
-            // Create inventory transaction for source warehouse (Stock Out)
-            \App\Models\InventoryTransaction::create([
-                'warehouse_id' => $request->from_warehouse_id,
-                'product_id' => $batch->product_id,
-                'batch_id' => $request->batch_id,
-                'quantity' => -$request->quantity, // Negative for outgoing
-                'type' => InventoryTransaction::TYPE_TRANSFER,
-                'remark' => 'Stock transferred to warehouse: -[' . $toWarehouse->name. ']',
-                'date' => now(),
-                'user' => Auth::user()->name ?? 'System',
-            ]);
-
-            // Create inventory transaction for destination warehouse (Stock In)
-            \App\Models\InventoryTransaction::create([
-                'warehouse_id' => $request->to_warehouse_id,
-                'product_id' => $batch->product_id,
-                'batch_id' => $request->batch_id,
-                'quantity' => $request->quantity, // Positive for incoming
-                'type' => InventoryTransaction::TYPE_TRANSFER, 
-                'remark' => 'Stock received from warehouse: -[' . $fromWarehouse->name.']  ',
-                'date' => now(),
-                'user' => Auth::user()->name ?? 'System',
-            ]);
+                $totalUnits += $item['quantity'];
+            }
 
             DB::commit();
 
-            Flash::success($request->quantity . ' units of ' . $batch->batch_code . ' transferred from ' . $fromWarehouse->name . ' to ' . $toWarehouse->name . ' successfully.');
+            Flash::success($totalUnits . ' units across ' . $items->count() . ' batch(es) transferred from ' . $fromWarehouse->name . ' to ' . $toWarehouse->name . ' successfully.');
 
         } catch (\Exception $e) {
             DB::rollBack();

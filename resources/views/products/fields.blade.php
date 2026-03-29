@@ -1,15 +1,12 @@
 <!-- Unit Code Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('unit_code', __('Unit Code')) !!}
-    <div class="input-group">
-        {!! Form::select('unit_code', $unitCodeOptions ?? [], null, [
-            'class' => 'form-control select2-unit-code',
-            'id' => 'unit_code',
-            'placeholder' => __('Select or type new unit code...'),
-            'style' => 'width: 100%;'
-        ]) !!}
-    </div>
-    <small class="form-text text-muted">You can select from existing or type a new unit code</small>
+    {!! Form::text('unit_code', null, [
+        'class' => 'form-control',
+        'id' => 'unit_code',
+        'maxlength' => 255,
+        'placeholder' => __('Enter unit code')
+    ]) !!}
 </div>
 
 <!-- Name Field -->
@@ -100,25 +97,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        /* Select2 custom styling */
-        .select2-container--default .select2-selection--single {
-            height: 38px;
-            border: 1px solid #ced4da;
-            border-radius: 0.25rem;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            line-height: 36px;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 36px;
-        }
-        
-        /* Style for newly created tags */
-        .select2-container--default .select2-selection--single .select2-selection__rendered .select2-selection__choice {
-            background-color: #e21212;
-            color: white;
-        }
-        
         /* Carton field styling */
         #units_per_carton_field {
             transition: all 0.3s ease;
@@ -137,57 +115,8 @@
         }
     </style>
 
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
-
     <script>
         $(document).ready(function () {
-            
-            // Initialize Select2 for unit code with tags enabled
-            $('.select2-unit-code').select2({
-                placeholder: '{{ __("Select or type new unit code...") }}',
-                allowClear: true,
-                tags: true,  // This enables creating new tags
-                createTag: function(params) {
-                    var term = $.trim(params.term);
-                    
-                    // Don't create tag if empty
-                    if (term === '') {
-                        return null;
-                    }
-                    
-                    // Check if the term already exists in the dropdown
-                    var exists = false;
-                    $('.select2-unit-code option').each(function() {
-                        if ($(this).val() === term) {
-                            exists = true;
-                            return false;
-                        }
-                    });
-                    
-                    // If it doesn't exist, create a new tag
-                    if (!exists) {
-                        return {
-                            id: term,
-                            text: term + ' (new)',
-                            newTag: true // Add a flag for new tags
-                        };
-                    }
-                    
-                    return null;
-                },
-                templateResult: function(result) {
-                    if (result.newTag) {
-                        return $('<span class="text-warning"><i class="fas fa-plus-circle"></i> ' + result.text + '</span>');
-                    }
-                    return result.text;
-                },
-                templateSelection: function(result) {
-                    return result.text.replace(' (new)', '');
-                },
-                width: '100%'
-            });
-
             // Carton enabled toggle logic
             function toggleUnitsPerCarton() {
                 if ($('#carton_enabled').val() == '1') {

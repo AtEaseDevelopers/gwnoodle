@@ -43,7 +43,11 @@ class ProductBatchController extends AppBaseController
      */
     public function index(ProductBatchDataTable $productBatchDataTable)
     {
-        return $productBatchDataTable->render('product_batches.index');
+        $warehouses = Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'location']);
+
+        return $productBatchDataTable->render('product_batches.index', compact('warehouses'));
     }
 
     /**
@@ -79,7 +83,7 @@ class ProductBatchController extends AppBaseController
     {
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:products,id',
-            'warehouse_id' => 'required|exists:warehouses,id',
+            //'warehouse_id' => 'required|exists:warehouses,id',
             'batch_code' => 'required|string|unique:product_batches,batch_code',
             'expiry_date' => 'required|date|after:today',
             'quantity' => 'nullable|integer|min:1',
@@ -482,6 +486,99 @@ class ProductBatchController extends AppBaseController
         }
     }
 
+    public function stockInBulk(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'remark' => 'nullable|string|max:255',
+            'items' => 'required|array|min:1',
+            'items.*.batch_id' => 'required|exists:product_batches,id',
+            'items.*.quantity' => 'required|integer|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first()
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $warehouse = Warehouse::findOrFail($request->warehouse_id);
+            $items = collect($request->input('items', []))
+                ->groupBy('batch_id')
+                ->map(function ($group, $batchId) {
+                    return [
+                        'batch_id' => (int) $batchId,
+                        'quantity' => (int) $group->sum('quantity'),
+                    ];
+                })
+                ->values();
+
+            $batchIds = $items->pluck('batch_id')->all();
+            $productBatches = ProductBatch::whereIn('id', $batchIds)->get()->keyBy('id');
+
+            $totalUnits = 0;
+
+            foreach ($items as $item) {
+                $productBatch = $productBatches->get($item['batch_id']);
+
+                if (!$productBatch) {
+                    throw new \RuntimeException('Product Batch not found');
+                }
+
+                $quantity = $item['quantity'];
+
+                $productBatch->increment('quantity', $quantity);
+
+                if ($productBatch->status == 2) {
+                    $productBatch->status = 1;
+                    $productBatch->save();
+                }
+
+                $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
+                    [
+                        'warehouse_id' => $warehouse->id,
+                        'product_id' => $productBatch->product_id,
+                        'batch_id' => $productBatch->id,
+                    ],
+                    ['quantity' => 0]
+                );
+
+                $warehouseInventory->increaseQuantity($quantity);
+
+                InventoryTransaction::create([
+                    'warehouse_id' => $warehouse->id,
+                    'product_id' => $productBatch->product_id,
+                    'batch_id' => $productBatch->id,
+                    'quantity' => $quantity,
+                    'type' => 1,
+                    'remark' => ($request->remark ?? 'Bulk stock in from barcode scan') . ' - Warehouse: ' . $warehouse->name,
+                    'date' => now(),
+                    'user' => Auth::user()->name ?? 'system'
+                ]);
+
+                $totalUnits += $quantity;
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => $totalUnits . ' units added across ' . $items->count() . ' batch(es) in ' . $warehouse->name . ' successfully.'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error processing bulk stock in: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function stockOut(Request $request, $id)
     {
         try {
@@ -684,7 +781,8 @@ class ProductBatchController extends AppBaseController
         $barcodeBase64 = DNS1D::getBarcodePNG($batchCode, 'C128B', 4, 250, [0,0,0], false);
         $barcode = imagecreatefromstring(base64_decode($barcodeBase64));
 
-        $width = imagesx($barcode);
+        $horizontalPadding = 80;
+        $width = imagesx($barcode) + ($horizontalPadding * 2);
         $height = imagesy($barcode) + 120;
 
         $canvas = imagecreatetruecolor($width, $height);
@@ -692,16 +790,22 @@ class ProductBatchController extends AppBaseController
         $black = imagecolorallocate($canvas, 0, 0, 0);
 
         imagefill($canvas, 0, 0, $white);
-        imagecopy($canvas, $barcode, 0, 0, 0, 0, imagesx($barcode), imagesy($barcode));
+        imagecopy($canvas, $barcode, $horizontalPadding, 0, 0, 0, imagesx($barcode), imagesy($barcode));
+
+        $fontPath = public_path('fonts/DejaVuSans.ttf');
+        $fontSize = 40;
+        $textBoundingBox = imagettfbbox($fontSize, 0, $fontPath, $batchCode);
+        $textWidth = $textBoundingBox[2] - $textBoundingBox[0];
+        $textX = max($horizontalPadding, (int) (($width - $textWidth) / 2));
 
         imagettftext(
             $canvas,
-            40,
+            $fontSize,
             0,
-            20,
+            $textX,
             $height - 20,
             $black,
-            public_path('fonts/DejaVuSans.ttf'),
+            $fontPath,
             $batchCode
         );
 

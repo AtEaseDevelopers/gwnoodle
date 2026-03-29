@@ -29,7 +29,7 @@ class ReportDataTable extends DataTable
      */
     public function query(Report $model)
     {
-        return $model->newQuery()->orderBy('name', 'asc');
+        return $model->newQuery()->where('status', 1)->orderBy('name', 'asc');
     }
 
     /**

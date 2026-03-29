@@ -53,10 +53,10 @@
                                             @if( ($i+1) % 2 == 0 )
 
                                                 <tr class="even">
-                                                    <td>{{ $ass['customer']['code'] }}</td>
-                                                    <td>{{ $ass['customer']['company'] }}</td>
-                                                    <td>{{ $ass['customer']['phone'] }}</td>
-                                                    <td class=" truncate">{{ $ass['customer']['address'] }}</td>
+                                                    <td>{{ $ass['customer']['code'] ?? '' }}</td>
+                                                    <td>{{ $ass['customer']['company'] ?? '' }}</td>
+                                                    <td>{{ $ass['customer']['phone'] ?? '' }}</td>
+                                                    <td class=" truncate">{{ $ass['customer']['delivery_address'] ?? $ass['customer']['billing_address'] ?? '' }}</td>
                                                     <td>{{ $ass['sequence'] }}</td>
                                                     <td>
                                                     {!! Form::open(['route' => ['drivers.deleteassign', Crypt::encrypt($ass['id'])], 'method' => 'delete']) !!}
@@ -72,10 +72,10 @@
                                                 </tr>
                                             @else
                                                 <tr class="odd">
-                                                    <td>{{ $ass['customer']['code'] }}</td>
-                                                    <td>{{ $ass['customer']['company'] }}</td>
-                                                    <td>{{ $ass['customer']['phone'] }}</td>
-                                                    <td class=" truncate">{{ $ass['customer']['address'] }}</td>
+                                                    <td>{{ $ass['customer']['code'] ?? '' }}</td>
+                                                    <td>{{ $ass['customer']['company'] ?? '' }}</td>
+                                                    <td>{{ $ass['customer']['phone'] ?? '' }}</td>
+                                                    <td class=" truncate">{{ $ass['customer']['delivery_address'] ?? $ass['customer']['billing_address'] ?? '' }}</td>
                                                     <td>{{ $ass['sequence'] }}</td>
                                                     <td>
                                                     {!! Form::open(['route' => ['drivers.deleteassign', Crypt::encrypt($ass['id'])], 'method' => 'delete']) !!}

@@ -1,4 +1,4 @@
-c <?php
+<?php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
@@ -369,6 +369,7 @@ Route::group(['middleware' => ['auth']], function() {
         ]);
         
         Route::post('/productBatches/stock-in/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
+        Route::post('/productBatches/stock-in-bulk', [App\Http\Controllers\ProductBatchController::class, 'stockInBulk'])->name('productBatches.stock-in-bulk');
         Route::post('/productBatches/stock-out/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockOut'])->name('productBatches.stock-out');
         
         // Mass actions
@@ -618,6 +619,7 @@ Route::group(['middleware' => ['auth']], function() {
     });
     Route::group(['middleware' => ['permission:inventorytransaction']], function() {
         Route::get('/inventoryTransactions/index', [App\Http\Controllers\InventoryTransactionController::class, 'index'])->name('inventoryTransactions.index');
+        Route::get('/warehouseTransactions/index', [App\Http\Controllers\InventoryTransactionController::class, 'warehouseIndex'])->name('warehouseTransactions.index');
         Route::get('/inventoryTransactions/show/{id}', [App\Http\Controllers\InventoryTransactionController::class, 'show'])->name('inventoryTransactions.show');
 
     });
@@ -686,4 +688,3 @@ Route::group(['middleware' => ['auth']], function() {
         // Route::resource('reportdetails', App\Http\Controllers\ReportdetailController::class);
     }
 });
-

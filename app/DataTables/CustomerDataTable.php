@@ -109,10 +109,6 @@ class CustomerDataTable extends DataTable
             "), function ($join) {
                 $join->on('customers.id', '=', 'invoicesummary.customer_id');
             })
-            ->leftJoin('codes', function ($join) {
-                $join->on('customers.group', '=', 'codes.value')
-                    ->where('codes.code', '=', 'customer_group');
-            })
             ->select(
                 'customers.*',
                 DB::raw("COALESCE(invoicesummary.totalprice, 0) as totalprice"),
@@ -126,37 +122,7 @@ class CustomerDataTable extends DataTable
             END as credit
     
                 ")
-            )
-                ->groupBy(
-                    'customers.id',
-                    'customers.code',
-                    'customers.company',
-                    'customers.paymentterm',
-                    'customers.phone',
-                    'customers.billing_address',
-                    'customers.delivery_address',
-                    'customers.status',
-                    'customers.created_at',
-                    'customers.updated_at',
-                    'customers.deleted_at',
-                    'customers.agent_id',
-                    'customers.driver_id',
-                    'customers.group',
-                    'customers.category',
-                    'customers.postcode',
-                    'customers.area',
-                    'customers.email',
-                    'customers.state',
-                    'customers.country',
-                    'customers.registration_no',
-                    'customers.msic',
-                    'customers.sst_registration_no',
-                    'customers.tourism_tax_registration',
-                    'invoicesummary.customer_id',
-                    'invoicesummary.totalprice',
-                    'invoicesummary.paid',
-                    'invoicesummary.credit'
-                );
+            );
                 
             if ($this->request()->has('group_id') && $this->request()->input('group_id') != -1) {
                 $query->whereRaw('FIND_IN_SET(?, customers.group)', [$this->request()->input('group_id')]);

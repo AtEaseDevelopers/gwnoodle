@@ -9,7 +9,7 @@
 </head>
 <body>
 <h1>Privacy Policy Page</h1>
-<p>At Ease is committed to preserving your privacy. Please read the following privacy policy to understand how we use and protect the information obtained from those visiting and using WAI MAH ICE App (the "App"). This policy is your guide to how we will handle information we learn about you from your visit to our App.</p>
+<p>At Ease is committed to preserving your privacy. Please read the following privacy policy to understand how we use and protect the information obtained from those visiting and using GW VAN SALES App (the "App"). This policy is your guide to how we will handle information we learn about you from your visit to our App.</p>
 <p>By using the App you consent to the collection/retention and use of your personal information in accordance with this policy.</p>
 <p>Information that we collect from you</p>
 <ul>

@@ -6,7 +6,7 @@
         'data-live-search' => 'true', 
         'placeholder' => 'Pick a Customer...',
         'autofocus',
-        'disabled' => isset($invoicePayment) ? 'disabled' : ''
+        
     ]) !!}
     
     @if(isset($invoicePayment))

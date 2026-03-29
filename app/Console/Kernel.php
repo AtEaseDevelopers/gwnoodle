@@ -18,6 +18,10 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->hourly();
         $schedule->command('CronJob:updatedo')
         ->everyMinute();
+
+        $schedule->command('invoices:sync-default-driver-id')
+        ->dailyAt('00:00')
+        ->withoutOverlapping();
     }
 
     /**

@@ -72,7 +72,7 @@ class InventoryTransactionDataTable extends DataTable
      */
     public function query(InventoryTransaction $model)
     {
-        return $model->newQuery()
+        $query = $model->newQuery()
             ->with([
                 'lorry:id,lorryno', 
                 'product:id,name', 
@@ -81,6 +81,14 @@ class InventoryTransactionDataTable extends DataTable
             ])
             ->select('inventory_transactions.*')
             ->orderBy('inventory_transactions.date','desc');
+
+        if (request()->routeIs('warehouseTransactions.index')) {
+            $query->whereNull('inventory_transactions.lorry_id');
+        } else {
+            $query->whereNotNull('inventory_transactions.lorry_id');
+        }
+
+        return $query;
     }
 
     /**

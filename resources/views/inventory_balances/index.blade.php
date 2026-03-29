@@ -18,8 +18,7 @@
                         </div>
                         <div class="card-body">
                             @include('inventory_balances.table')
-                            <div class="pull-right mr-3">
-                            </div>
+                            <div class="pull-right mr-3"></div>
                         </div>
                     </div>
                 </div>
@@ -27,78 +26,79 @@
         </div>
     </div>
 
-    <!-- Stock In Modal - Distribute Batch from Warehouse to Lorries -->
     <div id="stockin" class="modal fade">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
-                    <h4 class="modal-title h6">{{ __('Stock In') }} - Distribute from Warehouse to Lorries</h4>
+                    <h4 class="modal-title h6">{{ __('Stock In') }} - Move from Warehouse to Lorry</h4>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">×</button>
                 </div>
                 <div class="modal-body">
                     {!! Form::open(['route' => 'inventoryBalances.stockin', 'id' => 'stockinForm']) !!}
-                    
-                    <!-- Warehouse Selection First -->
                     <div class="form-group">
                         <label for="warehouse_id_stockin" class="col-form-label">{{ __('Select Warehouse') }}:</label>
-                        <select name="warehouse_id" id="warehouse_id_stockin" class="form-control select2-warehouse" required>
+                        <select name="warehouse_id" id="warehouse_id_stockin" class="form-control" required>
                             <option value="">{{ __('Select Warehouse') }}</option>
                             @foreach($warehouses ?? [] as $warehouse)
                                 <option value="{{ $warehouse->id }}">{{ $warehouse->name }} ({{ $warehouse->location }})</option>
                             @endforeach
                         </select>
                     </div>
-                    
-                    <!-- Batch Selection (populated based on warehouse) -->
+
                     <div class="form-group">
-                        <label for="product_batch_id" class="col-form-label">{{ __('Select Product Batch') }}:</label>
-                        <select name="product_batch_id" id="product_batch_id" class="form-control select2-batch" required disabled>
-                            <option value="">{{ __('First select a warehouse') }}</option>
+                        <label for="lorry_id_stockin" class="col-form-label">{{ __('Select Lorry') }}:</label>
+                        <select name="lorry_id" id="lorry_id_stockin" class="form-control" required>
+                            <option value="">{{ __('Select Lorry') }}</option>
+                            @foreach($lorryItems as $lorryId => $lorryName)
+                                <option value="{{ $lorryId }}">{{ $lorryName }}</option>
+                            @endforeach
                         </select>
-                        <small class="text-muted batch-info" id="batchInfo"></small>
                     </div>
 
-                    <!-- Lorry Multi-Select with Search -->
                     <div class="form-group">
-                        <label for="lorry_ids" class="col-form-label">{{ __('Select Lorries') }}:</label>
-                        <div class="dropdown">
-                            <button class="btn btn-outline-primary btn-block dropdown-toggle" type="button" id="dropdownLorryStockIn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                {{ __('Select Lorries') }}
-                            </button>
-                            <div class="dropdown-menu p-3" aria-labelledby="dropdownLorryStockIn" style="width: 100%; max-height: 300px; overflow-y: auto;">
-                                <input type="text" class="form-control mb-3" id="lorrySearchStockIn" placeholder="Search Lorries...">
-                                <div id="lorryListStockIn">
-                                    @foreach($lorryItems as $lorryId => $lorryName)
-                                        <div class="form-check ml-3">
-                                            <input class="form-check-input lorry-checkbox" type="checkbox" name="lorry_ids[]" value="{{ $lorryId }}" id="lorry_stockin_{{ $lorryId }}">
-                                            <label class="form-check-label" for="lorry_stockin_{{ $lorryId }}">
-                                                {{ $lorryName }}
-                                            </label>
-                                        </div>
-                                    @endforeach
-                                </div>
+                        <label for="batch_code_scan" class="col-form-label">{{ __('Scan Product Batch') }}:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="batch_code_scan" placeholder="Scan barcode and press Enter" autocomplete="off" disabled>
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-outline-primary" id="openBatchCameraBtn" disabled>
+                                    <i class="fa fa-camera"></i> {{ __('Scan Barcode') }}
+                                </button>
                             </div>
                         </div>
-                        <small class="text-danger lorry-error" style="display: none;">{{ __('Please select at least one lorry') }}</small>
+                        <small class="d-block text-muted" id="stockinBatchHelp">{{ __('Select warehouse and lorry first. Barcode scanner can input code followed by Enter.') }}</small>
+                        <small class="d-none text-danger" id="stockinScanError"></small>
+                        <small class="d-none text-success" id="stockinScanSuccess"></small>
                     </div>
 
-                    <!-- Quantity per Lorry -->
-                    <div class="form-group">
-                        <label for="quantity_per_lorry" class="col-form-label">{{ __('Quantity per Lorry') }}:</label>
-                        <input type="number" min="1" class="form-control" placeholder="Enter quantity per lorry" name="quantity_per_lorry" id="quantity_per_lorry" disabled>
-                        <small class="text-muted" id="totalDistributionInfo"></small>
-                        <small class="text-danger quantity-error" style="display: none;">{{ __('Please enter a valid quantity') }}</small>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm" id="stockinItemsTable">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('Batch Code') }}</th>
+                                    <th>{{ __('Product') }}</th>
+                                    <th class="text-center">{{ __('Available') }}</th>
+                                    <th style="width: 160px;">{{ __('Quantity') }}</th>
+                                    <th style="width: 90px;" class="text-center">{{ __('Action') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr id="stockinEmptyRow">
+                                    <td colspan="5" class="text-center text-muted">{{ __('No scanned items yet') }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                    
-                    <!-- Summary -->
+
+                    <div id="stockinItemsContainer"></div>
+
                     <div class="alert alert-info" id="distributionSummary" style="display: none;">
-                        <strong>{{ __('Distribution Summary:') }}</strong>
+                        <strong>{{ __('Stock In Summary:') }}</strong>
                         <span id="summaryText"></span>
                     </div>
-                    
+
                     <div class="form-group text-right mt-3">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('Cancel') }}</button>
-                        <button type="submit" name="button" class="btn btn-success" id="stockinSubmitBtn" disabled>{{ __('Distribute') }}</button>
+                        <button type="submit" name="button" class="btn btn-success" id="stockinSubmitBtn" disabled>{{ __('Stock In') }}</button>
                     </div>
                     {!! Form::close() !!}
                 </div>
@@ -106,7 +106,6 @@
         </div>
     </div>
 
-    <!-- Stock Out Modal - Return Batch from Lorry to Warehouse -->
     <div id="stockout" class="modal fade">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
@@ -116,8 +115,6 @@
                 </div>
                 <div class="modal-body">
                     {!! Form::open(['route' => 'inventoryBalances.stockout', 'id' => 'stockoutForm']) !!}
-                    
-                    <!-- Lorry Selection -->
                     <div class="form-group">
                         <label for="lorry_id" class="col-form-label">{{ __('Select Lorry') }}:</label>
                         <select name="lorry_id" id="lorry_id" class="form-control select2" required>
@@ -128,37 +125,33 @@
                         </select>
                     </div>
 
-                    <!-- Batch Selection (populated based on lorry) -->
                     <div class="form-group">
                         <label for="batch_id" class="col-form-label">{{ __('Select Batch to Return') }}:</label>
-                        <select name="batch_id" id="batch_id" class="form-control select2-batch" required disabled>
+                        <select name="batch_id" id="batch_id" class="form-control" required disabled>
                             <option value="">{{ __('First select a lorry') }}</option>
                         </select>
                         <small class="text-muted" id="batchQuantityInfo"></small>
                     </div>
 
-                    <!-- Destination Warehouse (populated based on batch) -->
                     <div class="form-group">
                         <label for="to_warehouse_id" class="col-form-label">{{ __('Return to Warehouse') }}:</label>
-                        <select name="to_warehouse_id" id="to_warehouse_id" class="form-control select2-warehouse" required disabled>
+                        <select name="to_warehouse_id" id="to_warehouse_id" class="form-control" required disabled>
                             <option value="">{{ __('Select destination warehouse') }}</option>
                         </select>
                         <small class="text-muted" id="warehouseInfo"></small>
                     </div>
 
-                    <!-- Quantity to Return -->
                     <div class="form-group">
                         <label for="quantity" class="col-form-label">{{ __('Quantity to Return') }}:</label>
                         <input type="number" min="1" class="form-control" placeholder="Enter quantity" name="quantity" id="stockout_quantity" disabled>
                         <small class="text-danger quantity-error" style="display: none;">{{ __('Please enter a valid quantity') }}</small>
                     </div>
-                    
-                    <!-- Batch Details Display -->
+
                     <div class="alert alert-info" id="batchDetails" style="display: none;">
                         <strong>{{ __('Return Details:') }}</strong>
                         <div id="batchDetailsText"></div>
                     </div>
-                    
+
                     <div class="form-group text-right mt-3">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('Cancel') }}</button>
                         <button type="submit" name="button" class="btn btn-warning" id="stockoutSubmitBtn" disabled>{{ __('Return Stock') }}</button>
@@ -168,36 +161,77 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="stockinScannerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h4 class="modal-title h6">{{ __('Scan Batch Barcode') }}</h4>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">×</button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs mb-3" id="stockinScanTab" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="stockin-camera-tab" data-toggle="tab" href="#stockin-camera-pane" role="tab">
+                                <i class="fa fa-camera"></i> Camera Scan
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="stockin-upload-tab" data-toggle="tab" href="#stockin-upload-pane" role="tab">
+                                <i class="fa fa-upload"></i> Upload Image
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="stockin-camera-pane" role="tabpanel">
+                            <div class="form-group">
+                                <label for="stockin-camera-select">{{ __('Select Camera') }}</label>
+                                <select id="stockin-camera-select" class="form-control"></select>
+                            </div>
+                            <div style="background:#000;border-radius:8px; position:relative;">
+                                <video id="stockin-barcode-video" autoplay playsinline style="width:100%"></video>
+                                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:80%; height:100px; border:3px solid rgba(255,0,0,0.5); border-radius:10px; pointer-events:none;"></div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="stockin-upload-pane" role="tabpanel">
+                            <div class="form-group">
+                                <label for="stockin-barcode-image-upload">{{ __('Upload Barcode Image') }}</label>
+                                <div class="custom-file">
+                                    <input type="file" class="custom-file-input" id="stockin-barcode-image-upload" accept="image/*">
+                                    <label class="custom-file-label" for="stockin-barcode-image-upload">Choose file...</label>
+                                </div>
+                                <small class="form-text text-muted">Supported formats: PNG, JPG, JPEG, GIF, BMP</small>
+                            </div>
+
+                            <div id="stockin-image-preview-container" style="display:none; text-align:center; margin-top:15px;">
+                                <img id="stockin-image-preview" style="max-width:100%; max-height:300px; border:1px solid #ddd; border-radius:4px; padding:5px;">
+                            </div>
+
+                            <button type="button" class="btn btn-primary mt-3" id="stockin-scan-upload-btn" disabled>
+                                <i class="fa fa-search"></i> Scan Uploaded Image
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="alert mt-3 d-none" id="stockin-camera-result"></div>
+
+                    <div class="text-center mt-3">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
-    
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+
     <style>
-        .dropdown-menu {
-            border-radius: 0.25rem;
-            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        }
-        .dropdown-menu .form-check {
-            padding: 0.25rem 0;
-        }
-        .dropdown-toggle::after {
-            margin-left: 10px;
-        }
-        .dropdown-menu::-webkit-scrollbar {
-            width: 8px;
-        }
-        .dropdown-menu::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-        .dropdown-menu::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 4px;
-        }
-        .dropdown-menu::-webkit-scrollbar-thumb:hover {
-            background: #555;
-        }
         .select2-container {
             width: 100% !important;
         }
@@ -214,267 +248,544 @@
 
     <script>
     $(document).ready(function () {
-        // Initialize Select2
-        $('.select2').select2({
+        let stockinWarehouseBatches = {};
+        let stockinItems = [];
+        let stockinCodeReader = null;
+        let stockinScanning = false;
+        let stockinStream = null;
+
+        $('#warehouse_id_stockin').select2({
             width: '100%',
-            dropdownParent: $('#stockout')
+            dropdownParent: $('#stockin')
         });
-        
-        $('.select2-batch').select2({
+
+        $('#lorry_id_stockin').select2({
+            width: '100%',
+            dropdownParent: $('#stockin')
+        });
+
+        $('#lorry_id').select2({
             width: '100%',
             dropdownParent: $('#stockout')
         });
 
-        // ==================== STOCK IN FUNCTIONALITY ====================
+        $('#batch_id').select2({
+            width: '100%',
+            dropdownParent: $('#stockout')
+        });
 
-        // Warehouse selection change - load batches from warehouse
-        $('#warehouse_id_stockin').on('change', function() {
-            var warehouseId = $(this).val();
-            var batchSelect = $('#product_batch_id');
-            
-            if (warehouseId) {
-                // Show loading state
-                batchSelect.empty().append('<option value="">{{ __("Loading batches...") }}</option>');
-                batchSelect.prop('disabled', true);
-                
-                // If using Select2, destroy and reinitialize after adding options
-                if (batchSelect.hasClass('select2-hidden-accessible')) {
-                    batchSelect.select2('destroy');
-                }
-                
-                $.ajax({
-                    url: '{{ route("warehouses.get-warehouse-batches", "") }}/' + warehouseId,
-                    type: 'GET',
-                    dataType: 'json',
-                    success: function(response) {
-                        console.log('Warehouse batches response:', response);
-                        
-                        // Clear the select
-                        batchSelect.empty();
-                        
-                        // Add default option
-                        batchSelect.append($('<option>', {
-                            value: '',
-                            text: '{{ __("Select Batch") }}'
-                        }));
-                        
-                        // Check if we have inventory data
-                        var inventory = response.inventory || response;
-                        
-                        if (inventory && Array.isArray(inventory) && inventory.length > 0) {
-                            console.log('Found', inventory.length, 'batches');
-                            
-                            // Loop through each batch
-                            $.each(inventory, function(index, item) {
-                                var batchId = item.batch_id || item.id;
-                                var batchCode = item.batch_code || 'Unknown';
-                                var productName = item.product_name || 'Unknown';
-                                var quantity = item.quantity || 0;
-                                var expiryDate = item.expiry_date || 'N/A';
-                                
-                                var optionText = batchCode + ' - ' + productName + 
-                                                ' (' + quantity + ' units';
-                                
-                                if (expiryDate && expiryDate !== 'N/A') {
-                                    optionText += ' | Exp: ' + expiryDate;
-                                }
-                                
-                                optionText += ')';
-                                
-                                if (item.is_expiring_soon) {
-                                    optionText += ' ⚠️ Expiring Soon';
-                                }
-                                
-                                // Create option element
-                                var option = $('<option>', {
-                                    value: batchId,
-                                    text: optionText,
-                                    'data-quantity': quantity,
-                                    'data-product': productName,
-                                    'data-expiry': expiryDate
-                                });
-                                
-                                batchSelect.append(option);
-                            });
-                            
-                            // Enable the select
-                            batchSelect.prop('disabled', false);
-                            
-                        } else {
-                            console.log('No batches found');
-                            batchSelect.append($('<option>', {
-                                value: '',
-                                text: '{{ __("No batches available in this warehouse") }}',
-                                disabled: true
-                            }));
-                            batchSelect.prop('disabled', true);
-                            $('#quantity_per_lorry').prop('disabled', true);
-                            $('#distributionSummary').hide();
+        $('#to_warehouse_id').select2({
+            width: '100%',
+            dropdownParent: $('#stockout')
+        });
+
+        $('#warehouse_id_stockin, #lorry_id_stockin').on('change', function() {
+            if (this.id === 'warehouse_id_stockin') {
+                loadWarehouseBatches();
+            } else {
+                toggleStockInScanner();
+                validateStockInForm();
+                updateDistributionSummary();
+            }
+        });
+
+        $('#batch_code_scan').on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addScannedBatch($(this).val());
+            }
+        });
+
+        $('#openBatchCameraBtn').on('click', function() {
+            if (!$(this).prop('disabled')) {
+                $('#stockinScannerModal').modal('show');
+            }
+        });
+
+        $(document).on('input', '.stockin-item-qty', function() {
+            const index = parseInt($(this).data('index'), 10);
+            const item = stockinItems[index];
+            let quantity = parseInt($(this).val(), 10);
+
+            if (!item) {
+                return;
+            }
+
+            if (!quantity || quantity < 1) {
+                quantity = 1;
+            }
+
+            if (quantity > item.available_quantity) {
+                quantity = item.available_quantity;
+            }
+
+            item.quantity = quantity;
+            $(this).val(quantity);
+            renderStockInItems();
+        });
+
+        $(document).on('click', '.remove-stockin-item', function() {
+            const index = parseInt($(this).data('index'), 10);
+            stockinItems.splice(index, 1);
+            renderStockInItems();
+        });
+
+        $('#stockinScannerModal').on('shown.bs.modal', function() {
+            initStockInScanner();
+        });
+
+        $('#stockinScannerModal').on('hidden.bs.modal', function() {
+            stopStockInScanner();
+            stopStockInCamera();
+            hideCameraResult();
+        });
+
+        $('#stockin-camera-select').on('change', function() {
+            const deviceId = this.value;
+            if (deviceId) {
+                stopStockInScanner();
+                stopStockInCamera();
+                setTimeout(function() {
+                    startStockInCamera(deviceId);
+                }, 300);
+            }
+        });
+
+        $('#stockin-barcode-image-upload').on('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                $(this).next('.custom-file-label').html(file.name);
+                const reader = new FileReader();
+                reader.onload = function(loadEvent) {
+                    $('#stockin-image-preview').attr('src', loadEvent.target.result);
+                    $('#stockin-image-preview-container').show();
+                    $('#stockin-scan-upload-btn').prop('disabled', false);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                $(this).next('.custom-file-label').html('Choose file...');
+                $('#stockin-image-preview-container').hide();
+                $('#stockin-scan-upload-btn').prop('disabled', true);
+            }
+        });
+
+        $('#stockin-scan-upload-btn').on('click', function() {
+            scanStockInUploadedImage();
+        });
+
+        function loadWarehouseBatches() {
+            const warehouseId = $('#warehouse_id_stockin').val();
+            stockinWarehouseBatches = {};
+            clearStockInItems();
+
+            if (!warehouseId) {
+                setStockInHelp('{{ __("Select warehouse and lorry first. Barcode scanner can input code followed by Enter.") }}', 'muted');
+                toggleStockInScanner();
+                validateStockInForm();
+                updateDistributionSummary();
+                return;
+            }
+
+            setStockInHelp('{{ __("Loading warehouse batches...") }}', 'muted');
+
+            $.ajax({
+                url: '{{ route("warehouses.get-warehouse-batches", "") }}/' + warehouseId,
+                type: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    const inventory = response.inventory || response || [];
+
+                    $.each(inventory, function(_, item) {
+                        const code = (item.batch_code || '').trim();
+                        if (!code) {
+                            return;
                         }
-                        
-                        // Reinitialize Select2
-                        batchSelect.select2({
-                            width: '100%',
-                            dropdownParent: $('#stockin')
-                        });
-                        
-                        // Trigger change to update any dependent elements
-                        batchSelect.trigger('change');
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error loading warehouse batches:', error);
-                        console.error('Response:', xhr.responseJSON);
-                        
-                        batchSelect.empty().append($('<option>', {
-                            value: '',
-                            text: '{{ __("Error loading batches") }}',
-                            disabled: true
-                        }));
-                        batchSelect.prop('disabled', true);
-                        $('#quantity_per_lorry').prop('disabled', true);
-                        $('#distributionSummary').hide();
-                        
-                        // Reinitialize Select2 even on error
-                        batchSelect.select2({
-                            width: '100%',
-                            dropdownParent: $('#stockin')
-                        });
+
+                        stockinWarehouseBatches[code.toUpperCase()] = {
+                            batch_id: parseInt(item.batch_id || item.id, 10),
+                            batch_code: code,
+                            product_name: item.product_name || 'Unknown',
+                            quantity: parseInt(item.quantity || 0, 10),
+                            expiry_date: item.expiry_date || 'N/A'
+                        };
+                    });
+
+                    if (Object.keys(stockinWarehouseBatches).length > 0) {
+                        setStockInHelp('{{ __("Ready to scan batches for this warehouse.") }}', 'success');
+                    } else {
+                        setStockInHelp('{{ __("No batches available in this warehouse.") }}', 'danger');
                     }
-                });
-            } else {
-                // If using Select2, destroy before changing
-                if (batchSelect.hasClass('select2-hidden-accessible')) {
-                    batchSelect.select2('destroy');
+
+                    toggleStockInScanner();
+                    validateStockInForm();
+                    updateDistributionSummary();
+                },
+                error: function() {
+                    setStockInHelp('{{ __("Error loading warehouse batches.") }}', 'danger');
+                    toggleStockInScanner();
+                    validateStockInForm();
+                    updateDistributionSummary();
                 }
-                
-                batchSelect.empty().append($('<option>', {
-                    value: '',
-                    text: '{{ __("First select a warehouse") }}'
-                }));
-                batchSelect.prop('disabled', true);
-                $('#quantity_per_lorry').prop('disabled', true);
-                $('#distributionSummary').hide();
-                
-                // Reinitialize Select2
-                batchSelect.select2({
-                    width: '100%',
-                    dropdownParent: $('#stockin')
-                });
-            }
-            
-            validateStockInForm();
-        });
-
-        // Batch selection change
-        $('#product_batch_id').on('change', function() {
-            var selected = $(this).find('option:selected');
-            var quantity = selected.data('quantity') || 0;
-            
-            if (quantity > 0) {
-                $('#batchInfo').text('Available: ' + quantity + ' units | Expiry: ' + selected.data('expiry'));
-                $('#quantity_per_lorry').prop('disabled', false);
-            } else {
-                $('#batchInfo').text('No stock available');
-                $('#quantity_per_lorry').prop('disabled', true);
-            }
-            validateStockInForm();
-            updateDistributionSummary();
-        });
-
-        // Quantity per lorry change
-        $('#quantity_per_lorry').on('input', function() {
-            validateStockInForm();
-            updateDistributionSummary();
-        });
-
-        // Lorry checkbox change
-        $('.lorry-checkbox').change(function() {
-            var selectedCount = $('#stockin').find('.lorry-checkbox:checked').length;
-            var dropdownButton = $('#dropdownLorryStockIn');
-            
-            if (selectedCount > 0) {
-                dropdownButton.text(selectedCount + ' lorry(s) selected');
-                $('#stockin').find('.lorry-error').hide();
-            } else {
-                dropdownButton.text('Select Lorries');
-                $('#stockin').find('.lorry-error').show();
-            }
-            
-            validateStockInForm();
-            updateDistributionSummary();
-        });
-
-        // Lorry search
-        $('#lorrySearchStockIn').on('keyup', function() {
-            var searchTerm = $(this).val().toLowerCase();
-            $('#lorryListStockIn .form-check').each(function() {
-                var lorryName = $(this).find('label').text().toLowerCase();
-                $(this).toggle(lorryName.includes(searchTerm));
             });
-        });
+        }
 
-        // Update distribution summary
-        function updateDistributionSummary() {
-            var perLorry = parseInt($('#quantity_per_lorry').val()) || 0;
-            var lorryCount = $('#stockin').find('.lorry-checkbox:checked').length;
-            var total = perLorry * lorryCount;
-            var available = $('#product_batch_id').find('option:selected').data('quantity') || 0;
-            var warehouseName = $('#warehouse_id_stockin').find('option:selected').text();
-            
-            if (perLorry > 0 && lorryCount > 0) {
-                var summary = total + ' units from <strong>' + warehouseName + '</strong> to be distributed to ' + lorryCount + ' lorry(s)';
-                
-                if (total > available) {
-                    summary += ' <span class="text-danger">(Insufficient stock! Available: ' + available + ')</span>';
-                    $('#stockinSubmitBtn').prop('disabled', true);
-                } else {
-                    summary += ' <span class="text-success">(Available: ' + available + ')</span>';
+        function toggleStockInScanner() {
+            const enabled = $('#warehouse_id_stockin').val() !== '' && $('#lorry_id_stockin').val() !== '' && Object.keys(stockinWarehouseBatches).length > 0;
+            $('#batch_code_scan').prop('disabled', !enabled).val('');
+            $('#openBatchCameraBtn').prop('disabled', !enabled);
+
+            if (!enabled) {
+                hideStockInMessages();
+            }
+        }
+
+        function setStockInHelp(message, type) {
+            $('#stockinBatchHelp')
+                .removeClass('text-muted text-success text-danger')
+                .addClass(type === 'success' ? 'text-success' : (type === 'danger' ? 'text-danger' : 'text-muted'))
+                .text(message);
+        }
+
+        function hideStockInMessages() {
+            $('#stockinScanError').addClass('d-none').text('');
+            $('#stockinScanSuccess').addClass('d-none').text('');
+        }
+
+        function showStockInError(message) {
+            $('#stockinScanSuccess').addClass('d-none').text('');
+            $('#stockinScanError').removeClass('d-none').text(message);
+        }
+
+        function showStockInSuccess(message) {
+            $('#stockinScanError').addClass('d-none').text('');
+            $('#stockinScanSuccess').removeClass('d-none').text(message);
+        }
+
+        function addScannedBatch(rawCode) {
+            const code = (rawCode || '').trim();
+            $('#batch_code_scan').val('');
+
+            if (!code) {
+                return;
+            }
+
+            hideStockInMessages();
+
+            if (!$('#warehouse_id_stockin').val() || !$('#lorry_id_stockin').val()) {
+                showStockInError('Please select warehouse and lorry first.');
+                return;
+            }
+
+            const batch = stockinWarehouseBatches[code.toUpperCase()];
+            if (!batch) {
+                showStockInError('Batch code not found in the selected warehouse: ' + code);
+                return;
+            }
+
+            const existingItem = stockinItems.find(function(item) {
+                return item.batch_id === batch.batch_id;
+            });
+
+            if (existingItem) {
+                if (existingItem.quantity >= existingItem.available_quantity) {
+                    showStockInError('Batch ' + batch.batch_code + ' already reached available quantity.');
+                    return;
                 }
-                
-                $('#summaryText').html(summary);
+
+                existingItem.quantity += 1;
+            } else {
+                stockinItems.push({
+                    batch_id: batch.batch_id,
+                    batch_code: batch.batch_code,
+                    product_name: batch.product_name,
+                    available_quantity: batch.quantity,
+                    expiry_date: batch.expiry_date,
+                    quantity: 1
+                });
+            }
+
+            renderStockInItems();
+            showStockInSuccess('Added batch ' + batch.batch_code + ' to stock in list.');
+        }
+
+        function clearStockInItems() {
+            stockinItems = [];
+            renderStockInItems();
+        }
+
+        function renderStockInItems() {
+            const tbody = $('#stockinItemsTable tbody');
+            const hiddenContainer = $('#stockinItemsContainer');
+
+            tbody.empty();
+            hiddenContainer.empty();
+
+            if (stockinItems.length === 0) {
+                tbody.append('<tr id="stockinEmptyRow"><td colspan="5" class="text-center text-muted">{{ __("No scanned items yet") }}</td></tr>');
+            } else {
+                $.each(stockinItems, function(index, item) {
+                    tbody.append(
+                        '<tr>' +
+                            '<td>' + escapeHtml(item.batch_code) + '<br><small class="text-muted">Exp: ' + escapeHtml(item.expiry_date) + '</small></td>' +
+                            '<td>' + escapeHtml(item.product_name) + '</td>' +
+                            '<td class="text-center">' + item.available_quantity + '</td>' +
+                            '<td><input type="number" min="1" max="' + item.available_quantity + '" value="' + item.quantity + '" class="form-control stockin-item-qty" data-index="' + index + '"></td>' +
+                            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-stockin-item" data-index="' + index + '"><i class="fa fa-trash"></i></button></td>' +
+                        '</tr>'
+                    );
+
+                    hiddenContainer.append('<input type="hidden" name="items[' + index + '][product_batch_id]" value="' + item.batch_id + '">');
+                    hiddenContainer.append('<input type="hidden" name="items[' + index + '][quantity]" value="' + item.quantity + '">');
+                });
+            }
+
+            validateStockInForm();
+            updateDistributionSummary();
+        }
+
+        function updateDistributionSummary() {
+            const warehouseName = $('#warehouse_id_stockin').find('option:selected').text();
+            const lorryName = $('#lorry_id_stockin').find('option:selected').text();
+            let totalUnits = 0;
+
+            $.each(stockinItems, function(_, item) {
+                totalUnits += parseInt(item.quantity, 10) || 0;
+            });
+
+            if (stockinItems.length > 0 && $('#warehouse_id_stockin').val() && $('#lorry_id_stockin').val()) {
+                $('#summaryText').html(
+                    stockinItems.length + ' batch(es), ' +
+                    totalUnits + ' unit(s) from <strong>' + escapeHtml(warehouseName) + '</strong> to <strong>' + escapeHtml(lorryName) + '</strong>'
+                );
                 $('#distributionSummary').show();
             } else {
                 $('#distributionSummary').hide();
             }
         }
 
-        // Validate stock in form
         function validateStockInForm() {
-            var warehouseSelected = $('#warehouse_id_stockin').val() !== '';
-            var batchSelected = $('#product_batch_id').val() !== '';
-            var lorrySelected = $('#stockin').find('.lorry-checkbox:checked').length > 0;
-            var quantity = $('#quantity_per_lorry').val();
-            var quantityValid = quantity && parseInt(quantity) > 0;
-            
-            var isValid = warehouseSelected && batchSelected && lorrySelected && quantityValid;
-            
-            $('#stockinSubmitBtn').prop('disabled', !isValid);
-            
-            // Show/hide error messages
-            $('#stockin').find('.lorry-error').toggle(!lorrySelected);
-            
-            if (!quantityValid && quantity) {
-                $('#stockin').find('.quantity-error').show();
-            } else {
-                $('#stockin').find('.quantity-error').hide();
+            const warehouseSelected = $('#warehouse_id_stockin').val() !== '';
+            const lorrySelected = $('#lorry_id_stockin').val() !== '';
+            const hasItems = stockinItems.length > 0;
+            const quantitiesValid = stockinItems.every(function(item) {
+                return item.quantity > 0 && item.quantity <= item.available_quantity;
+            });
+
+            $('#stockinSubmitBtn').prop('disabled', !(warehouseSelected && lorrySelected && hasItems && quantitiesValid));
+        }
+
+        function escapeHtml(value) {
+            return $('<div>').text(value || '').html();
+        }
+
+        function initStockInScanner() {
+            stopStockInCamera();
+            stopStockInScanner();
+            hideCameraResult();
+            resetStockInScannerModal();
+
+            navigator.mediaDevices.enumerateDevices().then(function(devices) {
+                const cameras = devices.filter(function(device) {
+                    return device.kind === 'videoinput';
+                });
+                const select = $('#stockin-camera-select').empty();
+
+                if (cameras.length === 0) {
+                    showCameraResult('No camera found on this device.', 'danger');
+                    return;
+                }
+
+                $.each(cameras, function(index, camera) {
+                    select.append('<option value="' + camera.deviceId + '">' + escapeHtml(camera.label || ('Camera ' + (index + 1))) + '</option>');
+                });
+
+                startStockInCamera(cameras[0].deviceId);
+            }).catch(function(error) {
+                showCameraResult('Error accessing cameras: ' + error.message, 'danger');
+            });
+        }
+
+        function startStockInCamera(deviceId) {
+            navigator.mediaDevices.getUserMedia({
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            }).then(function(stream) {
+                stockinStream = stream;
+                const video = document.getElementById('stockin-barcode-video');
+                video.srcObject = stream;
+                video.onloadedmetadata = function() {
+                    video.play();
+                    startStockInDecode();
+                };
+            }).catch(function(error) {
+                showCameraResult('Camera access denied: ' + error.message, 'danger');
+            });
+        }
+
+        function startStockInDecode() {
+            if (stockinScanning) {
+                return;
+            }
+
+            try {
+                const hints = new Map();
+                const formats = [
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.CODE_93,
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.EAN_8,
+                    ZXing.BarcodeFormat.UPC_A,
+                    ZXing.BarcodeFormat.UPC_E
+                ];
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                hints.set(ZXing.DecodeHintType.CHARACTER_SET, 'UTF-8');
+                stockinCodeReader = new ZXing.BrowserMultiFormatReader(hints);
+
+                stockinCodeReader.decodeFromVideoDevice(undefined, document.getElementById('stockin-barcode-video'), function(result, err) {
+                    if (result) {
+                        const code = result.getText();
+                        if (code && code.length >= 4) {
+                            showCameraResult('Barcode scanned successfully. Code: ' + code, 'success');
+                            if (navigator.vibrate) {
+                                navigator.vibrate(200);
+                            }
+                            addScannedBatch(code);
+                            $('#stockinScannerModal').modal('hide');
+                        }
+                    }
+
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error('Scanner error:', err);
+                    }
+                });
+
+                stockinScanning = true;
+                showCameraResult('Scanning for barcode...', 'info');
+            } catch (error) {
+                showCameraResult('Failed to start scanner: ' + error.message, 'danger');
             }
         }
 
-        // ==================== STOCK OUT FUNCTIONALITY ====================
+        function scanStockInUploadedImage() {
+            const file = $('#stockin-barcode-image-upload')[0].files[0];
+            if (!file) {
+                showCameraResult('Please select an image first', 'warning');
+                return;
+            }
 
-        // Lorry selection change - load batches from lorry
+            showCameraResult('Scanning uploaded image...', 'info');
+
+            const reader = new FileReader();
+            reader.onload = function(loadEvent) {
+                const img = new Image();
+                img.src = loadEvent.target.result;
+
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+                    const imageData = canvas.toDataURL('image/png');
+
+                    try {
+                        const hints = new Map();
+                        const formats = [
+                            ZXing.BarcodeFormat.CODE_128,
+                            ZXing.BarcodeFormat.CODE_39,
+                            ZXing.BarcodeFormat.CODE_93,
+                            ZXing.BarcodeFormat.EAN_13,
+                            ZXing.BarcodeFormat.EAN_8,
+                            ZXing.BarcodeFormat.UPC_A,
+                            ZXing.BarcodeFormat.UPC_E
+                        ];
+                        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+                        const reader = new ZXing.BrowserMultiFormatReader(hints);
+                        reader.decodeFromImage(undefined, imageData).then(function(result) {
+                            const code = result.getText();
+                            if (code && code.length >= 4) {
+                                showCameraResult('Barcode scanned successfully. Code: ' + code, 'success');
+                                addScannedBatch(code);
+                                $('#stockinScannerModal').modal('hide');
+                            } else {
+                                showCameraResult('No valid barcode found in image', 'danger');
+                            }
+                        }).catch(function(error) {
+                            console.error('Image decode error:', error);
+                            showCameraResult('Failed to decode barcode from image', 'danger');
+                        });
+                    } catch (error) {
+                        console.error('Error processing image:', error);
+                        showCameraResult('Error processing image: ' + error.message, 'danger');
+                    }
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function stopStockInScanner() {
+            if (stockinCodeReader && stockinScanning) {
+                try {
+                    stockinCodeReader.reset();
+                } catch (error) {
+                    console.error('Error stopping stock in scanner:', error);
+                }
+            }
+
+            stockinCodeReader = null;
+            stockinScanning = false;
+        }
+
+        function stopStockInCamera() {
+            if (stockinStream) {
+                stockinStream.getTracks().forEach(function(track) {
+                    track.stop();
+                });
+                stockinStream = null;
+            }
+        }
+
+        function showCameraResult(message, type) {
+            $('#stockin-camera-result')
+                .removeClass('d-none alert-info alert-success alert-danger alert-warning')
+                .addClass('alert-' + type)
+                .html(message);
+        }
+
+        function hideCameraResult() {
+            $('#stockin-camera-result')
+                .addClass('d-none')
+                .removeClass('alert-info alert-success alert-danger alert-warning')
+                .text('');
+        }
+
+        function resetStockInScannerModal() {
+            $('#stockin-camera-tab').tab('show');
+            $('#stockin-image-preview-container').hide();
+            $('#stockin-barcode-image-upload').val('');
+            $('#stockin-barcode-image-upload').next('.custom-file-label').html('Choose file...');
+            $('#stockin-scan-upload-btn').prop('disabled', true);
+        }
+
         $('#lorry_id').on('change', function() {
-            var lorryId = $(this).val();
-            var batchSelect = $('#batch_id');
-            var warehouseSelect = $('#to_warehouse_id');
-            
+            const lorryId = $(this).val();
+            const batchSelect = $('#batch_id');
+            const warehouseSelect = $('#to_warehouse_id');
+
             if (lorryId) {
                 $.ajax({
                     url: '{{ route("inventoryBalances.get-lorry-batches", "") }}/' + lorryId,
                     type: 'GET',
                     success: function(response) {
                         batchSelect.empty().append('<option value="">{{ __("Select Batch") }}</option>');
-                        
+
                         if (response.batches && response.batches.length > 0) {
                             $.each(response.batches, function(index, batch) {
                                 batchSelect.append(
@@ -482,7 +793,7 @@
                                     'data-quantity="' + batch.quantity + '" ' +
                                     'data-expiry="' + batch.expiry_date + '" ' +
                                     'data-product-id="' + batch.product_id + '">' +
-                                    batch.batch_code + ' - ' + batch.product_name + 
+                                    batch.batch_code + ' - ' + batch.product_name +
                                     ' (' + batch.quantity + ' units | Exp: ' + batch.expiry_date + ')' +
                                     '</option>'
                                 );
@@ -496,10 +807,8 @@
                             $('#stockout_quantity').prop('disabled', true);
                             $('#batchDetails').hide();
                         }
-                        
-                        if (batchSelect.hasClass('select2-hidden-accessible')) {
-                            batchSelect.trigger('change.select2');
-                        }
+
+                        batchSelect.trigger('change.select2');
                     },
                     error: function(xhr) {
                         console.error('Error loading batches:', xhr);
@@ -515,40 +824,38 @@
                 $('#stockout_quantity').prop('disabled', true);
                 $('#batchDetails').hide();
             }
-            
+
             validateStockOutForm();
         });
 
-        // Batch selection change - load warehouses that have this batch
         $('#batch_id').on('change', function() {
-            var selected = $(this).find('option:selected');
-            var quantity = selected.data('quantity') || 0;
-            var batchId = $(this).val();
-            var warehouseSelect = $('#to_warehouse_id');
-            
+            const selected = $(this).find('option:selected');
+            const quantity = selected.data('quantity') || 0;
+            const batchId = $(this).val();
+            const warehouseSelect = $('#to_warehouse_id');
+
             if (quantity > 0) {
                 $('#batchQuantityInfo').text('Available on lorry: ' + quantity + ' units');
                 $('#stockout_quantity').prop('disabled', false).attr('max', quantity).val('');
-                
+
                 $('#batchDetailsText').html(
                     '<strong>Batch:</strong> ' + selected.text() + '<br>' +
                     '<strong>Available on lorry:</strong> ' + quantity + ' units'
                 );
                 $('#batchDetails').show();
-                
-                // Load warehouses that have this batch
+
                 $.ajax({
                     url: '{{ route("warehouses.get-warehouses-with-batch", "") }}/' + batchId,
                     type: 'GET',
                     success: function(response) {
                         warehouseSelect.empty().append('<option value="">{{ __("Select Warehouse") }}</option>');
-                        
+
                         if (response.warehouses && response.warehouses.length > 0) {
                             $.each(response.warehouses, function(index, warehouse) {
                                 warehouseSelect.append(
                                     '<option value="' + warehouse.id + '" ' +
                                     'data-stock="' + warehouse.stock + '">' +
-                                    warehouse.name + (warehouse.location ? ' (' + warehouse.location + ')' : '') + 
+                                    warehouse.name + (warehouse.location ? ' (' + warehouse.location + ')' : '') +
                                     ' - Stock: ' + warehouse.stock + ' units' +
                                     '</option>'
                                 );
@@ -560,10 +867,8 @@
                             warehouseSelect.prop('disabled', true);
                             $('#warehouseInfo').text('No warehouse currently has this batch');
                         }
-                        
-                        if (warehouseSelect.hasClass('select2-hidden-accessible')) {
-                            warehouseSelect.trigger('change.select2');
-                        }
+
+                        warehouseSelect.trigger('change.select2');
                     },
                     error: function(xhr) {
                         console.error('Error loading warehouses:', xhr);
@@ -571,7 +876,6 @@
                         warehouseSelect.prop('disabled', true);
                     }
                 });
-                
             } else {
                 $('#batchQuantityInfo').text('');
                 $('#stockout_quantity').prop('disabled', true);
@@ -579,63 +883,54 @@
                 warehouseSelect.empty().append('<option value="">{{ __("Select batch first") }}</option>');
                 warehouseSelect.prop('disabled', true);
             }
-            
+
             validateStockOutForm();
         });
 
-        // Warehouse selection change
         $('#to_warehouse_id').on('change', function() {
             validateStockOutForm();
-            
-            var selected = $(this).find('option:selected');
-            var stock = selected.data('stock') || 0;
-            
+
+            const selected = $(this).find('option:selected');
+            const stock = selected.data('stock') || 0;
+
             if (selected.val()) {
                 $('#warehouseInfo').text('Current stock in this warehouse: ' + stock + ' units');
             }
         });
 
-        // Quantity input change
         $('#stockout_quantity').on('input', function() {
             validateStockOutForm();
         });
 
-        // Validate stock out form (SINGLE FUNCTION)
         function validateStockOutForm() {
-            var lorrySelected = $('#lorry_id').val() !== '';
-            var batchSelected = $('#batch_id').val() !== '';
-            var warehouseSelected = $('#to_warehouse_id').val() !== '';
-            var quantity = $('#stockout_quantity').val();
-            var maxQuantity = $('#stockout_quantity').attr('max');
-            var quantityValid = quantity && parseInt(quantity) > 0 && parseInt(quantity) <= parseInt(maxQuantity);
-            
-            var isValid = lorrySelected && batchSelected && warehouseSelected && quantityValid;
-            
-            $('#stockoutSubmitBtn').prop('disabled', !isValid);
-            
+            const lorrySelected = $('#lorry_id').val() !== '';
+            const batchSelected = $('#batch_id').val() !== '';
+            const warehouseSelected = $('#to_warehouse_id').val() !== '';
+            const quantity = $('#stockout_quantity').val();
+            const maxQuantity = $('#stockout_quantity').attr('max');
+            const quantityValid = quantity && parseInt(quantity, 10) > 0 && parseInt(quantity, 10) <= parseInt(maxQuantity, 10);
+
+            $('#stockoutSubmitBtn').prop('disabled', !(lorrySelected && batchSelected && warehouseSelected && quantityValid));
+
             if (!quantityValid && quantity) {
                 $('#stockout').find('.quantity-error').text('Quantity must be between 1 and ' + maxQuantity).show();
-            } else if (!quantity && batchSelected) {
-                $('#stockout').find('.quantity-error').hide();
             } else {
                 $('#stockout').find('.quantity-error').hide();
             }
         }
 
-        // ==================== MODAL RESET ====================
-        
-        // Reset stock in modal
         $('#stockin').on('hidden.bs.modal', function() {
-            $(this).find('select').val('').trigger('change');
-            $(this).find('.lorry-checkbox').prop('checked', false);
-            $(this).find('input[type="number"]').val('');
-            $(this).find('.dropdown-toggle').text('Select Lorries');
-            $(this).find('.lorry-error, .quantity-error').hide();
-            $(this).find('#distributionSummary').hide();
+            $('#warehouse_id_stockin').val('').trigger('change');
+            $('#lorry_id_stockin').val('').trigger('change');
+            $('#batch_code_scan').val('');
+            stockinWarehouseBatches = {};
+            clearStockInItems();
+            hideStockInMessages();
+            setStockInHelp('{{ __("Select warehouse and lorry first. Barcode scanner can input code followed by Enter.") }}', 'muted');
+            $('#distributionSummary').hide();
             $('#stockinSubmitBtn').prop('disabled', true);
         });
 
-        // Reset stock out modal
         $('#stockout').on('hidden.bs.modal', function() {
             $(this).find('select').val('').trigger('change');
             $(this).find('input[type="number"]').val('');
@@ -644,9 +939,8 @@
             $('#stockoutSubmitBtn').prop('disabled', true);
         });
 
-        // Keyboard shortcut
         $(document).keyup(function(e) {
-            if(e.altKey && e.keyCode == 78){
+            if (e.altKey && e.keyCode == 78) {
                 $('.card .card-header button').first().click();
             }
         });

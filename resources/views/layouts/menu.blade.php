@@ -178,16 +178,34 @@
 @endcanany
 
 
-@can('warehouse')
-
-<li class="nav-item {{ Request::is('trips*') ? 'active' : '' }}">
-    <a class="nav-link" href="{{ route('warehouses.index') }}">
+@canany(['warehouse','inventorytransaction'])
+<li class="nav-item nav-dropdown {{ Request::is('warehouses*','warehouseTransactions*') ? 'open' : '' }}">
+    <a class="nav-link nav-dropdown-toggle" href="#">
         <i class="nav-icon icon-home"></i>
-        <span>{{ trans('Warehouse') }}</span>
+        <span>Warehouse</span>
     </a>
-</li>
 
-@endcan 
+    @can('warehouse')
+        <ul class="nav-dropdown-items">
+            <li class="nav-item {{ Request::is('warehouses*') ? 'active' : '' }}">
+                <a class="nav-link {{ Request::is('warehouses*') ? 'active' : '' }}" href="{{ route('warehouses.index') }}">
+                    <span>Warehouse</span>
+                </a>
+            </li>
+        </ul>
+    @endcan
+
+    @can('inventorytransaction')
+        <ul class="nav-dropdown-items">
+            <li class="nav-item {{ Request::is('warehouseTransactions*') ? 'active' : '' }}">
+                <a class="nav-link {{ Request::is('warehouseTransactions*') ? 'active' : '' }}" href="{{ route('warehouseTransactions.index') }}">
+                    <span>{{ trans('side_menu.transactions') }}</span>
+                </a>
+            </li>
+        </ul>
+    @endcan
+</li>
+@endcanany
 
 @canany(['inventorybalance','inventorytransaction'])
 <li class="nav-item nav-dropdown {{ Request::is('inventoryBalances*','inventoryTransactions*') ? 'open' : '' }}">
@@ -347,7 +365,7 @@
         </ul>
     @endcan
 
-    @can('supervisor')
+    <!-- @can('supervisor')
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('supervisors*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('supervisors*') ? 'active' : '' }}" href="{{ route('supervisors.index') }}">
@@ -355,7 +373,7 @@
                 </a>
             </li>
         </ul>
-    @endcan
+    @endcan -->
 
     @can('customer')
         <ul class="nav-dropdown-items">
@@ -533,4 +551,3 @@
     </li>
 
 @endcan
-

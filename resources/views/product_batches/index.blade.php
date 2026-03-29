@@ -111,95 +111,103 @@
     </div>
 </div>
 
-<!-- Batch Confirmation Modal -->
-<div class="modal fade" id="batchConfirmationModal" tabindex="-1">
-    <div class="modal-dialog modal-lg"> <!-- Changed to modal-lg for wider modal -->
+<!-- Bulk Stock In Modal -->
+<div class="modal fade" id="batchStockInModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white py-2"> <!-- Reduced padding -->
+            <div class="modal-header bg-success text-white py-2">
                 <h5 class="modal-title">
-                    <i class="fa fa-check-circle"></i> Batch Found
+                    <i class="fa fa-plus-circle"></i> Stock In Product Batches
                 </h5>
                 <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
             </div>
-            <div class="modal-body py-2"> <!-- Reduced padding -->
-                <!-- Batch Details in a more compact format -->
-                <div class="alert alert-info py-2 mb-2" id="batch-details">
-                    Loading batch details...
-                </div>
-                
-                <form id="batch-quantity-form">
+            <div class="modal-body py-2">
+                <form id="batch-stockin-form">
                     @csrf
-                    <input type="hidden" id="confirmed_batch_id" name="batch_id">
-                    
-                    <!-- First Row: Barcode and Quantity -->
+
                     <div class="row">
-                        <div class="col-md-7">
+                        <div class="col-md-8">
                             <div class="form-group mb-2">
-                                <label for="confirmed_barcode_display" class="mb-1">Scanned Barcode <span class="text-danger">*</span></label>
+                                <label for="stockin-batch-scan-input" class="mb-1">Scan Product Batch <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <div class="input-group-prepend">
                                         <span class="input-group-text bg-light"><i class="fa fa-barcode"></i></span>
                                     </div>
-                                    <input type="text" class="form-control bg-light" 
-                                           id="confirmed_barcode_display" name="barcode_display" 
-                                           readonly placeholder="Scanned barcode will appear here">
+                                    <input type="text" class="form-control" id="stockin-batch-scan-input" autocomplete="off" placeholder="Scan barcode and press Enter">
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <div class="form-group mb-2">
-                                <label for="quantity" class="mb-1">Quantity <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="quantity" 
-                                       name="quantity" min="0" value="1" required>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Second Row: Warehouse and Transaction Type -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group mb-2">
-                                <label for="warehouse_id" class="mb-1">Warehouse <span class="text-danger">*</span></label>
-                                <select class="form-control" id="warehouse_id" name="warehouse_id" required>
-                                    <option value="">Select Warehouse</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group mb-2">
-                                <label for="transaction_type" class="mb-1">Transaction Type</label>
-                                <select class="form-control" id="transaction_type" name="transaction_type">
-                                    <option value="stock_in">Stock In (Add)</option>
-                                    <option value="stock_out">Stock Out (Remove)</option>
-                                </select>
+                                <label class="mb-1 d-block">&nbsp;</label>
+                                <button type="button" class="btn btn-info btn-block" id="open-stockin-camera-btn">
+                                    <i class="fa fa-camera"></i> Scan Barcode
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Third Row: Remark -->
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group mb-2">
+                                <label for="stockin-warehouse-id" class="mb-1">Warehouse <span class="text-danger">*</span></label>
+                                <select class="form-control" id="stockin-warehouse-id" name="warehouse_id" required>
+                                    <option value="">Select Warehouse</option>
+                                    @foreach($warehouses ?? [] as $warehouse)
+                                        <option value="{{ $warehouse->id }}">{{ $warehouse->name }}{{ $warehouse->location ? ' (' . $warehouse->location . ')' : '' }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group mb-2">
+                                <label class="mb-1 d-block">&nbsp;</label>
+                                <div class="alert alert-light border mb-0 py-2">
+                                    <strong>Total Batches:</strong> <span id="stockin-total-batches">0</span><br>
+                                    <strong>Total Units:</strong> <span id="stockin-total-units">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="row">
                         <div class="col-md-12">
                             <div class="form-group mb-2">
-                                <label for="remark" class="mb-1">Remark (Optional)</label>
-                                <textarea class="form-control" id="remark" name="remark" rows="1" 
+                                <label for="stockin-remark" class="mb-1">Remark (Optional)</label>
+                                <textarea class="form-control" id="stockin-remark" name="remark" rows="1"
                                         placeholder="Enter any notes"></textarea>
                             </div>
                         </div>
                     </div>
 
-                    <input type="hidden" id="confirmed_batch_code" name="batch_code">
-                    <!-- Help text in a single line -->
-                    <small class="text-muted d-block mt-1">
-                        <i class="fa fa-info-circle"></i> Current stock: <span id="current-stock-display">0</span> units
-                    </small>
+                    <div class="alert alert-info py-2 mb-2 d-none" id="stockin-scan-message"></div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Batch Code</th>
+                                    <th>Product</th>
+                                    <th>Expiry Date</th>
+                                    <th style="width: 140px;">Quantity</th>
+                                    <th style="width: 80px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stockin-items-table-body">
+                                <tr id="stockin-empty-row">
+                                    <td colspan="5" class="text-center text-muted">No scanned batches yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </form>
             </div>
-            <div class="modal-footer py-2"> <!-- Reduced padding -->
+            <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">
                     <i class="fa fa-times"></i> Cancel
                 </button>
-                <button type="button" class="btn btn-success btn-sm" id="confirm-batch-btn">
-                    <i class="fa fa-check"></i> Process Batch
+                <button type="button" class="btn btn-success btn-sm" id="confirm-stockin-btn" disabled>
+                    <i class="fa fa-check"></i> Process Stock In
                 </button>
             </div>
         </div>
@@ -214,29 +222,50 @@
         let codeReader = null;
         let isScanning = false;
         let activeStream = null;
-        let scannedBatchCode = null;
+        let stockInItems = [];
+        let stockInBatchCache = {};
 
         $(document).ready(function() {
             HideLoad();
             
             $(document).on('click', '.btn-scan-barcode', function(e) {
-                e.preventDefault(); 
+                e.preventDefault();
+                $('#batchStockInModal').modal('show');
+                setTimeout(() => $('#stockin-batch-scan-input').trigger('focus'), 250);
+            });
+
+            $('#open-stockin-camera-btn').on('click', function() {
                 $('#barcodeScannerModal').modal('show');
             });
 
-            // Initialize scanner when modal is shown
+            $('#stockin-batch-scan-input').on('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const code = $(this).val().trim();
+                    $(this).val('');
+
+                    if (code) {
+                        lookupBatchAndAdd(code);
+                    }
+                }
+            });
+
             $('#barcodeScannerModal').on('shown.bs.modal', function() {
+                const baseZIndex = 1060;
+                $(this).css('z-index', baseZIndex);
+                $('.modal-backdrop').last().css('z-index', baseZIndex - 10);
                 initCameraAndScanner();
             });
 
-            // Clean up when modal is hidden
             $('#barcodeScannerModal').on('hidden.bs.modal', function() {
                 stopScanner();
                 stopCamera();
                 resetScannerModal();
+                $(this).css('z-index', '');
+                $('body').addClass('modal-open');
+                setTimeout(() => $('#stockin-batch-scan-input').trigger('focus'), 150);
             });
 
-            // Camera change handler
             $('#camera-select').on('change', function () {
                 const deviceId = this.value;
                 if (deviceId) {
@@ -246,14 +275,10 @@
                 }
             });
 
-            // Handle file upload
             $('#barcode-image-upload').on('change', function(e) {
                 const file = e.target.files[0];
                 if (file) {
-                    // Update file input label
                     $(this).next('.custom-file-label').html(file.name);
-                    
-                    // Show image preview
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         $('#image-preview').attr('src', e.target.result);
@@ -268,9 +293,92 @@
                 }
             });
 
-            // Handle scan uploaded image button
             $('#scan-upload-btn').on('click', function() {
                 scanUploadedImage();
+            });
+
+            $(document).on('input', '.stockin-item-qty', function() {
+                const index = parseInt($(this).data('index'), 10);
+                const item = stockInItems[index];
+                let qty = parseInt($(this).val(), 10);
+
+                if (!item) {
+                    return;
+                }
+
+                if (!qty || qty < 1) {
+                    qty = 1;
+                }
+
+                item.quantity = qty;
+                $(this).val(qty);
+                renderStockInItems();
+            });
+
+            $(document).on('click', '.remove-stockin-item', function() {
+                const index = parseInt($(this).data('index'), 10);
+                stockInItems.splice(index, 1);
+                renderStockInItems();
+            });
+
+            $('#confirm-stockin-btn').on('click', function() {
+                const warehouseId = $('#stockin-warehouse-id').val();
+                const remark = $('#stockin-remark').val();
+
+                if (!warehouseId) {
+                    showStockInMessage('danger', 'Please select a warehouse');
+                    return;
+                }
+
+                if (stockInItems.length === 0) {
+                    showStockInMessage('danger', 'Please scan at least one product batch');
+                    return;
+                }
+
+                $(this).html('<i class="fa fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
+
+                $.ajax({
+                    url: "{{ route('productBatches.stock-in-bulk') }}",
+                    type: "POST",
+                    data: {
+                        warehouse_id: warehouseId,
+                        remark: remark,
+                        items: stockInItems.map(function(item) {
+                            return {
+                                batch_id: item.id,
+                                quantity: item.quantity
+                            };
+                        }),
+                        _token: "{{ csrf_token() }}"
+                    },
+                    success: function(response) {
+                        $('#batchStockInModal').modal('hide');
+                        toastr.success(response.message, 'Success');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1200);
+                    },
+                    error: function(xhr) {
+                        let message = 'Error processing stock in';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            message = xhr.responseJSON.message;
+                        }
+
+                        showStockInMessage('danger', message);
+                        $('#confirm-stockin-btn').html('<i class="fa fa-check"></i> Process Stock In').prop('disabled', false);
+                    }
+                });
+            });
+
+            $('#batchStockInModal').on('hidden.bs.modal', function() {
+                stockInItems = [];
+                stockInBatchCache = {};
+                $('#stockin-batch-scan-input').val('');
+                $('#stockin-warehouse-id').val('');
+                $('#stockin-remark').val('');
+                hideStockInMessage();
+                renderStockInItems();
+                $('#confirm-stockin-btn').html('<i class="fa fa-check"></i> Process Stock In').prop('disabled', true);
             });
         });
 
@@ -278,7 +386,6 @@
             stopCamera();
             stopScanner();
 
-            // Get available cameras
             navigator.mediaDevices.enumerateDevices().then(devices => {
                 const cameras = devices.filter(d => d.kind === 'videoinput');
                 const select = $('#camera-select').empty();
@@ -292,7 +399,6 @@
                     select.append(`<option value="${cam.deviceId}">${cam.label || 'Camera ' + (i+1)}</option>`);
                 });
 
-                // Start with first camera
                 startCamera(cameras[0].deviceId);
             }).catch(err => {
                 console.error('Error enumerating devices:', err);
@@ -314,7 +420,6 @@
                 const video = document.getElementById('barcode-video');
                 video.srcObject = stream;
                 
-                // Wait for video to be ready then start scanning
                 video.onloadedmetadata = function() {
                     video.play();
                     startZXingScanner();
@@ -361,11 +466,8 @@
                 codeReader.decodeFromVideoDevice(undefined, videoElement, (result, err) => {
                     if (result) {
                         const text = result.getText();
-                        console.log('Camera scan - Text:', text);
-                        
-                        // Only accept codes with reasonable length
+
                         if (text && text.length >= 4) {
-                            scannedBatchCode = text;
                             handleSuccessfulScan(text);
                         }
                     }
@@ -398,17 +500,13 @@
                 img.src = e.target.result;
                 
                 img.onload = function() {
-                    // Create canvas from image
                     const canvas = document.createElement('canvas');
                     canvas.width = img.width;
                     canvas.height = img.height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, img.width, img.height);
-                    
-                    // Convert to data URL
                     const imageData = canvas.toDataURL('image/png');
-                    
-                    // Use ZXing to decode
+
                     try {
                         const hints = new Map();
                         const formats = [
@@ -427,10 +525,8 @@
                         
                         reader.decodeFromImage(undefined, imageData).then(result => {
                             const text = result.getText();
-                            console.log('Image scan - Text:', text);
-                            
+
                             if (text && text.length >= 4) {
-                                scannedBatchCode = text;
                                 handleSuccessfulScan(text);
                             } else {
                                 showScanResult('❌ No valid barcode found in image', 'danger');
@@ -446,30 +542,6 @@
                 };
             };
             reader.readAsDataURL(file);
-        }
-
-        function searchBatchByCode(batchCode) {
-            // and redirect to its show page if found
-            console.log('Searching for batch:', batchCode);
-                        
-            $.ajax({
-                url: "{{ route('productBatches.search-by-code', '') }}/" + encodeURIComponent(batchCode),
-                type: "POST",
-                data: {
-                    _token: "{{ csrf_token() }}"
-                },
-                success: function(response) {
-                    if (response.success) {
-                        handleSuccessfulScan(response.batch_code);
-                    } else {
-                        showScanResult('❌ Batch not found in database', 'warning');
-                    }
-                },
-                error: function() {
-                    showScanResult('❌ Error searching for batch', 'danger');
-                }
-            });
-            
         }
 
         function showScanResult(message, type) {
@@ -499,45 +571,39 @@
             $('#barcode-image-upload').val('');
             $('#barcode-image-upload').next('.custom-file-label').html('Choose file...');
             $('#scan-upload-btn').prop('disabled', true);
-            scannedBatchCode = null;
         }
 
         function handleSuccessfulScan(code) {
-            // Stop camera scanning
             stopScanner();
-            
-            // Stop camera
             stopCamera();
-
-            // Show success message in scanner modal
             showScanResult('✅ Barcode scanned successfully!<br>Code: <b>' + code + '</b><br><i class="fa fa-spinner fa-spin"></i> Searching...', 'success');
 
-            // Vibrate if supported
             if (navigator.vibrate) {
                 navigator.vibrate(200);
             }
-            
-            // Store the scanned code
-            $('#last-scanned-barcode').remove();
-            $('<input>').attr({
-                type: 'hidden',
-                id: 'last-scanned-barcode',
-                name: 'last_scanned_barcode',
-                value: code
-            }).appendTo('form');
-            
-            // Search for the batch using the scanned code
-            searchBatchByCode(code);
+
+            lookupBatchAndAdd(code, true);
         }
 
-        function searchBatchByCode(batchCode) {
-            console.log('Searching for batch:', batchCode);
-            
+        function lookupBatchAndAdd(batchCode, fromScanner = false) {
             if (!batchCode) {
-                showScanResult('❌ No batch code to search', 'warning');
+                if (fromScanner) {
+                    showScanResult('❌ No batch code to search', 'warning');
+                } else {
+                    showStockInMessage('danger', 'No batch code to search');
+                }
                 return;
             }
-            
+
+            const normalizedCode = batchCode.toUpperCase();
+            if (stockInBatchCache[normalizedCode]) {
+                addBatchToStockIn(stockInBatchCache[normalizedCode]);
+                if (fromScanner) {
+                    $('#barcodeScannerModal').modal('hide');
+                }
+                return;
+            }
+
             $.ajax({
                 url: "{{ route('productBatches.search-by-code', '') }}/" + encodeURIComponent(batchCode),
                 type: "POST",
@@ -546,13 +612,18 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        // Close scanner modal
-                        $('#barcodeScannerModal').modal('hide');
-                        
-                        // Populate and show confirmation modal
-                        showBatchConfirmationModal(response);
+                        stockInBatchCache[normalizedCode] = response;
+                        addBatchToStockIn(response);
+
+                        if (fromScanner) {
+                            $('#barcodeScannerModal').modal('hide');
+                        }
                     } else {
-                        showScanResult('❌ ' + response.message, 'warning');
+                        if (fromScanner) {
+                            showScanResult('❌ ' + response.message, 'warning');
+                        } else {
+                            showStockInMessage('danger', response.message);
+                        }
                     }
                 },
                 error: function(xhr) {
@@ -562,164 +633,88 @@
                     } else if (xhr.status === 404) {
                         message = 'Batch not found in database';
                     }
-                    showScanResult('❌ ' + message, 'danger');
+
+                    if (fromScanner) {
+                        showScanResult('❌ ' + message, 'danger');
+                    } else {
+                        showStockInMessage('danger', message);
+                    }
                     console.error('AJAX error:', xhr);
                 }
             });
         }
 
-        function showBatchConfirmationModal(batchData) {
-            // Populate batch details
-            const batchDetails = `
-                <strong>Batch Code:</strong> ${batchData.batch_code}<br>
-                <strong>Product:</strong> ${batchData.product_name}<br>
-                <strong>Product Code:</strong> ${batchData.product_code}<br>
-                <strong>Expiry Date:</strong> ${batchData.expiry_date}<br>
-                <strong>Current Stock:</strong> ${batchData.quantity} units<br>
-                <strong>Status:</strong> ${getStatusText(batchData.status)}
-            `;
-            
-            $('#batch-details').html(batchDetails);
-            $('#confirmed_batch_id').val(batchData.id);
-            $('#confirmed_batch_code').val(batchData.batch_code);
+        function addBatchToStockIn(batchData) {
+            const existingItem = stockInItems.find(function(item) {
+                return parseInt(item.id, 10) === parseInt(batchData.id, 10);
+            });
 
-            // Set the scanned barcode in the read-only field
-            $('#confirmed_barcode_display').val(batchData.batch_code);
-            
-            // Populate warehouse dropdown
-            const warehouseSelect = $('#warehouse_id');
-            warehouseSelect.empty().append('<option value="">Select Warehouse</option>');
-            
-            if (batchData.warehouses && batchData.warehouses.length > 0) {
-                $.each(batchData.warehouses, function(index, warehouse) {
-                    warehouseSelect.append(
-                        $('<option>', {
-                            value: warehouse.id,
-                            text: warehouse.name + (warehouse.location ? ' (' + warehouse.location + ')' : '')
-                        })
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                stockInItems.push({
+                    id: batchData.id,
+                    batch_code: batchData.batch_code,
+                    product_name: batchData.product_name,
+                    product_code: batchData.product_code,
+                    expiry_date: batchData.expiry_date,
+                    current_stock: batchData.quantity,
+                    quantity: 1
+                });
+            }
+
+            renderStockInItems();
+            showStockInMessage('success', 'Added batch <strong>' + escapeHtml(batchData.batch_code) + '</strong> to stock in list.');
+            $('#stockin-batch-scan-input').trigger('focus');
+        }
+
+        function renderStockInItems() {
+            const tbody = $('#stockin-items-table-body');
+            let totalUnits = 0;
+
+            tbody.empty();
+
+            if (stockInItems.length === 0) {
+                tbody.append('<tr id="stockin-empty-row"><td colspan="5" class="text-center text-muted">No scanned batches yet</td></tr>');
+            } else {
+                stockInItems.forEach(function(item, index) {
+                    totalUnits += parseInt(item.quantity, 10) || 0;
+
+                    tbody.append(
+                        '<tr>' +
+                            '<td><strong>' + escapeHtml(item.batch_code) + '</strong><br><small class="text-muted">' + escapeHtml(item.product_code || '') + '</small></td>' +
+                            '<td>' + escapeHtml(item.product_name || '') + '</td>' +
+                            '<td>' + escapeHtml(item.expiry_date || '') + '</td>' +
+                            '<td><input type="number" min="1" class="form-control stockin-item-qty" data-index="' + index + '" value="' + item.quantity + '"></td>' +
+                            '<td><button type="button" class="btn btn-danger btn-sm remove-stockin-item" data-index="' + index + '"><i class="fa fa-trash"></i></button></td>' +
+                        '</tr>'
                     );
                 });
-                warehouseSelect.prop('disabled', false);
-            } else {
-                warehouseSelect.append('<option value="" disabled>No active warehouses found</option>');
-                warehouseSelect.prop('disabled', true);
             }
-            
-            // Set max quantity for stock out
-            $('#quantity').attr('max', batchData.quantity);
-            
-            // Update transaction type based on current stock
-            if (batchData.quantity <= 0) {
-                $('#transaction_type').val('stock_in');
-                $('#transaction_type option[value="stock_out"]').prop('disabled', true);
-            } else {
-                $('#transaction_type option[value="stock_out"]').prop('disabled', false);
-            }
-            
-            // Show the modal
-            $('#batchConfirmationModal').modal('show');
+
+            $('#stockin-total-batches').text(stockInItems.length);
+            $('#stockin-total-units').text(totalUnits);
+            $('#confirm-stockin-btn').prop('disabled', stockInItems.length === 0);
         }
 
-        function getStatusText(status) {
-            switch(status) {
-                case 1: return '<span class="badge badge-success">Active</span>';
-                case 2: return '<span class="badge badge-danger">Inactive</span>';
-                case 3: return '<span class="badge badge-warning">Expired</span>';
-                default: return '<span class="badge badge-secondary">Unknown</span>';
-            }
+        function showStockInMessage(type, message) {
+            $('#stockin-scan-message')
+                .removeClass('d-none alert-success alert-info alert-danger alert-warning')
+                .addClass('alert-' + type)
+                .html(message);
         }
 
-        // Handle confirm button click
-        $(document).on('click', '#confirm-batch-btn', function() {
-            const batchId = $('#confirmed_batch_id').val();
-            const batchCode = $('#confirmed_batch_code').val();
-            const quantity = $('#quantity').val();
-            const warehouseId = $('#warehouse_id').val();
-            const transactionType = $('#transaction_type').val();
-            const remark = $('#remark').val();
-            
-            if (!warehouseId) {
-                alert('Please select a warehouse');
-                return;
-            }
-            
-            if (!quantity || quantity <= 0) {
-                alert('Please enter a valid quantity');
-                return;
-            }
-            
-            // Show loading
-            $(this).html('<i class="fa fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
-            
-            // Determine which endpoint to call based on transaction type
-            let url = '';
-            if (transactionType === 'stock_in') {
-                url = "{{ url('productBatches/stock-in') }}/" + batchId;
-            } else {
-                url = "{{ url('productBatches/stock-out') }}/" + batchId;
-            }
-            
-            // Send AJAX request
-            $.ajax({
-                url: url,
-                type: "POST",
-                data: {
-                    quantity: quantity,
-                    warehouse_id: warehouseId,
-                    remark: remark,
-                    _token: "{{ csrf_token() }}"
-                },
-                success: function(response) {
-                    $('#batchConfirmationModal').modal('hide');
-                    
-                    // Show success message
-                    toastr.success(response.message, 'Success');
-                    
-                    // Reload the page or update the table
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1500);
-                },
-                error: function(xhr) {
-                    let message = 'Error processing transaction';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        message = xhr.responseJSON.message;
-                    }
-                    
-                    alert('Error: ' + message);
-                    
-                    // Reset button
-                    $('#confirm-batch-btn').html('<i class="fa fa-check"></i> Process Batch').prop('disabled', false);
-                }
-            });
-        });
+        function hideStockInMessage() {
+            $('#stockin-scan-message')
+                .addClass('d-none')
+                .removeClass('alert-success alert-info alert-danger alert-warning')
+                .html('');
+        }
 
-        // Reset confirmation modal when hidden
-        $('#batchConfirmationModal').on('hidden.bs.modal', function() {
-            $('#confirmed_barcode_display').val('');
-            $('#quantity').val(1);
-            $('#warehouse_id').val('').trigger('change');
-            $('#remark').val('');
-            $('#transaction_type').val('stock_in');
-            $('#confirm-batch-btn').html('<i class="fa fa-check"></i> Process Batch').prop('disabled', false);
-        });
+        function escapeHtml(value) {
+            return $('<div>').text(value || '').html();
+        }
 
-        // Validate quantity based on transaction type
-        $('#transaction_type').on('change', function() {
-            const type = $(this).val();
-            const currentStock = parseInt($('#batch-details').text().match(/Current Stock: (\d+)/)?.[1] || 0);
-            
-            if (type === 'stock_out') {
-                $('#quantity').attr('max', currentStock);
-                if (parseInt($('#quantity').val()) > currentStock) {
-                    $('#quantity').val(currentStock);
-                }
-            } else {
-                $('#quantity').removeAttr('max');
-            }
-        });
-
-        // Keep your existing functions (mass actions, etc.)
         $(document).keyup(function(e) {
             if(e.altKey && e.keyCode == 78){
                 $('.card .card-header a')[0].click();

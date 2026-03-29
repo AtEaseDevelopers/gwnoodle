@@ -66,16 +66,16 @@ class InventoryBalanceController extends AppBaseController
     }
 
     /**
-     * Stock In - Distribute batch from warehouse to multiple lorries
+     * Stock In - Move multiple batches from one warehouse to one lorry
      */
     public function stockin(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'warehouse_id' => 'required|exists:warehouses,id',
-            'product_batch_id' => 'required|exists:product_batches,id',
-            'lorry_ids' => 'required|array',
-            'lorry_ids.*' => 'exists:lorrys,id',
-            'quantity_per_lorry' => 'required|integer|min:1'
+            'lorry_id' => 'required|exists:lorrys,id',
+            'items' => 'required|array|min:1',
+            'items.*.product_batch_id' => 'required|exists:product_batches,id',
+            'items.*.quantity' => 'required|integer|min:1'
         ]);
 
         if ($validator->fails()) {
@@ -84,96 +84,96 @@ class InventoryBalanceController extends AppBaseController
                 ->withInput();
         }
 
-        $activeLorries = Lorry::whereIn('id', $request->lorry_ids)
-            ->where('status', 1) // Assuming 1 = active/in use
-            ->pluck('lorryno')
-            ->toArray();
-
-        if (!empty($activeLorries)) {
-            $activeLorryNumbers = implode(', ', $activeLorries);
-            Flash::error("Cannot stock in to vans: {$activeLorryNumbers}. The selected van currently not in use.");
-            return redirect()->back()->withInput();
-        }
-        
-        $productBatch = ProductBatch::find($request->product_batch_id);
+        $lorry = Lorry::find($request->lorry_id);
         $warehouseId = $request->warehouse_id;
-        
-        // Check if warehouse has this batch
-        $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
-            ->where('batch_id', $productBatch->id)
-            ->first();
+        $items = collect($request->input('items', []))
+            ->groupBy('product_batch_id')
+            ->map(function ($group, $batchId) {
+                return [
+                    'product_batch_id' => (int) $batchId,
+                    'quantity' => (int) $group->sum('quantity'),
+                ];
+            })
+            ->values();
 
-        if (!$warehouseInventory) {
-            Flash::error('This batch is not available in the selected warehouse.');
+        if ($items->isEmpty()) {
+            Flash::error('Please scan at least one batch.');
             return redirect()->back()->withInput();
         }
 
-        // Calculate total needed
-        $totalNeeded = $request->quantity_per_lorry * count($request->lorry_ids);
+        $batchIds = $items->pluck('product_batch_id')->all();
+        $productBatches = ProductBatch::whereIn('id', $batchIds)->get()->keyBy('id');
+        $warehouseInventoryMap = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+            ->whereIn('batch_id', $batchIds)
+            ->get()
+            ->keyBy('batch_id');
 
-        if ($warehouseInventory->quantity < $totalNeeded) {
-            Flash::error('Insufficient batch quantity in warehouse. Available: ' . $warehouseInventory->quantity . ', Needed: ' . $totalNeeded);
-            return redirect()->back()->withInput();
+        foreach ($items as $item) {
+            $warehouseInventory = $warehouseInventoryMap->get($item['product_batch_id']);
+            $productBatch = $productBatches->get($item['product_batch_id']);
+
+            if (!$warehouseInventory || !$productBatch) {
+                Flash::error('One or more scanned batches are not available in the selected warehouse.');
+                return redirect()->back()->withInput();
+            }
+
+            if ($warehouseInventory->quantity < $item['quantity']) {
+                Flash::error('Insufficient batch quantity in warehouse for batch ' . $productBatch->batch_code . '. Available: ' . $warehouseInventory->quantity . ', Needed: ' . $item['quantity']);
+                return redirect()->back()->withInput();
+            }
         }
 
         DB::beginTransaction();
         
         try {
-            // Remove from warehouse
-            $warehouseInventory->decreaseQuantity($totalNeeded);
+            $inventoryBalance = InventoryBalance::firstOrCreate(
+                ['lorry_id' => $lorry->id],
+                ['batches' => []]
+            );
 
-            foreach ($request->lorry_ids as $lorryId) {
-                $lorry = Lorry::find($lorryId);
-                // Get or create inventory balance for this lorry
-                $inventoryBalance = InventoryBalance::firstOrCreate(
-                    ['lorry_id' => $lorryId],
-                    ['batches' => []]
-                );
+            $totalUnits = 0;
 
-                // Add batch to lorry's inventory
+            foreach ($items as $item) {
+                $productBatch = $productBatches->get($item['product_batch_id']);
+                $warehouseInventory = $warehouseInventoryMap->get($item['product_batch_id']);
+
+                $warehouseInventory->decreaseQuantity($item['quantity']);
                 $inventoryBalance->updateBatchQuantity(
-                    $productBatch->id, 
-                    $request->quantity_per_lorry, 
+                    $productBatch->id,
+                    $item['quantity'],
                     'add'
                 );
-                
-                // Create inventory transaction for lorry
+
                 InventoryTransaction::create([
                     'type' => InventoryTransaction::TYPE_STOCK_IN,
-                    'lorry_id' => $lorryId,
+                    'lorry_id' => $lorry->id,
                     'warehouse_id' => $warehouseId,
                     'product_id' => $productBatch->product_id,
                     'batch_id' => $productBatch->id,
-                    'quantity' => $request->quantity_per_lorry,
+                    'quantity' => $item['quantity'],
                     'date' => now(),
                     'user' => Auth::user()->name,
                     'remark' => 'Received from warehouse'
                 ]);
 
-                 // Create inventory transaction for warehouse (stock out)
                 InventoryTransaction::create([
                     'type' => InventoryTransaction::TYPE_STOCK_OUT,
                     'warehouse_id' => $warehouseId,
-                    'lorry_id' => $lorryId,
+                    'lorry_id' => $lorry->id,
                     'product_id' => $productBatch->product_id,
                     'batch_id' => $productBatch->id,
-                    'quantity' => -$request->quantity_per_lorry,
+                    'quantity' => -$item['quantity'],
                     'date' => now(),
                     'user' => Auth::user()->name,
                     'remark' => "Distributed to van #{$lorry->lorryno}."
                 ]);
-                
+
+                $totalUnits += $item['quantity'];
             }
-            if ($productBatch->quantity <= 0) {
-                $productBatch->status = 2; // Inactive
-                $productBatch->save();
-            }
-            
-           
-            
+
             DB::commit();
 
-            Flash::success('Successfully distributed ' . $totalNeeded . ' units to ' . count($request->lorry_ids) . ' lorry(s).');
+            Flash::success('Successfully stocked in ' . $totalUnits . ' units across ' . $items->count() . ' batch(es) to lorry ' . $lorry->lorryno . '.');
 
         } catch (\Exception $e) {
             DB::rollBack();

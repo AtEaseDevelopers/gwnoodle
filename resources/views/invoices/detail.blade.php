@@ -229,7 +229,7 @@
                 var product_id = $('#product_id').val();
                 if(invoice_id != '' && product_id != ''){
                     
-                    var url = '{{ config("app.url") }}/invoiceDetails/getprice/'+invoice_id+'/'+product_id;
+                    var url = '{{ config("app.url") }}invoiceDetails/getprice/'+invoice_id+'/'+product_id;
                     
                     console.log('Fetching price from:', url);
                     

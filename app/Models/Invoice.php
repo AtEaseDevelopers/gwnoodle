@@ -30,6 +30,7 @@ class Invoice extends Model
         'date',
         'customer_id',
         'driver_id',
+        'default_driver_id',
         'kelindan_id',
         'agent_id',
         'supervisor_id',
@@ -50,6 +51,7 @@ class Invoice extends Model
         'date' => 'datetime:d-m-Y H:i:s',
         'customer_id' => 'integer',
         'driver_id' => 'integer',
+        'default_driver_id' => 'integer',
         'kelindan_id' => 'integer',
         'agent_id' => 'integer',
         'supervisor_id' => 'integer',
@@ -68,7 +70,8 @@ class Invoice extends Model
         'date' => 'required',
         'customer_id' => 'required',
         'paymentterm' => 'required',
-        'driver_id' => 'required',
+        'driver_id' => 'nullable|integer|exists:drivers,id',
+        'default_driver_id' => 'nullable|integer|exists:drivers,id',
         'status' => 'required',
         'remark' => 'nullable|string|max:255|string|max:255',
         'created_at' => 'nullable|nullable',
@@ -88,6 +91,11 @@ class Invoice extends Model
     public function driver()
     {
         return $this->belongsTo(\App\Models\Driver::class, 'driver_id', 'id');
+    }
+
+    public function defaultDriver()
+    {
+        return $this->belongsTo(\App\Models\Driver::class, 'default_driver_id', 'id');
     }
 
     public function kelindan()

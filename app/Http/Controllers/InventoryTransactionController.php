@@ -31,7 +31,23 @@ class InventoryTransactionController extends AppBaseController
      */
     public function index(InventoryTransactionDataTable $inventoryTransactionDataTable)
     {
-        return $inventoryTransactionDataTable->render('inventory_transactions.index');
+        return $inventoryTransactionDataTable->render('inventory_transactions.index', [
+            'pageTitle' => __('inventory_transactions.inventory_transactions'),
+        ]);
+    }
+
+    /**
+     * Display a listing of warehouse-only InventoryTransaction records.
+     *
+     * @param InventoryTransactionDataTable $inventoryTransactionDataTable
+     *
+     * @return Response
+     */
+    public function warehouseIndex(InventoryTransactionDataTable $inventoryTransactionDataTable)
+    {
+        return $inventoryTransactionDataTable->render('inventory_transactions.index', [
+            'pageTitle' => 'Warehouse Transactions',
+        ]);
     }
 
     /**

@@ -242,8 +242,8 @@ class InvoicePaymentDataTable extends DataTable
             'name' => 'payment_no']),
             
             'invoice_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.invoice_no'),
-            'data' => 'invoice_id',
-            'name' => 'invoice.invoice_no']),
+            'data' => 'invoice.invoiceno',
+            'name' => 'invoice.invoiceno']),
 
             'amount'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.amount'),
             'data' => 'amount',

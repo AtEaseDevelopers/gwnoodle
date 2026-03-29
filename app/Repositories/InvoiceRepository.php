@@ -21,6 +21,7 @@ class InvoiceRepository extends BaseRepository
         'date',
         'customer_id',
         'driver_id',
+        'default_driver_id',
         'kelindan_id',
         'agent_id',
         'supervisor_id',
