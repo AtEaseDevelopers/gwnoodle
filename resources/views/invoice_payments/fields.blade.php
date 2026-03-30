@@ -186,7 +186,7 @@
                 var url = '/invoicePayments/customer-invoices/' + customerId;
                 $.get(url, function(data, status){
                     if (status === 'success') {
-                        if (data.status) {
+                    if (data.status) {
                             var o = '<option disabled>Pick an Invoice...</option>';
                             $.each(data.data, function(key, invoice) {
                                 o += `<option value="${invoice.id}">

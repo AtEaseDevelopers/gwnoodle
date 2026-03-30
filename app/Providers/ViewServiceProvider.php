@@ -21,6 +21,7 @@ use App\Models\Driver;
 use App\Models\Loan;
 use App\Models\Price;
 use App\Models\Report;
+use App\Models\Warehouse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use View;
@@ -137,6 +138,17 @@ class ViewServiceProvider extends ServiceProvider
         View::composer(['invoice_details.fields','invoices.detail'], function ($view) {
             $invoiceItems = Invoice::pluck('invoiceno','id')->toArray();
             $view->with('invoiceItems', $invoiceItems);
+        });
+        View::composer(['invoices.show'], function ($view) {
+            $invoiceItems = Invoice::pluck('invoiceno','id')->toArray();
+            $view->with('invoiceItems', $invoiceItems);
+        });
+ 
+        View::composer(['invoices.show'], function ($view) {
+            $warehouseItems = Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->pluck('name', 'id');
+            $view->with('warehouseItems', $warehouseItems);
         });
         View::composer(['invoices.fields'], function ($view) {
             $supervisorItems = Supervisor::pluck('name','id')->toArray();

@@ -278,7 +278,7 @@
         <table class="totals">
             <tr>
                 <td class="ta-r">Total :</td>
-                <td class="ta-r">{{ number_format($totalamount, 2) }}</td>
+                <td class="ta-r" style = "font-size: 20px;">{{ number_format($totalamount, 2) }}</td>
             </tr>
             <tr>
                 <td class="ta-r">Rounding Adj :</td>

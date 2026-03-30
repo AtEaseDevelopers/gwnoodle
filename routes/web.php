@@ -581,7 +581,9 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('/warehouses', [App\Http\Controllers\WarehouseController::class, 'store'])->name('warehouses.store');
         Route::get('/warehouses/{id}', [App\Http\Controllers\WarehouseController::class, 'show'])->name('warehouses.show');
         Route::get('/warehouses/{id}/edit', [App\Http\Controllers\WarehouseController::class, 'edit'])->name('warehouses.edit');
-        Route::put('/warehouses/{id}', [App\Http\Controllers\WarehouseController::class, 'update'])->name('warehouses.update');
+        Route::match(['put', 'patch'], '/warehouses/{id}', [App\Http\Controllers\WarehouseController::class, 'update'])->name('warehouses.update');
+
+        Route::get('warehouses/{warehouseId}/all-batches', [App\Http\Controllers\WarehouseController::class, 'getAllBatches'])->name('warehouses.get-all-batches');
 
         // AJAX routes for getting batches/inventory
         Route::get('/warehouses/get-warehouse-batches/{warehouse_id}', [App\Http\Controllers\WarehouseController::class, 'getWarehouseBatches'])->name('warehouses.get-warehouse-batches');

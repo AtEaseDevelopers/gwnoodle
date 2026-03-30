@@ -31,4 +31,14 @@ class Warehouse extends Model
     {
         return $query->where('status', self::STATUS_ACTIVE);
     }
+
+    public function getStatusBadgeClassAttribute()
+    {
+        return match($this->status) {
+            self::STATUS_ACTIVE => 'badge-success',
+            self::STATUS_INACTIVE => 'badge-danger',
+            default => 'badge-secondary',
+        };
+    }
+
 }

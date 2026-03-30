@@ -5,7 +5,7 @@
       <li class="breadcrumb-item">
          <a href="{!! route('invoices.index') !!}">{{ __('invoices.invoices') }}</a>
       </li>
-      <li class="breadcrumb-item active">{{ __('invoices.create') }}</li>
+      <li class="breadcrumb-item active">{{ __('Create') }}</li>
     </ol>
      <div class="container-fluid">
           <div class="animated fadeIn">

@@ -136,6 +136,7 @@ class InvoicePaymentDataTable extends DataTable
                         'render' => 'function(data, type, row){
                                 var paymentTerms = {
                                     1: \'Cash\',
+                                    2: \'Credit\',
                                     3: \'Online BankIn\',
                                     4: \'E-wallet\',
                                     5: \'Cheque\'
@@ -161,17 +162,17 @@ class InvoicePaymentDataTable extends DataTable
                             }
                         }'
                     ],
-                    [
-                    'targets' => 11,
-                    'render' => 'function(data, type){
-                        if(data == 1) {
-                            return "Synced";
-                        } else if (data == 2) {
-                            return "Voided";
-                        }
+                    // [
+                    // 'targets' => 11,
+                    // 'render' => 'function(data, type){
+                    //     if(data == 1) {
+                    //         return "Synced";
+                    //     } else if (data == 2) {
+                    //         return "Voided";
+                    //     }
                         
-                    }'
-                    ],
+                    // }'
+                    // ],
                 ],
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
@@ -181,9 +182,9 @@ class InvoicePaymentDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == \'Status\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Completed</option><option value="0">New</option><option value="2">Cancelled</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Completed</option><option value="0">New</option><option value="2">Cancelled   </option></select>\';
                             }else if(columns[index].title == \'Type\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="1">Cash</option><option value="3">Online BankIn</option><option value="4">E-wallet</option><option value="5">Cheque</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="1">Cash</option><option value="2">Credit</option><option value="3">Online BankIn</option><option value="4">E-wallet</option><option value="5">Cheque</option></select>\';
                             }else if(columns[index].title == \'Approve At\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
                             }else if(columns[index].title == \'Date\'){
@@ -199,14 +200,14 @@ class InvoicePaymentDataTable extends DataTable
                             })
                         }
                     });
-                    var groupItems = '.json_encode(Code::where('code','customer_group')->pluck('description','value')->toArray()).';
-                    var x = document.getElementById("group");
-                    $.each(groupItems, function( index, value ) {
-                        var option = document.createElement("option");
-                        option.text = value;
-                        option.value = index;
-                        x.add(option);
-                    });
+                    // var groupItems = '.json_encode(Code::where('code','customer_group')->pluck('description','value')->toArray()).';
+                    // var x = document.getElementById("group");
+                    // $.each(groupItems, function( index, value ) {
+                    //     var option = document.createElement("option");
+                    //     option.text = value;
+                    //     option.value = index;
+                    //     x.add(option);
+                    // });
                 }'
             ]);
     }
@@ -271,10 +272,10 @@ class InvoicePaymentDataTable extends DataTable
 
             // 'remark',
 
-            'group'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.group'),
-            'data' => 'customer.GroupDescription',
-            'name' => 'customer.group',
-            'orderable' => false]),
+            // 'group'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.group'),
+            // 'data' => 'customer.GroupDescription',
+            // 'name' => 'customer.group',
+            // 'orderable' => false]),
         ];
     }
 

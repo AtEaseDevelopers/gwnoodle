@@ -210,6 +210,33 @@ class WarehouseController extends Controller
         return view('warehouses.remove_inventory', compact('warehouse', 'inventory'));
     }
 
+    public function getAllBatches($warehouseId)
+    {
+        $inventory = WarehouseInventoryBalance::with(['batch.product'])
+            ->where('warehouse_id', $warehouseId)
+            ->where('quantity', '>', 0)
+            ->get();
+        
+        $batches = [];
+        foreach ($inventory as $item) {
+            if ($item->batch && $item->batch->product) {
+                $batches[] = [
+                    'batch_id' => $item->batch_id,
+                    'batch_code' => $item->batch->batch_code,
+                    'expiry_date' => $item->batch->expiry_date,
+                    'product_id' => $item->batch->product_id,
+                    'product_name' => $item->batch->product->name,
+                    'quantity' => $item->quantity
+                ];
+            }
+        }
+        
+        return response()->json([
+            'success' => true,
+            'batches' => $batches
+        ]);
+    }
+
     /**
      * Get inventory summary for a warehouse (AJAX)
      */

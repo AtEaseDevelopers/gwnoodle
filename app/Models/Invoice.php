@@ -135,7 +135,7 @@ class Invoice extends Model
 
     public function getDateAttribute($value)
     {
-        return Carbon::parse($value)->format('d-m-Y H:i:s');
+        return Carbon::parse($value)->format('d-m-Y');
     }
 
 
