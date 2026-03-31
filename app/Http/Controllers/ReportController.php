@@ -314,6 +314,25 @@ class ReportController extends AppBaseController
             ]);
         }
 
+        if ($sp == 'FINISHED_GOODS_TRACEABILITY') {
+            // Extract parameters for traceability report
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+            
+            // Handle filters
+            $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
+            $product_id = isset($data['product_id']) ? $data['product_id'] : null;
+            $batch_id = isset($data['batch_id']) ? $data['batch_id'] : null;
+            
+            // Redirect to the report view with parameters
+            return redirect()->route('finished_goods_traceability_view', [
+                'date_from' => $date_from,
+                'date_to' => $date_to,
+                'customer_id' => $customer_id,
+                'product_id' => $product_id,
+                'batch_id' => $batch_id,
+            ]);
+        }
         $param = '';
         foreach ($data as $key => $value) {
             if ($key != '_token') {
@@ -509,6 +528,80 @@ class ReportController extends AppBaseController
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
     }
+
+    public function finishedGoodsTraceabilityView(Request $request)
+    {
+        // Get parameters directly from request
+        $date_from = $request->date_from ?? date('Y-m-d');
+        $date_to = $request->date_to ?? date('Y-m-d');
+
+        // Handle filters that might be arrays (multiselect)
+        $customer_id = $request->customer_id;
+        $product_id = $request->product_id;
+        $batch_id = $request->batch_id;
+        
+        // Convert to array if they are strings (single selection)
+        if ($customer_id && !is_array($customer_id)) {
+            $customer_id = [$customer_id];
+        }
+        if ($product_id && !is_array($product_id)) {
+            $product_id = [$product_id];
+        }
+        if ($batch_id && !is_array($batch_id)) {
+            $batch_id = [$batch_id];
+        }
+
+        $filters = [
+            'customer_id' => $customer_id,
+            'product_id' => $product_id,
+            'batch_id' => $batch_id,
+        ];
+        
+        $service = new \App\Services\FinishedGoodsTraceabilityService();
+        $reportData = $service->generateReport($date_from, $date_to, $filters);
+        
+        // Calculate PDF height based on number of items
+        $totalItems = count($reportData['items']);
+        $minHeight = 500;
+        $heightPerRow = 30;
+        $calculatedHeight = $minHeight + ($totalItems * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 600);
+        
+        try {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.finished_goods_traceability', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'date_from' => $date_from,
+                'date_to' => $date_to
+            ]);
+            
+            // Set custom paper size (landscape for better visibility)
+            $pdf->setPaper('A4', 'landscape');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'chroot' => public_path(),
+            ]);
+            
+            // Stream to browser
+            return $pdf->stream('finished_goods_traceability_' . $date_from . '_to_' . $date_to . '.pdf');
+            
+        } catch(Exception $e) {
+            dd($e->getMessage());
+            \Log::error('Traceability PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+
+
+
+
 
     public function monthlysalereport(Request $request)
     {
