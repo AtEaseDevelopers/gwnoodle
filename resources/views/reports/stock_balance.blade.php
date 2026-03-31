@@ -133,8 +133,8 @@
         }
         
         th {
-            background-color: #4CAF50;
-            color: white;
+            background-color: #d4d4d4;
+            color: black;
             padding: 5px;
             text-align: left;
             border: 1px solid #ddd;
