@@ -1575,17 +1575,37 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
-            $customer = Customer::select('customers.*', 'assigns.sequence')
+            
+            $customers = Customer::select('customers.*', 'assigns.sequence')
                 ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
                 ->where('assigns.driver_id', $driver->id)
                 ->orderBy('assigns.sequence', 'asc')
-                ->get();          
+                ->get();
+            
+            // Add credit amount for each customer
+            foreach ($customers as $customer) {
+                // Get all credit invoices for this customer (payment term = 2)
+                $invoices = Invoice::where('customer_id', $customer->id)
+                    ->where('status', Invoice::STATUS_COMPLETED)
+                    ->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT) // 2 = Credit
+                    ->with(['invoicedetail'])
+                    ->get();
+                
+                // Calculate total credit amount from invoice details
+                $totalCredit = 0;
+                foreach ($invoices as $invoice) {
+                    $totalCredit += $invoice->invoicedetail->sum('totalprice');
+                }
+                // Add credit amount to customer object
+                $customer->credit_amount = round($totalCredit, 2);
+            }
+            
             //process
-            if($customer != null){
+            if($customers->isNotEmpty()){
                 return response()->json([
                     'result' => true,
                     'message' => __LINE__.$this->message_separator.'api.message.customer_found',
-                    'data' => $customer
+                    'data' => $customers
                 ], 200);
             }else{
                 return response()->json([
