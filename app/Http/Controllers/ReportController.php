@@ -250,25 +250,6 @@ class ReportController extends AppBaseController
         $data = $request->all();
         $report_id = $data['_report_id'];
         $sp = Report::where('id', $report_id)->pluck('sqlvalue')->first();
-
-        if ($sp == 'DAILY_SALES_REPORT') {
-            $param = '';
-            foreach ($data as $key => $value) {
-                if ($key != '_token' && $key != '_report_id') {
-                    if (is_array($value)) {
-                        $array = '';
-                        foreach ($value as $arr) {
-                            $array = $array . $arr . ',';
-                        }
-                        $array = rtrim($array, ",");
-                        $param = $param . $key . '=' . $array . '&';
-                    } else {
-                        $param = $param . $key . '=' . $value . '&';
-                    }
-                }
-            }
-            return redirect(route('daily_sales_report_excel') . '?' . $param);
-        }
         
         if ($sp == 'STOCK_BALANCE_REPORT') {
             // Extract parameters for stock balance report
@@ -317,6 +298,19 @@ class ReportController extends AppBaseController
                 'date_to' => $date_to,
                 'warehouse_id' => $warehouse_id,
                 'product_id' => $product_id,
+            ]);
+        }
+
+        if ($sp == 'DAILY_SALES_REPORT') {
+            // Extract parameters for daily sales report
+            $date = isset($data['date']) ? $data['date'] : date('Y-m-d');
+            $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
+            $payment_term = isset($data['payment_term']) ? $data['payment_term'] : null;
+            // Redirect to the report view with parameters
+            return redirect()->route('daily_sales_report_view', [
+                'date' => $date,
+                'customer_id' => $customer_id,
+                'payment_term' => $payment_term,
             ]);
         }
 
@@ -462,6 +456,56 @@ class ReportController extends AppBaseController
             
         } catch(Exception $e) {
             dd($e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    public function dailySalesReportView(Request $request)
+    {
+        // Get parameters directly from request
+        $date = $request->date ?? date('Y-m-d');
+        
+        $filters = [
+            'customer_id' => $request->customer_id,
+            'payment_term' => $request->payment_term,
+        ];
+        
+        $service = new \App\Services\DailySalesReportService();
+        $reportData = $service->generateReport($date, $filters);
+        
+        // Calculate PDF height based on content
+        $totalInvoiceItems = count($reportData['invoices']);
+        $totalProductItems = count($reportData['products']);
+        $minHeight = 500;
+        $heightPerRow = 30;
+        $calculatedHeight = $minHeight + (($totalInvoiceItems + $totalProductItems) * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 600);
+        
+        try {
+            $pdf = Pdf::loadView('reports.daily_sales', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'selected_date' => $date
+            ]);
+            
+            // Set custom paper size
+            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+            ]);
+            
+            // Stream to browser
+            return $pdf->stream('daily_sales_report_' . $date . '.pdf');
+            
+        } catch(Exception $e) {
+            \Log::error('Daily Sales PDF Error: ' . $e->getMessage());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
     }

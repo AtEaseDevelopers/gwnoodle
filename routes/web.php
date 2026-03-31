@@ -293,6 +293,8 @@ Route::group(['middleware' => ['auth']], function() {
 
         Route::get('/stock-received-report', [App\Http\Controllers\ReportController::class, 'stockReceivedReportView'])->name('stock_received_report_view');
         Route::post('/stock-received-report/generate', [App\Http\Controllers\ReportController::class, 'generateStockReceivedReport'])->name('stock_received_report_generate');
+
+        Route::get('/daily-sales-report', [App\Http\Controllers\ReportController::class, 'dailySalesReportView'])->name('daily_sales_report_view');
     });
 
 
