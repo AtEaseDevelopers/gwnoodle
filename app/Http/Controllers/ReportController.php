@@ -297,7 +297,28 @@ class ReportController extends AppBaseController
             return redirect()->route('stock_balance_report_view');
         }
 
-        
+        if ($sp == 'STOCK_RECEIVED_REPORT') {
+
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+            $warehouse_id = isset($data['warehouse_id']) ? $data['warehouse_id'] : null;
+            $product_id = isset($data['product_id']) ? $data['product_id'] : null;
+
+            if ($warehouse_id && !is_array($warehouse_id)) {
+                $warehouse_id = [$warehouse_id];
+            }            
+
+            if ($product_id && !is_array($product_id)) {
+                $product_id = [$product_id];
+            }
+                // Redirect to the report view with date range parameters
+            return redirect()->route('stock_received_report_view', [
+                'date_from' => $date_from,
+                'date_to' => $date_to,
+                'warehouse_id' => $warehouse_id,
+                'product_id' => $product_id,
+            ]);
+        }
 
         $param = '';
         foreach ($data as $key => $value) {
@@ -381,6 +402,70 @@ class ReportController extends AppBaseController
         }
     }
     
+    public function stockReceivedReportView(Request $request)
+    {
+        // Get parameters directly from request
+        $date_from = $request->date_from ?? $request->date ?? date('Y-m-d');
+        $date_to = $request->date_to ?? $request->date ?? date('Y-m-d');
+
+        // Handle warehouse_id (could be array or string)
+        $warehouse_id = $request->warehouse_id;
+        if ($warehouse_id && !is_array($warehouse_id)) {
+            $warehouse_id = [$warehouse_id];
+        }
+        
+        // Handle product_id (could be array or string)
+        $product_id = $request->product_id;
+        if ($product_id && !is_array($product_id)) {
+            $product_id = [$product_id];
+        }
+        
+        $filters = [
+            'warehouse_id' => $request->warehouse_id,
+            'product_id' => $request->product_id,
+        ];
+        
+        $service = new \App\Services\StockReceivedReportService();
+        $reportData = $service->generateReport($date_from, $date_to, $filters);
+        
+        // Calculate PDF height based on number of items
+        $totalItems = count($reportData['items']);
+        $minHeight = 450;
+        $heightPerRow = 25;
+        $calculatedHeight = $minHeight + ($totalItems * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 500);
+        
+        try {
+            $pdf = Pdf::loadView('reports.stock_received', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'date_from' => $date_from,
+                'date_to' => $date_to
+            ]);
+            
+            // Set custom paper size
+            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+
+            ]);
+
+            // Stream to browser (view in browser)
+            return $pdf->stream('stock_received_report_' . $date_from . '_to_' . $date_to . '.pdf');
+            
+        } catch(Exception $e) {
+            dd($e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
     public function monthlysalereport(Request $request)
     {
         // return $request->all();

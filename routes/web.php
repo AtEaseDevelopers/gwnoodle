@@ -290,6 +290,9 @@ Route::group(['middleware' => ['auth']], function() {
         Route::get('/report/customerstatementofaccount', [App\Http\Controllers\ReportController::class, 'customer_statement_of_account'])->name('customer_statement_of_account');
         Route::get('/report/daily_sales_report_excel', [App\Http\Controllers\ReportController::class, 'daily_sales_report_excel'])->name('daily_sales_report_excel');
         Route::get('/stock-balance-report', [App\Http\Controllers\ReportController::class, 'generateStockBalanceReport'])->name('stock_balance_report_view');
+
+        Route::get('/stock-received-report', [App\Http\Controllers\ReportController::class, 'stockReceivedReportView'])->name('stock_received_report_view');
+        Route::post('/stock-received-report/generate', [App\Http\Controllers\ReportController::class, 'generateStockReceivedReport'])->name('stock_received_report_generate');
     });
 
 
