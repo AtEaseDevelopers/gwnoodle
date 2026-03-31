@@ -22,6 +22,12 @@ class Invoice extends Model
     public const STATUS_SYNCED_TO_XERO = 1;
     public const STATUS_VOIDED = 2;
 
+    const PAYMENT_TERM_CASH = 1;
+    const PAYMENT_TERM_CREDIT = 2;
+    const PAYMENT_TERM_ONLINE = 3;
+    const PAYMENT_TERM_TNG = 4; 
+    const PAYMENT_TERM_CHEQUE = 5;
+
     const STATUS_COMPLETED = 1;
     const STATUS_NEW = 2;
 
@@ -37,7 +43,8 @@ class Invoice extends Model
         'paymentterm',
         'status',
         'remark',
-        'chequeno'
+        'chequeno',
+        'trip_id',
     ];
 
     /**
@@ -96,6 +103,11 @@ class Invoice extends Model
     public function defaultDriver()
     {
         return $this->belongsTo(\App\Models\Driver::class, 'default_driver_id', 'id');
+    }
+
+    public function trip()
+    {
+        return $this->belongsTo(\App\Models\Trip::class, 'trip_id', 'id');
     }
 
     public function kelindan()

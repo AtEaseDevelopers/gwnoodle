@@ -2235,6 +2235,7 @@ class DriverController extends Controller
             $invoice->status = 1;
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
+            $invoice->trip_id = $driver->trip_id;
             $invoice->save();
             
             $totalprice = 0;
@@ -3778,100 +3779,117 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
-            //validation
-            $validator = Validator::make($request->all(), [
-                'date' => 'required|date',
-            ]);
+            $trip = Trip::where('driver_id', $driver->id)->where('uuid',$driver->trip_id)->first();
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.$validator->errors()->first(),
-                    'data' => null
-                ], 400);
+            $lorryId = $trip->lorry_id;
+            $inventoryBalances = NULL;
+            if($lorryId) {
+                $inventoryBalances = InventoryBalance::where('lorry_id', $lorryId)->first()->getBatchesWithDetailsAttribute();
             }
-            if($data['date'] > date('Y-m-d H:i:s')){
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.date_cannot_be_future_date',
-                    'data' => null
-                ], 400);
-            }
-            //process
-            $sales = DB::Select('select sum(a.totalprice) as sales from(select i.id,sum(id.totalprice) as totalprice from invoices i left join invoice_details id on id.invoice_id = i.id where i.status = 1 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id.' group by i.id) a')[0]->sales;
-            $cash = DB::Select('select coalesce(sum(coalesce(amount,0)),0) as cash from invoice_payments where type = 1 and status = 1 and driver_id = '.$driver->id.' and approve_at >= "'.$data['date'].'" and approve_at < "'.date('Y-m-d', strtotime("+1 day", strtotime($data['date']))).'";')[0]->cash;
-            $bank_in = DB::Select('select coalesce(sum(coalesce(bank_in,0)),0) as bank_in from trips where type = 2 and driver_id = '.$driver->id.' and created_at >= "'.$data['date'].'" and created_at < "'.date('Y-m-d', strtotime("+1 day", strtotime($data['date']))).'";')[0]->bank_in;
-            $cash_left = DB::Select('select coalesce(sum(coalesce(cash,0)),0) as cash from trips where type = 2 and driver_id = '.$driver->id.' and created_at >= "'.$data['date'].'" and created_at < "'.date('Y-m-d', strtotime("+1 day", strtotime($data['date']))).'";')[0]->cash;
-            // $credit = DB::select('select sum(a.totalprice) as credit from ( select i.id,sum(id.totalprice) as totalprice from invoices i left join invoice_details id on id.invoice_id = i.id left join invoice_payments ip on ip.invoice_id = i.id where i.status = 1 and i.date = "'.$data['date'].'" and i.driver_id = '.$driver->id.' and ip.id is null group by i.id ) a')[0]->credit;
-            $credit = DB::select('select sum(a.totalprice) as credit from ( select i.id, sum(id.totalprice) as totalprice from invoices i left join invoice_details id on id.invoice_id = i.id where i.status = 1 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id.' and i.paymentterm = 2 group by i.id ) a')[0]->credit;
-            $bank = DB::select('select sum(a.totalprice) as bank from ( select i.id, sum(id.totalprice) as totalprice from invoices i left join invoice_details id on id.invoice_id = i.id where i.status = 1 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id.' and i.paymentterm = 3 group by i.id ) a')[0]->bank;
-            $tng = DB::select('select sum(a.totalprice) as tng from ( select i.id, sum(id.totalprice) as totalprice from invoices i left join invoice_details id on id.invoice_id = i.id where i.status = 1 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id.' and i.paymentterm = 4 group by i.id ) a')[0]->tng;
-            $cheque = DB::select('select sum(a.totalprice) as cheque from ( select i.id, sum(id.totalprice) as totalprice from invoices i left join invoice_details id on id.invoice_id = i.id where i.status = 1 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id.' and i.paymentterm = 5 group by i.id ) a')[0]->cheque;
-            $productsold = DB::Select('select sum(id.quantity) as productsold from invoices i left join invoice_details id on id.invoice_id = i.id where i.status = 1 and id.totalprice > 0 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id)[0]->productsold;
-            $solddetail = DB::select('select p.name, sum(id.quantity) as quantity, sum(id.totalprice) as price from invoices i left join invoice_details id on id.invoice_id = i.id  left join products p on p.id = id.product_id where i.status = 1 and id.totalprice > 0 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id.' group by id.product_id, p.id, p.name');
-            $productfoc = DB::Select('select sum(id.quantity) as productsold from invoices i left join invoice_details id on id.invoice_id = i.id where i.status = 1 and id.totalprice = 0 and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id)[0]->productsold;
-            $focdetail = DB::select('select p.name, sum(id.quantity) as quantity, sum(id.totalprice) as price from invoices i left join invoice_details id on id.invoice_id = i.id left join products p on p.id = id.product_id where i.status = 1 and id.totalprice = 0  and DATE(i.date) = "'.$data['date'].'" and i.driver_id = '.$driver->id.' group by id.product_id, p.id, p.name');
-            $trip = DB::table('trips as t')
-                ->select([
-                    't.id',
-                    't.advance_amount',  // Make sure this matches your column name exactly
-                    'd.name as driver_name',
-                    'k.name as kelindan_name', 
-                    'l.lorryno'
-                ])
-                ->leftJoin('drivers as d', 'd.id', '=', 't.driver_id')
-                ->leftJoin('kelindans as k', 'k.id', '=', 't.kelindan_id')
-                ->leftJoin('lorrys as l', 'l.id', '=', 't.lorry_id')
-                ->where('t.driver_id', $driver->id)
-                ->where('t.type', 1)
-                ->whereDate('t.date', $data['date'])  // Better date filtering
-                ->get()
-                ->map(function ($trip) {
-                    // Convert null advance_amount to 0 if needed
-                    $trip->advance_amount = $trip->advance_amount ?? 0;
-                    return $trip;
-                });                        
-            $transaction = DB::table('inventory_transactions as i_t')
-            ->join('products as p', 'p.id', '=', 'i_t.product_id')
-            ->join('drivers as d', function($join) use ($driver) {
-                $join->where('d.id', '=', $driver->id)
-                    ->where(DB::raw("SUBSTRING_INDEX(i_t.user, ' ', 1)"), '=', DB::raw('d.employeeid'))
-                    ->where(DB::raw("REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(i_t.user, '(', -1), ')', 1), ')', '')"), '=', DB::raw('d.name'));
-            })
-            ->where('i_t.type', 5)
-            ->where('i_t.created_at', '>=', $data['date'] . ' 00:00:00')
-            ->where('i_t.created_at', '<', $data['date'] . ' 23:59:59')
-            ->select('p.name', 'i_t.quantity')
-            ->get();
+        
+            $invoices = Invoice::where('trip_id', $driver->trip_id)
+            ->where('status', Invoice::STATUS_COMPLETED)
+            ->with(['invoicedetail.product'])
+            ->get(); 
 
-            // $trip = Trip::where('driver_id', $driver->id)
-            // ->where('date','>=',$data['date'].' 00:00:00')
-            // ->where('date','<',$data['date'].' 23:59:59')
-            // ->where('type',1) 
-            // ->with('driver')
-            // ->with('kelindan')
-            // ->with('lorry')
-            // ->get()
-            // ->toArray();
+            
+            $salesByPaymentTerm = [
+                'cash' => round($invoices->filter(function($invoice) {
+                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CASH;
+                })->sum(function($invoice) {
+                    return $invoice->invoicedetail->sum('totalprice');
+                }), 2),
+                
+                'credit' => round($invoices->filter(function($invoice) {
+                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CREDIT;
+                })->sum(function($invoice) {
+                    return $invoice->invoicedetail->sum('totalprice');
+                }), 2),
+                
+                'online_payment' => round($invoices->filter(function($invoice) {
+                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_ONLINE;
+                })->sum(function($invoice) {
+                    return $invoice->invoicedetail->sum('totalprice');
+                }), 2),
+                
+                'tng' => round($invoices->filter(function($invoice) {
+                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_TNG;
+                })->sum(function($invoice) {
+                    return $invoice->invoicedetail->sum('totalprice');
+                }), 2),
+                
+                'cheque' => round($invoices->filter(function($invoice) {
+                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CHEQUE;
+                })->sum(function($invoice) {
+                    return $invoice->invoicedetail->sum('totalprice');
+                }), 2),
+            ];
+
+            $productsSold = $invoices->flatMap(function($invoice) {
+                    return $invoice->invoicedetail;
+                })
+                ->groupBy('product_id')
+                ->map(function($details, $productId) {
+                    $firstDetail = $details->first();
+                    return [
+                        'name' => $firstDetail->product ? $firstDetail->product->name : 'Unknown Product',
+                        'quantity' => $details->sum('quantity')
+                    ];
+                })
+                ->values()
+                ->toArray();
+
+            $trip = Trip::where('driver_id', $driver->id)
+                ->orderBy('date', 'desc')
+                ->first();
+                
+            if ($trip->type == Trip::END_TRIP) {
+                $end_time = $trip->date;
+
+                $start_trip = Trip::where('driver_id', $driver->id)
+                    ->orderBy('date', 'desc')
+                    ->where('type', Trip::START_TRIP) // Assuming START_TRIP is 1
+                    ->first();
+
+                $start_time = $start_trip->date ?? null;
+                
+                // When we have both start and end trip, return both in the array
+                $tripArray = [
+                    [
+                        'trip_id' => $start_trip->uuid ?? '',
+                        'start_time' => $start_time ?? '',
+                        'type' => 'Start Trip',
+                    ],
+                    [
+                        'trip_id' => $trip->uuid,
+                        'end_time' => $end_time ?? '',
+                        'type' => 'End Trip',
+                    ]
+                ];
+            } else {
+                // When we only have start trip, return only one array
+                $start_time = $trip->date;
+                $end_time = null;
+                
+                $tripArray = [
+                    [
+                        'trip_id' => $trip->uuid,
+                        'start_time' => $start_time ?? '',
+                        'type' => 'Start Trip',
+                    ]
+                ];
+            }
+
             $result = [
-                'sales' => round($sales,2),
-                'cash' => round($cash,2),
-                'cash_left' =>  ceil($cash_left),
-                'bank_in' => round($bank_in,2),
-                'wastage' => $transaction,
-                'credit' => round($credit,2),
-                'onlinebank' =>round($bank,2),
-                'tng' =>round($tng,2),
-                'cheque' =>round($cheque,2),
-                'productsold' => [
-                    'total_quantity' =>round($productsold,2),
-                    'details' =>$solddetail
+                'sales_summary' => [
+                    'total_invoices' => $invoices->count(),
+                    'by_payment_term' => $salesByPaymentTerm,
                 ],
-                'productfoc' => [
-                    'total_quantity' =>round($productfoc,2),
-                    'details' =>$focdetail
-                ],
-                'trip' => $trip
+
+                'productsold' => $productsSold,
+                'inventory_balance'=> $inventoryBalances,
+
+                'trip' => $tripArray
             ];
             return response()->json([
                 'result' => true,

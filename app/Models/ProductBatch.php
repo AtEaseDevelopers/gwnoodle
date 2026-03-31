@@ -187,6 +187,11 @@ class ProductBatch extends Model
         return $query->orderBy('expiry_date', 'asc');
     }
 
+    public function warehouseInventoryBalances()
+    {
+        return $this->hasMany(WarehouseInventoryBalance::class, 'batch_id');
+    }
+
     // Relationships
     public function product()
     {
