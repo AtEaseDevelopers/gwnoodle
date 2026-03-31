@@ -333,6 +333,41 @@ class ReportController extends AppBaseController
                 'batch_id' => $batch_id,
             ]);
         }
+
+        if ($sp == 'STOCK_CARD_REPORT') {
+            // Extract parameters for stock card report
+            $product_id = isset($data['product_id']) ? $data['product_id'] : null;
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d', strtotime('-30 days'));
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+            $warehouse_id = isset($data['warehouse_id']) ? $data['warehouse_id'] : null;
+            $batch_id = isset($data['batch_id']) ? $data['batch_id'] : null;
+            
+            // Validate product_id is required
+            if (!$product_id) {
+                return back()->with('error', 'Product is required for Stock Card Report');
+            }
+            
+            // Handle arrays for multiselect
+            if (!is_array($product_id)) {
+                $product_id = [$product_id];
+            }
+            if ($warehouse_id && !is_array($warehouse_id)) {
+                $warehouse_id = [$warehouse_id];
+            }
+            if ($batch_id && !is_array($batch_id)) {
+                $batch_id = [$batch_id];
+            }
+            
+            // Redirect to the report view
+            return redirect()->route('stock_card_report_view', [
+                'product_id' => $product_id,
+                'date_from' => $date_from,
+                'date_to' => $date_to,
+                'warehouse_id' => $warehouse_id,
+                'batch_id' => $batch_id,
+            ]);
+        }
+
         $param = '';
         foreach ($data as $key => $value) {
             if ($key != '_token') {
@@ -598,7 +633,88 @@ class ReportController extends AppBaseController
         }
     }
 
-
+    public function stockCardReportView(Request $request)
+    {
+        // Get parameters directly from request
+        $product_id = $request->product_id;
+        $date_from = $request->date_from ?? date('Y-m-d', strtotime('-30 days'));
+        $date_to = $request->date_to ?? date('Y-m-d');
+        
+        // Validate product_id is required
+        if (!$product_id) {
+            return back()->with('error', 'Product is required for Stock Card Report');
+        }
+        
+        // Handle product_id as array (multiselect)
+        if (!is_array($product_id)) {
+            $product_id = [$product_id];
+        }
+        
+        // Handle filters
+        $warehouse_id = $request->warehouse_id;
+        $batch_id = $request->batch_id;
+        
+        // Convert to array if needed
+        if ($warehouse_id && !is_array($warehouse_id)) {
+            $warehouse_id = [$warehouse_id];
+        }
+        if ($batch_id && !is_array($batch_id)) {
+            $batch_id = [$batch_id];
+        }
+        
+        $filters = [
+            'warehouse_id' => $warehouse_id,
+            'batch_id' => $batch_id,
+        ];
+        
+        $service = new \App\Services\StockCardService();
+        $reportData = $service->generateReport($product_id, $date_from, $date_to, $filters);
+        
+        if (!$reportData) {
+            return back()->with('error', 'No products found');
+        }
+        
+        // Calculate total transactions across all products for PDF height
+        $totalTransactions = 0;
+        foreach ($reportData['products'] as $product) {
+            $totalTransactions += count($product['transactions']);
+        }
+        
+        $minHeight = 550;
+        $heightPerRow = 35;
+        $calculatedHeight = $minHeight + ($totalTransactions * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 700);
+        
+        try {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.stock_card', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'date_from' => $date_from,
+                'date_to' => $date_to
+            ]);
+            
+            // Set custom paper size (landscape for better visibility)
+            $pdf->setPaper('A4', 'landscape');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'chroot' => public_path(),
+            ]);
+            
+            // Stream to browser
+            $productCodes = implode('_', array_column($reportData['products'], 'product.code'));
+            return $pdf->stream('stock_card_' . $productCodes . '_' . $date_from . '_to_' . $date_to . '.pdf');
+            
+        } catch(Exception $e) {
+            \Log::error('Stock Card PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
 
 
 
