@@ -656,7 +656,6 @@ class InvoiceController extends AppBaseController
             Session::forget('invoice_detail_data');
             
         } catch (\Exception $e) {
-            dd($e->getMessage());
             DB::rollBack();
             Flash::error('Error saving invoice detail: ' . $e->getMessage());
             return redirect()->back()->withInput();

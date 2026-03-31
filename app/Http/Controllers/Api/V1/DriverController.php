@@ -7475,7 +7475,8 @@ class DriverController extends Controller
                 'type' => InventoryTransaction::TYPE_STOCK_IN,
                 'remark' => ($request->remark ?? 'Stock in from mobile app') . ' - Warehouse: ' . $warehouse->name,
                 'date' => now(),
-                'user' => $user->name
+                'user' => $user->name,
+                'stock_received'=>1
             ]);
 
             DB::commit();

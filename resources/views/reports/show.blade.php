@@ -80,7 +80,7 @@
                                         }
                                     @endphp
                                     <div class="form-group col-sm-12">
-                                        <input class="btn btn-primary" type="submit" value="Run Report">
+                                        <input class="btn btn-primary" type="submit" value="Run Report" formtarget="_blank">
                                     </div>
                                 </form>
                                  {{-- @include('reports.show_fields') --}}

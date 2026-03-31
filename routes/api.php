@@ -78,7 +78,7 @@ Route::group(['prefix' => 'v1'], function () {
     // Route::post('/driver/task/push', [App\Http\Controllers\Api\V1\DriverController::class, 'pushdrivertask']);
     // Route::get('/driver/task/listtranfer', [App\Http\Controllers\Api\V1\DriverController::class, 'listtranfer']);
     //dashboard
-    Route::post('/driver/dashboard', [App\Http\Controllers\Api\V1\DriverController::class, 'dashboard']);
+    Route::get('/driver/dashboard', [App\Http\Controllers\Api\V1\DriverController::class, 'dashboard']);
 
     Route::get('/driver/inventory-balance', [App\Http\Controllers\Api\V1\DriverController::class, 'getInventoryBalance']);
     Route::get('/driver/stock/transaction', [App\Http\Controllers\Api\V1\DriverController::class, 'getInventoryTransaction']);

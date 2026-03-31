@@ -249,89 +249,71 @@ class ReportController extends AppBaseController
     {
         $data = $request->all();
         $report_id = $data['_report_id'];
-        $sp = Report::where('id',$report_id)->pluck('sqlvalue')->first();
-        if($sp == 'SELLER_INFORMATION_RECORD'){
-            $param = '';
-            foreach ($data as $key => $value) {
-                if($key != '_token' && $key != '_report_id'){
-                    if(is_array($value)){
-                        $array = '';
-                        foreach($value as $arr){
-                            $array = $array.$arr.',';
-                        }
-                        $array = rtrim($array, ",");
-                        $param = $param . $key . '=' . $array . '&';
-                    }else{
-                        $param = $param . $key . '=' . $value . '&';
-                    }
-                }
-            }
-            return redirect(route('seller_information_record').'?'.$param); 
+        $sp = Report::where('id', $report_id)->pluck('sqlvalue')->first();
 
-            /*if($request->report_type == 'Run Report PDF'){
-                return redirect(route('seller_information_record').'?'.$param); 
-            }
-            else{
-                return redirect(route('seller_information_record_excel').'?'.$param); 
-            }*/
-        }
-        if($sp == 'CUSTOMER_STATEMENT_OF_ACCOUNT'){
+        if ($sp == 'DAILY_SALES_REPORT') {
             $param = '';
             foreach ($data as $key => $value) {
-                if($key != '_token' && $key != '_report_id'){
-                    if(is_array($value)){
+                if ($key != '_token' && $key != '_report_id') {
+                    if (is_array($value)) {
                         $array = '';
-                        foreach($value as $arr){
-                            $array = $array.$arr.',';
+                        foreach ($value as $arr) {
+                            $array = $array . $arr . ',';
                         }
                         $array = rtrim($array, ",");
                         $param = $param . $key . '=' . $array . '&';
-                    }else{
+                    } else {
                         $param = $param . $key . '=' . $value . '&';
                     }
                 }
             }
-            return redirect(route('customer_statement_of_account').'?'.$param);   
+            return redirect(route('daily_sales_report_excel') . '?' . $param);
         }
         
-         if($sp == 'DAILY_SALES_REPORT'){
-            $param = '';
+        if ($sp == 'STOCK_BALANCE_REPORT') {
+            // Extract parameters for stock balance report
+            $filters = [];
             foreach ($data as $key => $value) {
-                if($key != '_token' && $key != '_report_id'){
-                    if(is_array($value)){
-                        $array = '';
-                        foreach($value as $arr){
-                            $array = $array.$arr.',';
-                        }
-                        $array = rtrim($array, ",");
-                        $param = $param . $key . '=' . $array . '&';
-                    }else{
-                        $param = $param . $key . '=' . $value . '&';
-                    }
+                if ($key != '_token' && $key != '_report_id' && $value) {
+                    $filters[$key] = $value;
                 }
             }
-             return redirect(route('daily_sales_report_excel').'?'.$param); 
+            
+            // Generate the stock balance report
+            $service = new \App\Services\StockBalanceReportService();
+            $reportData = $service->generateReport($filters);
+            
+            // Check if PDF export is requested
+            if (isset($filters['export_pdf']) && $filters['export_pdf'] == 'true') {
+                $pdf = $service->generatePDF($reportData, $filters['paper_size'] ?? 'A4');
+                $filename = 'stock_balance_report_' . date('Y-m-d_H-i-s') . '.pdf';
+                return $pdf->download($filename);
+            }
+            
+            // Store report data in session and redirect to view
+            session()->put('stock_balance_report_data', $reportData);
+            session()->put('stock_balance_report_filters', $filters);
+            
+            return redirect()->route('stock_balance_report_view');
         }
+
         
+
         $param = '';
         foreach ($data as $key => $value) {
-            if($key != '_token'){
-                if(is_array($value)){
+            if ($key != '_token') {
+                if (is_array($value)) {
                     $array = '';
-                    foreach($value as $arr){
-                        $array = $array.$arr.',';
+                    foreach ($value as $arr) {
+                        $array = $array . $arr . ',';
                     }
                     $array = rtrim($array, ",");
                     $param = $param . "'" . $array . "',";
-                }else{
-                    
-                    
-                    if($key== 'datefrom')
-                        $value .=  ' 00:00:00';
-                    else
-                    if($key== 'dateto')
-                    {
-                        $value .=  ' 23:59:59';
+                } else {
+                    if ($key == 'datefrom')
+                        $value .= ' 00:00:00';
+                    else if ($key == 'dateto') {
+                        $value .= ' 23:59:59';
                     }
                     
                     $param = $param . "'" . $value . "',";
@@ -339,10 +321,64 @@ class ReportController extends AppBaseController
             }
         }
         $param = rtrim($param, ",");
-        $query = 'call '.$sp."(".$param.");";
+        $query = 'call ' . $sp . "(" . $param . ");";
         $result = DB::select($query)[0];
         $result = $result->ID;
         return redirect(route('showreport', $result));
+    }
+    
+    public function generateStockBalanceReport(Request $request)
+    {
+        $service = new \App\Services\StockBalanceReportService();
+        
+        $filters = [
+            'warehouse_id' => $request->warehouse_id,
+            'product_id' => $request->product_id,
+            'batch_no' => $request->batch_no,
+            'show_zero_stock' => $request->show_zero_stock
+        ];
+        
+        // Generate report data
+        $reportData = $service->generateReportOptimized($filters);
+        
+        // Calculate dynamic height based on content
+        $totalRows = 0;
+        foreach ($reportData['warehouses'] as $warehouse) {
+            foreach ($warehouse['products'] as $product) {
+                $totalRows += count($product['batches']);
+            }
+        }
+        
+        // Base height + additional per row
+        $minHeight = 450;
+        $heightPerRow = 23;
+        $calculatedHeight = $minHeight + ($totalRows * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 500); // Minimum 500 points
+
+        try {
+            $pdf = Pdf::loadView('reports.stock_balance', [
+                'reportData' => $reportData,
+                'filters' => $filters
+            ]);
+            
+            // Set custom paper size
+            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait'); // 595 is A4 width in points
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10
+            ]);
+            
+            // Stream to browser (view in browser)
+            return $pdf->stream('stock_balance_report_' . date('Y-m-d_H-i-s') . '.pdf');
+            
+        } catch(Exception $e) {
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
     }
     
     public function monthlysalereport(Request $request)
