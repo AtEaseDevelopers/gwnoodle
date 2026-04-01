@@ -50,6 +50,8 @@ class WarehouseController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
+            'stock_out_enabled' => 'sometimes|boolean', 
+
         ]);
 
         if ($validator->fails()) {
@@ -66,6 +68,7 @@ class WarehouseController extends Controller
                 'name' => $request->name,
                 'location' => $request->location,
                 'status' => 'active', // Default status
+                'stock_out_enabled' => $request->has('stock_out_enabled') ? 1 : 0, // Check if checkbox was checked
             ]);
 
             DB::commit();
@@ -132,6 +135,7 @@ class WarehouseController extends Controller
             'name' => 'required|string|max:255',
             'location' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
+            'stock_out_enabled' => 'sometimes|boolean', 
         ]);
 
         if ($validator->fails()) {
@@ -145,6 +149,7 @@ class WarehouseController extends Controller
                 'name' => $request->name,
                 'location' => $request->location,
                 'status' => $request->status,
+                'stock_out_enabled' => $request->has('stock_out_enabled') ? 1 : 0, // Check if checkbox was checked
             ]);
 
             Flash::success('Warehouse updated successfully.');

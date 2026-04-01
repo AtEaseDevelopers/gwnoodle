@@ -25,6 +25,14 @@ class WarehouseDataTable extends DataTable
                 $status = ucfirst($warehouse->status);
                 return '<span class="badge ' . $badgeClass . '">' . $status . '</span>';
             })
+            ->editColumn('stock_out_enabled', function($warehouse) {
+                // Add data attribute with raw value for filtering
+                if ($warehouse->stock_out_enabled) {
+                    return '<span class="badge badge-success" data-stock-out="1"><i class="fa fa-check-circle"></i> Enabled</span>';
+                } else {
+                    return '<span class="badge badge-secondary" data-stock-out="0"><i class="fa fa-ban"></i> Disabled</span>';
+                }
+            })
             ->addColumn('total_batches', function($warehouse) {
                 $count = $warehouse->inventoryBalances->count();
                 return '<span class="badge badge-info">' . $count . ' batches</span>';
@@ -38,33 +46,33 @@ class WarehouseDataTable extends DataTable
                 return '<span class="badge badge-secondary">' . $count . ' products</span>';
             })
             ->addColumn('inventory_summary', function($warehouse) {
-                if ($warehouse->inventoryBalances->isEmpty()) {
-                    return '<span class="text-muted">No inventory</span>';
-                }
-                
-                $summary = '<div style="max-height: 150px; overflow-y: auto;">';
-                $summary .= '<table class="table table-sm table-bordered mb-0">';
-                $summary .= '<thead><tr><th>Product</th><th>Batch</th><th>Qty</th></tr></thead><tbody>';
-                
-                $warehouse->inventoryBalances->take(5)->each(function($item) use (&$summary) {
-                    $expiringClass = ($item->batch && $item->batch->isExpiringSoon()) ? 'expiring-soon' : '';
-                    $summary .= '<tr>';
-                    $summary .= '<td>' . ($item->product ? $item->product->name : 'Unknown') . '</td>';
-                    $summary .= '<td class="' . $expiringClass . '">' . ($item->batch ? $item->batch->batch_code : 'Unknown') . '</td>';
-                    $summary .= '<td class="text-center">' . $item->quantity . '</td>';
-                    $summary .= '</tr>';
-                });
-                
-                if ($warehouse->inventoryBalances->count() > 5) {
-                    $summary .= '<tr><td colspan="3" class="text-center text-muted">+ ' . ($warehouse->inventoryBalances->count() - 5) . ' more...</td></tr>';
-                }
-                
-                $summary .= '</tbody></table>';
-                $summary .= '</div>';
-                
-                return $summary;
-            })
-            ->rawColumns(['action', 'status', 'total_batches', 'total_quantity', 'products_count', 'inventory_summary']);
+                    if ($warehouse->inventoryBalances->isEmpty()) {
+                        return '<span class="text-muted">No inventory</span>';
+                    }
+                    
+                    $summary = '<div style="max-height: 150px; overflow-y: auto;">';
+                    $summary .= '<table class="table table-sm table-bordered mb-0">';
+                    $summary .= '<thead><tr><th>Product</th><th>Batch</th><th>Qty</th></tr></thead><tbody>';
+                    
+                    $warehouse->inventoryBalances->take(5)->each(function($item) use (&$summary) {
+                        $expiringClass = ($item->batch && $item->batch->isExpiringSoon()) ? 'expiring-soon' : '';
+                        $summary .= '<tr>';
+                        $summary .= '<td>' . ($item->product ? $item->product->name : 'Unknown') . '</td>';
+                        $summary .= '<td class="' . $expiringClass . '">' . ($item->batch ? $item->batch->batch_code : 'Unknown') . '</td>';
+                        $summary .= '<td class="text-center">' . $item->quantity . '</td>';
+                        $summary .= '</tr>';
+                    });
+                    
+                    if ($warehouse->inventoryBalances->count() > 5) {
+                        $summary .= '<tr><td colspan="3" class="text-center text-muted">+ ' . ($warehouse->inventoryBalances->count() - 5) . ' more...</td></tr>';
+                    }
+                    
+                    $summary .= '</tbody></table>';
+                    $summary .= '</div>';
+                    
+                    return $summary;
+                })
+            ->rawColumns(['action', 'status', 'stock_out_enabled', 'total_batches', 'total_quantity', 'products_count', 'inventory_summary']);
     }
 
     /**
@@ -138,23 +146,34 @@ class WarehouseDataTable extends DataTable
                     ],
                 ],
                 'initComplete' => 'function(){
-                    var columns = this.api().init().columns;
-                    this.api()
-                    .columns()
-                    .every(function (index) {
+                    var table = this.api();
+                    
+                    // Add filter for Stock Out column
+                    var stockOutColumn = table.column(\'stock_out_enabled:name\');
+                    var stockOutSelect = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Enabled</option><option value="0">Disabled</option></select>\';
+                    $(stockOutSelect).appendTo($(stockOutColumn.footer()).empty()).on(\'change\', function(){
+                        var val = $(this).val();
+                        stockOutColumn.search(val).draw();
+                    });
+                    
+                    // Add filter for Status column
+                    var statusColumn = table.column(\'status:name\');
+                    var statusSelect = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option></select>\';
+                    $(statusSelect).appendTo($(statusColumn.footer()).empty()).on(\'change\', function(){
+                        var val = $(this).val();
+                        statusColumn.search(val).draw();
+                    });
+                    
+                    // Add text search for other columns
+                    table.columns().every(function (index) {
                         var column = this;
-                        if(columns[index].searchable){
-                            if(columns[index].title == "Status"){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option></select>\';
-                                $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
-                                    column.search($(this).val(), true, false).draw();
-                                });
-                            } else {
-                                var input = \'<input type="text" placeholder="Search" style="width: 100%;">\';
-                                $(input).appendTo($(column.footer()).empty()).on(\'keyup change\', function(){
-                                    column.search($(this).val(), true, false).draw();
-                                });
-                            }
+                        var columnName = column.header().textContent.trim();
+                        
+                        if(columnName !== "Status" && columnName !== "Stock Out" && columnName !== "Actions") {
+                            var input = \'<input type="text" placeholder="Search" style="width: 100%;">\';
+                            $(input).appendTo($(column.footer()).empty()).on(\'keyup change\', function(){
+                                column.search($(this).val(), true, false).draw();
+                            });
                         }
                     });
                 }'
@@ -199,6 +218,15 @@ class WarehouseDataTable extends DataTable
                 'searchable' => true,
                 'orderable' => true,
                 'width' => '100px',
+                'className' => 'text-center'
+            ],
+            [
+                'title' => 'Stock Out',
+                'data' => 'stock_out_enabled',
+                'name' => 'stock_out_enabled',
+                'searchable' => true,
+                'orderable' => true,
+                'width' => '110px',
                 'className' => 'text-center'
             ],
             [

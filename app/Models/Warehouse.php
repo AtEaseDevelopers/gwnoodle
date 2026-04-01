@@ -13,10 +13,13 @@ class Warehouse extends Model
         'name',
         'location',
         'status',
+        'stock_out_enabled',
     ];
 
     protected $casts = [
         'status' => 'string',
+        'stock_out_enabled' => 'boolean', 
+
     ];
 
     const STATUS_ACTIVE = 'active';

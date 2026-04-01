@@ -28,7 +28,7 @@ class InventoryCountController extends Controller
         $drivers = Driver::all();
         $products = Product::all();
         $statuses = InventoryCount::getStatusOptions();
-        $warehouses = Warehouse::where('status', 'active')->orderBy('name')->get(); // Add this
+        $warehouses = Warehouse::where('stock_out_enabled', 1)->orderBy('name')->get(); // Add this
         $lorries = Lorry::where('status', 1)->get(); // Add this
 
         // Pass filter parameters to DataTable
