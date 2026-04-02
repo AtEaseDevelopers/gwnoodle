@@ -79,7 +79,7 @@ class Invoice extends Model
         'paymentterm' => 'required',
         'driver_id' => 'nullable|integer|exists:drivers,id',
         'default_driver_id' => 'nullable|integer|exists:drivers,id',
-        'status' => 'required',
+        'status' => 'nullable',
         'remark' => 'nullable|string|max:255|string|max:255',
         'created_at' => 'nullable|nullable',
         'updated_at' => 'nullable|nullable'

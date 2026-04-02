@@ -31,7 +31,7 @@ Route::group(['prefix' => 'v1'], function () {
     Route::get('/driver/trip', [App\Http\Controllers\Api\V1\DriverController::class, 'checktrip']);
     Route::post('/driver/trip/start', [App\Http\Controllers\Api\V1\DriverController::class, 'starttrip']);
     Route::post('/driver/trip/end', [App\Http\Controllers\Api\V1\DriverController::class, 'tripEnd']);
-    Route::post('/driver/trip', [App\Http\Controllers\Api\V1\DriverController::class, 'trip']);
+
     //Kelindan
     // Route::get('/driver/kelindan', [App\Http\Controllers\Api\V1\DriverController::class, 'getkelindan']);
     //Lorry
@@ -62,6 +62,7 @@ Route::group(['prefix' => 'v1'], function () {
 
      //Invoice Payment
     Route::post('/driver/invoicepayment', [App\Http\Controllers\Api\V1\DriverController::class, 'addpayment']);
+    Route::get('/driver/get-customer-invoice-list/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getcustomerinvoice']);
     Route::post('/driver/invoicepayment/pdf', [App\Http\Controllers\Api\V1\DriverController::class, 'paymentpdf']);
 
     //Stock
@@ -96,10 +97,12 @@ Route::group(['prefix' => 'v1'], function () {
 
 
     //manager
+    Route::get('/driver/get-stock-out-warehouse', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockOutWarehouseInventory']);
     Route::get('/driver/get-warehouse-balance/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getWarehouseInventory']);
     Route::get('/driver/get-driver-product/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getDriverProduct']);
 
-    Route::get('/driver/stock-count-list', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockCount']);
+    Route::get('/driver/stock-count-list/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getStockCount']);
+
     Route::post('/driver/stock-count-approve', [App\Http\Controllers\Api\V1\DriverController::class, 'approveStockCount']);
     Route::post('/driver/stock-return', [App\Http\Controllers\Api\V1\DriverController::class, 'StockReturn']);
 

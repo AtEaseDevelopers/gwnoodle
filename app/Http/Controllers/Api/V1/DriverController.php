@@ -435,125 +435,6 @@ class DriverController extends Controller
         }
     }
 
-    // public function endtrip(Request $request){
-    //     try{
-    //         $data = $request->all();
-    //         //check session
-    //         $driver = Driver::where('session', $request->header('session'))->first();
-    //         if(empty($driver)){
-    //             return response()->json([
-    //                 'result' => false,
-    //                 'message' => __LINE__.$this->message_separator.'Invalid session',
-    //                 'data' => null
-    //             ], 401);
-    //         }
-    //         //validation
-    //         $validator = Validator::make($request->all(), [
-    //             // 'kelindan_id' => 'required|numeric',
-    //             'lorry_id' => 'required|numeric',
-    //         ]);
-    //         if ($validator->fails()) {
-    //             return response()->json([
-    //                 'result' => false,
-    //                 'message' => __LINE__.$this->message_separator.$validator->errors()->first(),
-    //                 'data' => null
-    //             ], 400);
-    //         }
-    //         // $kelindan = Kelindan::where('id', $data['kelindan_id'])->first();
-    //         // if(empty($kelindan)){
-    //         //     return response()->json([
-    //         //         'result' => false,
-    //         //         'message' => __LINE__.$this->message_separator.'Invalid Kelindan',
-    //         //         'data' => null
-    //         //     ], 400);
-    //         // }
-    //         $lorry = Lorry::where('id', $data['lorry_id'])->first();
-    //         if(empty($lorry)){
-    //             return response()->json([
-    //                 'result' => false,
-    //                 'message' => __LINE__.$this->message_separator.'Invalid Lorry',
-    //                 'data' => null
-    //             ], 400);
-    //         }
-    //         //process
-    //         DB::beginTransaction();
-    //         $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
-    //         if(!empty($trip)){
-    //             if($trip->type == 2){
-    //                 DB::rollback();
-    //                 return response()->json([
-    //                     'result' => false,
-    //                     'message' => __LINE__.$this->message_separator.'Trip had not started',
-    //                     'data' => null
-    //                 ], 400);
-    //             }else{
-    //                 $newtrip = new Trip();  
-    //                 $newtrip->driver_id = $driver->id;   
-    //                 $newtrip->kelindan_id = $data['kelindan_id'];
-    //                 $newtrip->lorry_id = $data['lorry_id'];
-    //                 $newtrip->cash = $data['cash'];
-    //                 $newtrip->advance_amount = $data['advance_amount'] ?? 0;
-    //                 $newtrip->type = 2;
-    //                 $newtrip->date = date("Y-m-d H:i:s");
-    //                 $newtrip->save();
-    //                 //cancelled task
-    //                 $task = Task::where('driver_id', $driver->id)->where('date',date('Y-m-d'))->whereIn('status',[0,1])->update(['trip_id'=>$newtrip->id,'status' => 9]);
-    //                 foreach($data["wastage"] as $wastage) {
-    //                     $inventorybalance = InventoryBalance::where('lorry_id',$trip->lorry_id)->where('product_id',$wastage['product_id'])->first();
-    //                     if(empty($inventorybalance)){
-    //                         DB::rollback();
-    //                         return response()->json([
-    //                             'result' => false,
-    //                             'message' => __LINE__.$this->message_separator.'Wastage quantity more than available quantity',
-    //                             'data' => null
-    //                         ], 400);
-    //                     }else{
-    //                         if($inventorybalance->quantity < $wastage["quantity"]){
-    //                             DB::rollback();
-    //                             return response()->json([
-    //                                 'result' => false,
-    //                                 'message' => __LINE__.$this->message_separator.'Wastage quantity more than available quantity',
-    //                                 'data' => null
-    //                             ], 400);
-    //                         }else{
-    //                             $inventorybalance->quantity = $inventorybalance->quantity - $wastage["quantity"];
-    //                             $inventorybalance->save();
-    //                             $inventorytransaction = New InventoryTransaction();
-    //                             $inventorytransaction->lorry_id = $trip->lorry_id;
-    //                             $inventorytransaction->product_id = $wastage["product_id"];
-    //                             $inventorytransaction->quantity = $wastage["quantity"] * -1;
-    //                             $inventorytransaction->type = 5;
-    //                             $inventorytransaction->date = date('Y-m-d H:i:s');
-    //                             $inventorytransaction->user = $driver->employeeid . " (" . $driver->name . ")";
-    //                             $inventorytransaction->save();
-    //                         }
-    //                     }
-    //                 }
-    //                 DB::commit();
-    //                 return response()->json([
-    //                     'result' => true,
-    //                     'message' => __LINE__.$this->message_separator.'Trip had been ended successfully',
-    //                     'data' => $newtrip
-    //                 ], 200);
-    //             }
-    //         }else{
-    //             DB::rollback();
-    //             return response()->json([
-    //                 'result' => false,
-    //                 'message' => __LINE__.$this->message_separator.'Trip had not started',
-    //                 'data' => null
-    //             ], 400);
-    //         }
-    //     }
-    //     catch(Exception $e){
-    //         return response()->json([
-    //             'result' => false,
-    //             'message' => __LINE__.$this->message_separator.$e->getMessage(),
-    //             'data' => null
-    //         ], 500);
-    //     }
-    // }
-
     public function tripEnd(Request $request)
     {
         // Validate session
@@ -640,216 +521,7 @@ class DriverController extends Controller
         }
     }
 
-    public function trip(Request $request){
-        $data = $request->all();
-        //check session
-        $driver = Driver::where('session', $request->header('session'))->first();
-        if(empty($driver)){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
-                'data' => null
-            ], 401);
-        }
-        //validation
-        $validator = Validator::make($request->all(), [
-            'kelindan_id' => 'required|numeric',
-            'lorry_id' => 'required|numeric',
-            'type' => 'required|numeric',
-        ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__.$this->message_separator.$validator->errors()->first(),
-                'data' => null
-            ], 400);
-        }
-        // $kelindan = Kelindan::where('id', $data['kelindan_id'])->first();
-        // if(empty($kelindan)){
-        //     return response()->json([
-        //         'result' => false,
-        //         'message' => __LINE__.$this->message_separator.'Invalid Kelindan',
-        //         'data' => null
-        //     ], 400);
-        // }
-        $lorry = Lorry::where('id', $data['lorry_id'])->first();
-        if(empty($lorry)){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__.$this->message_separator.'api.message.invalid_lorry',
-                'data' => null
-            ], 400);
-        }
-        if(!($data['type'] == 1 || $data['type'] == 2)){
-            return response()->json([
-               'result' => false,
-                'message' => __LINE__.$this->message_separator.'api.message.invalid_type',
-                'data' => null
-            ], 400);
-        }
-        //process
-        $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
-        if($data['type'] == 1){
-            if(!empty($trip)){
-                if($trip->type == 2){
-                    //insert trip
-                    $newtrip = new Trip();
-                    $newtrip->driver_id = $driver->id;
-                    $newtrip->kelindan_id = $data['kelindan_id'];
-                    $newtrip->lorry_id = $data['lorry_id'];
-                    $newtrip->type = 1;
-                    $newtrip->date = date("Y-m-d H:i:s");
-                    $newtrip->save();
-                    //generate task
-                    $assigns = Assign::where('driver_id', $driver->id)->orderby('sequence','asc')->get()->toarray();
-                    $count = 1;
-                    foreach($assigns as $assign){
-                        $task = new Task();
-                        $task->date = date("Y-m-d");
-                        $task->driver_id = $driver->id;
-                        $task->customer_id = $assign['customer_id'];
-                        $task->sequence = $count;
-                        $task->status = 0;
-                        $task->save();
-                        $count = $count + 1;
-                    }
-                    $invoices = Invoice::where('driver_id', $driver->id)->where('status',0)->where('date',date('Y-m-d'))->get()->toarray();
-                    foreach($invoices as $invoice){
-                        $task = new Task();
-                        $task->date = date("Y-m-d");
-                        $task->driver_id = $driver->id;
-                        $task->customer_id = $invoice['customer_id'];
-                        $task->invoice_id = $invoice['id'];
-                        $task->sequence = $count;
-                        $task->status = 0;
-                        $task->save();
-                        $count = $count + 1;
-                    }
-                    return response()->json([
-                        'result' => true,
-                        'message' => __LINE__.$this->message_separator.'api.message.trip_had_been_started_successfully',
-                        'data' => $newtrip
-                    ], 200);
-                }else{
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__.$this->message_separator.'api.message.trip_had_started',
-                        'data' => null
-                    ], 401);
-                }
-            }else{
-                //insert trip
-                $newtrip = new Trip();
-                $newtrip->driver_id = $driver->id;
-                $newtrip->kelindan_id = $data['kelindan_id'];
-                $newtrip->lorry_id = $data['lorry_id'];
-                $newtrip->type = 1;
-                $newtrip->date = date("Y-m-d H:i:s");
-                $newtrip->save();
-                //generate task
-                $assigns = Assign::where('driver_id', $driver->id)->orderby('sequence','asc')->get()->toarray();
-                $count = 1;
-                foreach($assigns as $assign){
-                    $task = new Task();
-                    $task->date = date("Y-m-d");
-                    $task->driver_id = $driver->id;
-                    $task->customer_id = $assign['customer_id'];
-                    $task->sequence = $count;
-                    $task->status = 0;
-                    $task->save();
-                    $count = $count + 1;
-                }
-                $invoices = Invoice::where('driver_id', $driver->id)->where('status',0)->where('date',date('Y-m-d'))->get()->toarray();
-                foreach($invoices as $invoice){
-                    $task = new Task();
-                    $task->date = date("Y-m-d");
-                    $task->driver_id = $driver->id;
-                    $task->customer_id = $invoice['customer_id'];
-                    $task->invoice_id = $invoice['id'];
-                    $task->sequence = $count;
-                    $task->status = 0;
-                    $task->save();
-                    $count = $count + 1;
-                }
-                return response()->json([
-                    'result' => true,
-                    'message' => __LINE__.$this->message_separator.'api.message.trip_had_been_started_successfully',
-                    'data' => $newtrip
-                ], 200);
-            }
-        }else if($data['type'] == 2){
-            if(!empty($trip)){
-                if($trip->type == 2){
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
-                        'data' => null
-                    ], 401);
-                }else{
-                    $newtrip = new Trip();
-                    $newtrip->driver_id = $driver->id;
-                    $newtrip->kelindan_id = $data['kelindan_id'];
-                    $newtrip->lorry_id = $data['lorry_id'];
-                    $newtrip->type = 2;
-                    $newtrip->date = date("Y-m-d H:i:s");
-                    $newtrip->save();
-                    //cancelled task
-                    $task = Task::where('driver_id', $driver->id)->where('date',date('Y-m-d'))->whereIn('status',[0,1])->update(['status' => 9]);
-                    return response()->json([
-                        'result' => true,
-                        'message' => __LINE__.$this->message_separator.'api.message.trip_had_been_ended_successfully',
-                        'data' => $newtrip
-                    ], 200);
-                }
-            }else{
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
-                    'data' => null
-                ], 401);
-            }
-        }
-    }
-
-    //Kelindan
-    // public function getkelindan(Request $request){
-    //     try{
-    //         $data = $request->all();
-    //         //check session
-    //         $driver = Driver::where('session', $request->header('session'))->first();
-    //         if(empty($driver)){
-    //             return response()->json([
-    //                 'result' => false,
-    //                 'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
-    //                 'data' => null
-    //             ], 401);
-    //         }
-    //         //process
-    //         // $kelindan = Kelindan::where('status',1)->select('id','name')->get()->toarray();
-    //         $kelindan = DB::select("select k.id, k.name from kelindans k left join ( select driver_id, type, kelindan_id from trips where id in ( select max(id) as id from trips group by driver_id ) ) b on k.id = b.kelindan_id and b.type = 1 where b.kelindan_id is null;");
-    //         if(count($kelindan) != 0){
-    //             return response()->json([
-    //                 'result' => true,
-    //                 'message' => __LINE__.$this->message_separator.'api.message.kelindan_found',
-    //                 'data' => $kelindan
-    //             ], 200);
-    //         }else{
-    //             return response()->json([
-    //                 'result' => false,
-    //                 'message' => __LINE__.$this->message_separator.'api.message.kelindan_not_found',
-    //                 'data' => null
-    //             ], 200);
-    //         }
-    //     }
-    //     catch(Exception $e){
-    //         return response()->json([
-    //             'result' => false,
-    //             'message' => __LINE__.$this->message_separator.$e->getMessage(),
-    //             'data' => null
-    //         ], 500);
-    //     }
-    // }
 
     //Lorry
     public function getlorry(Request $request){
@@ -2514,7 +2186,76 @@ class DriverController extends Controller
 	}
 	
 
-     public function addpayment(Request $request){
+    public function getcustomerinvoice(Request $request, $id)
+    {
+        try {
+            $customer = Customer::find($id);
+            if (empty($customer)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => 'Customer not found',
+                    'data' => null,
+                ], 404);
+            }
+
+            // Get unpaid invoices for the customer
+            $invoices = Invoice::where('customer_id', $id)
+                ->whereDoesntHave('invoicepayment', function ($query) {
+                    $query->where('status', 1);
+                })
+                ->where('status', 0)
+                ->orderBy('date', 'desc')
+                ->get(['id', 'invoiceno', 'date']);
+
+            // Calculate total amount for each invoice
+            $invoiceData = [];
+            $totalOutstanding = 0;
+
+            foreach ($invoices as $invoice) {
+                $totalAmount = InvoiceDetail::where("invoice_id", $invoice->id)->sum('totalprice');
+                $totalOutstanding += $totalAmount;
+                
+                $invoiceData[] = [
+                    'id' => $invoice->id,
+                    'invoice_no' => $invoice->invoiceno,
+                    'date' => $invoice->date,
+                    'total_amount' => (float) $totalAmount,
+                    'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
+                ];
+            }
+
+            if (empty($invoiceData)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => 'No unpaid invoices found for this customer',
+                    'data' => null,
+                ], 404);
+            }
+
+            return response()->json([
+                'result' => true,
+                'message' => 'Invoices retrieved successfully',
+                'data' => [
+                    'customer_id' => (int) $id,
+                    'customer_name' => $customer->name,
+                    'total_outstanding' => (float) $totalOutstanding,
+                    'formatted_outstanding' => 'RM ' . number_format($totalOutstanding, 2),
+                    'invoice_count' => count($invoiceData),
+                    'invoices' => $invoiceData
+                ]
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'result' => false,
+                'message' => 'Failed to retrieve invoices: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
+    public function addpayment(Request $request)
+    {
         try{
             $data = $request->all();
             //check session
@@ -2527,16 +2268,18 @@ class DriverController extends Controller
                     'color_code' => ''
                 ], 401);
             }
-            //validation
             
+            //validation
             $validator = Validator::make($request->all(), [
                 'date' => 'date_format:Y-m-d H:i:s',
                 'customer_id' => 'required|numeric',
                 'type' => 'required|numeric|gt:0|lt:6',
                 'remark' => 'present|nullable|string',
-                'amount' =>'required|numeric',
-                
+                'invoice_ids' => 'required|array|min:1', // Changed to array
+                'invoice_ids.*' => 'numeric|exists:invoices,id', // Validate each invoice ID exists
+                'cheque_no' => 'nullable|string',
             ]);
+            
             if ($validator->fails()) {
                 return response()->json([
                     'result' => false,
@@ -2544,7 +2287,8 @@ class DriverController extends Controller
                     'data' => null,
                 ], 400);
             }
-            $customer = Customer::where('id',$data['customer_id'])->first();
+            
+            $customer = Customer::where('id', $data['customer_id'])->first();
             if(empty($customer)){
                 return response()->json([
                     'result' => false,
@@ -2552,58 +2296,127 @@ class DriverController extends Controller
                     'data' => null,
                 ], 400);
             }
-            //process
             
+            //process
             DB::beginTransaction();
             
-            $invoicepayment = New InvoicePayment();
-            if(isset($data['invoice_id'])){
-                $invoicepayment->invoice_id = $data['invoice_id'];
+            $createdPayments = [];
+            $invoiceIds = $data['invoice_ids'];
+            
+            // If invoice_ids is a string (comma-separated), convert to array
+            if (!is_array($invoiceIds)) {
+                $invoiceIds = explode(',', $invoiceIds);
             }
             
+            // Get the total amount from the request or calculate from invoices
+            $totalAmount = isset($data['amount']) ? $data['amount'] : 0;
+            $amountPerInvoice = $totalAmount / count($invoiceIds);
+        
+            foreach ($invoiceIds as $index => $invoiceId) {
+            // Get the invoice to calculate its total amount
+            $invoice = Invoice::with('invoicedetail')->where('id', $invoiceId)->first();
+            
+            if (empty($invoice)) {
+                DB::rollBack();
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'Invoice not found for ID: '.$invoiceId,
+                    'data' => null,
+                ], 400);
+            }
+            
+            // Calculate invoice total amount
+            $invoiceTotal = $invoice->invoicedetail ? $invoice->invoicedetail->sum("totalprice") : 0;
+            
+            // Check if invoice already has approved payment
+            $existingPayment = InvoicePayment::where('invoice_id', $invoiceId)
+                ->where('status', 1)
+                ->first();
+                
+            if ($existingPayment) {
+                DB::rollBack();
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'Invoice '.$invoice->invoiceno.' already has an approved payment',
+                    'data' => null,
+                ], 400);
+            }
+            
+            $invoicepayment = new InvoicePayment();
+            $invoicepayment->invoice_id = $invoiceId;
             $invoicepayment->type = $data['type'];
             $invoicepayment->customer_id = $data['customer_id'];
-            $invoicepayment->amount = $data['amount'];
-            $invoicepayment->status = 1;
-            $invoicepayment->chequeno = $data['cheque_no'];
-            $invoicepayment->driver_id = $driver->id;
-            $invoicepayment->approve_by = $driver->name;
-            $invoicepayment->approve_at = date('Y-m-d H:i:s');
-            //$invoicepayment->created_at = $data['date'];
-            $invoicepayment->save();
+            
+            // If amount is provided in request, distribute it among invoices
+                // Otherwise use the invoice total amount
+                if (isset($data['amount']) && $data['amount'] > 0) {
+                    // For the last invoice, use remaining amount to avoid floating point issues
+                    if ($index === array_key_last($invoiceIds)) {
+                        $paymentAmount = $totalAmount - ($amountPerInvoice * (count($invoiceIds) - 1));
+                    } else {
+                        $paymentAmount = $amountPerInvoice;
+                    }
+                    $invoicepayment->amount = round($paymentAmount, 2);
+                } else {
+                    $invoicepayment->amount = $invoiceTotal;
+                }
+                
+                $invoicepayment->status = 1;
+                $invoicepayment->chequeno = $data['cheque_no'] ?? null;
+                $invoicepayment->driver_id = $driver->id;
+                $invoicepayment->approve_by = $driver->name;
+                $invoicepayment->approve_at = date('Y-m-d H:i:s');
+                $invoicepayment->remark = $data['remark'] ?? null;
+                
+                // Set custom date if provided
+                if (isset($data['date'])) {
+                    $invoicepayment->created_at = $data['date'];
+                }
+                
+                $invoicepayment->save();
+                
+                // Update invoice status to paid (status = 1)
+                $invoice->status = 1;
+                $invoice->save();
+                
+                $createdPayments[] = $invoicepayment;
+            }
             
             DB::commit();
-            $iv = InvoicePayment::where('id',$invoicepayment->id)->get()->first();
-           
-            $iv['payment_no'] = sprintf('PR%05d',$iv->id);
             
-            
-             try
-            {
-                $credit = DB::select('call ice_spGetCustomerCreditByDate("'.date('Y-m-d H:i:s').'",'.$iv->customer_id.');');
+            // Prepare response data
+            $responsePayments = [];
+            foreach ($createdPayments as $payment) {
+                $iv = InvoicePayment::where('id', $payment->id)->first();
+                $iv['payment_no'] = sprintf('PR%05d', $iv->id);
                 
-                if($credit)
-                {
-                    $iv->newcredit = round($credit[0]->credit,2);
-    
+                // Calculate credit for each payment
+                try {
+                    $credit = DB::select('call ice_spGetCustomerCreditByDate("'.date('Y-m-d H:i:s').'",'.$iv->customer_id.');');
+                    if($credit) {
+                        $iv->newcredit = round($credit[0]->credit, 2);
+                    } else {
+                        $iv->newcredit = 0;
+                    }
+                } catch(Exception $ex) {
+                    $iv->newcredit = 0;
                 }
-    
-            }
-            catch(Exception $ex)
-            {
-                 $iv->newcredit  = 0;
+                
+                $responsePayments[] = $iv;
             }
             
-           
-           // $iv->newcredit = round(DB::select('call ice_spGetCustomerCreditByDate("'.date('Y-m-d H:i:s').'",'.$iv->customer_id.');')[0]->credit,2);
-           
+            // If only one payment was created, return single object for backward compatibility
+            $responseData = count($responsePayments) == 1 ? $responsePayments[0] : $responsePayments;
+            
             return response()->json([
                 'result' => true,
-                'message' => __LINE__.$this->message_separator.'api.message.invoice_add_successfully',
-                'data' => $iv
+                'message' => __LINE__.$this->message_separator.'api.message.payment_add_successfully',
+                'data' => $responseData,
+                'total_payments' => count($responsePayments)
             ], 200);
-        }
-        catch(Exception $e){
+            
+        } catch(Exception $e){
+            DB::rollBack();
             return response()->json([
                 'result' => false,
                 'message' => __LINE__.$this->message_separator.$e->getMessage(),
@@ -5119,6 +4932,45 @@ class DriverController extends Controller
         }
     }
 
+    public function getStockOutWarehouseInventory(Request $request)
+    {
+        // Validate session or authentication
+        $user = User::where('session', $request->header('session'))->first();
+        if(empty($user)){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                'data' => null
+            ], 401);
+        }
+
+        try {
+            $warehouses = Warehouse::where('stock_out_enabled',1)
+                    ->orderBy('name')
+                    ->get();
+
+            $responseData = [
+                'warehouses' => $warehouses,
+            ];
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Warehouse for Stock Out retrieved successfully',
+                'data' => $responseData
+            ], 200);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error in getting warehouse for stockout: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . 'Error getting warehouse for stockout: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+    
     public function getWarehouseInventory(Request $request, $id =null)
     {
         // Validate session or authentication
@@ -5320,92 +5172,130 @@ class DriverController extends Controller
         }
     }
 
-     public function getStockCount(Request $request)
+    public function getStockCount(Request $request, $id = null)
     {
-        // Validate session
-        $user = User::where('session', $request->header('session'))->first();
-        if(empty($user)){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
-                'data' => null
-            ], 401);
-        }
-        
-        $inventoryCounts = InventoryCount::all();
-        
-        // Get all unique product IDs from all inventory counts
-        $allProductIds = [];
-        foreach ($inventoryCounts as $count) {
-            $items = $count->items;
-            if (is_array($items)) {
-                foreach ($items as $item) {
-                    if (isset($item['product_id'])) {
-                        $allProductIds[] = $item['product_id'];
+        try {
+            // Validate session
+            $user = User::where('session', $request->header('session'))->first();
+            if(empty($user)){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                    'data' => null
+                ], 401);
+            }
+            
+            // Build query
+            $query = InventoryCount::query();
+            
+            // If ID is provided, filter by ID
+            if ($id !== null) {
+                $query->where('id', $id);
+            }
+            
+            $inventoryCounts = $query->get();
+            
+            // Check if record exists when ID is provided
+            if ($id !== null && $inventoryCounts->isEmpty()) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'Stock count record not found',
+                    'data' => null
+                ], 404);
+            }
+            
+            // Get all unique product IDs from all inventory counts
+            $allProductIds = [];
+            foreach ($inventoryCounts as $count) {
+                $items = $count->items;
+                if (is_array($items)) {
+                    foreach ($items as $item) {
+                        if (isset($item['product_id'])) {
+                            $allProductIds[] = $item['product_id'];
+                        }
                     }
                 }
             }
+            
+            // Fetch all products in one query
+            $allProductIds = array_unique($allProductIds);
+            $products = Product::whereIn('id', $allProductIds)
+                ->get()
+                ->keyBy('id');
+            
+            // Fetch all drivers in one query (for multiple records)
+            $driverIds = $inventoryCounts->pluck('driver_id')->filter()->unique()->toArray();
+            $drivers = Driver::whereIn('id', $driverIds)
+                ->get()
+                ->keyBy('id');
+            
+            // Format the response
+            $formattedCounts = $inventoryCounts->map(function ($count) use ($products, $drivers) {
+                $items = $count->items;
+                $formattedItems = [];
+                
+                if (is_array($items)) {
+                    $formattedItems = array_map(function ($item) use ($products) {
+                        $productId = $item['product_id'];
+                        $product = $products[$productId] ?? null;
+                        $firstBatch = $item['batches'][0] ?? [];
+
+                        return [
+                            'product_id' => $item['product_id'],
+                            'product_name' => $product ? $product->name : null,
+                            'batch_id' => $firstBatch['batch_id'] ?? null,
+                            'batch_code' => $firstBatch['batch_code'] ?? null,
+                            'counted_quantity' => $item['counted_quantity'] ?? 0,
+                            'current_quantity' => $item['current_quantity'] ?? 0
+                        ];
+                    }, $items);
+                }
+                
+                // Get driver info from pre-fetched collection
+                $driver = null;
+                if ($count->driver_id) {
+                    $driver = $drivers[$count->driver_id] ?? null;
+                }
+                
+                return [
+                    'id' => $count->id,
+                    'driver_id' => $count->driver_id,
+                    'driver_name' => $driver ? $driver->name : null,
+                    'items' => $formattedItems,
+                    'status' => $count->status,
+                    'remarks' => $count->remarks,
+                    'rejection_reason' => $count->rejection_reason,
+                    'approved_by' => $count->approved_by,
+                    'trip_id' => $count->trip_id,
+                    'rejected_by' => $count->rejected_by,
+                    'approved_at' => $count->approved_at,
+                    'rejected_at' => $count->rejected_at,
+                    'created_at' => $count->created_at,
+                    'updated_at' => $count->updated_at
+                ];
+            });
+
+            // Return single object if ID was provided, otherwise return array
+            $responseData = ($id !== null) ? $formattedCounts->first() : $formattedCounts;
+            
+            $message = ($id !== null) 
+                ? 'Stock count record retrieved successfully' 
+                : 'Stock count records retrieved successfully';
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . $message,
+                'data' => $responseData,
+                'total_records' => ($id !== null) ? 1 : $formattedCounts->count()
+            ], 200);
+            
+        } catch (Exception $e) {
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $e->getMessage(),
+                'data' => null
+            ], 500);
         }
-        
-        // Fetch all products in one query
-        $allProductIds = array_unique($allProductIds);
-        $products = Product::whereIn('id', $allProductIds)
-            ->get()
-            ->keyBy('id');
-        
-        // Format the response
-        $formattedCounts = $inventoryCounts->map(function ($count) use ($products) {
-            $items = $count->items;
-            $formattedItems = [];
-            
-            if (is_array($items)) {
-                $formattedItems = array_map(function ($item) use ($products) {
-                    $productId = $item['product_id'];
-                    $product = $products[$productId] ?? null;
-                    $firstBatch = $item['batches'][0] ?? [];
-
-                    //$warehouse = Warehouse::find($item['warehouse_id']);
-                    return [
-                        'product_id' => $item['product_id'],
-                        'product_name' => $product ? $product->name : null,
-                        'batch_id' => $firstBatch['batch_id'] ?? null,
-                        'batch_code' => $firstBatch['batch_code'] ?? null,
-                        //'warehouse'=> $warehouse ? $warehouse->name : null,
-                        'counted_quantity' => $item['counted_quantity'] ?? 0,
-                        'current_quantity' => $item['current_quantity'] ?? 0
-                    ];
-                }, $items);
-            }
-            
-            // Include driver info if you have driver relationship
-            $driver = null;
-            if ($count->driver_id) {
-                $driver = Driver::find($count->driver_id);
-            }
-            
-            return [
-                'id' => $count->id,
-                'driver_id' => $count->driver_id,
-                'driver_name' => $driver ? $driver->name : null,
-                'items' => $formattedItems,
-                'status' => $count->status,
-                'remarks' => $count->remarks,
-                'rejection_reason' => $count->rejection_reason,
-                'approved_by' => $count->approved_by,
-                'trip_id' => $count->trip_id,
-                'rejected_by' => $count->rejected_by,
-                'approved_at' => $count->approved_at,
-                'rejected_at' => $count->rejected_at,
-                'created_at' => $count->created_at,
-                'updated_at' => $count->updated_at
-            ];
-        });
-
-        return response()->json([
-            'result' => true,
-            'message' => __LINE__ . $this->message_separator . 'Stock Out list retrieved successfully',
-            'data' => $formattedCounts
-        ], 200);
     }
 
     public function approveStockCount(Request $request)

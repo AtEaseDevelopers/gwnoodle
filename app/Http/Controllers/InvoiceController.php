@@ -90,9 +90,8 @@ class InvoiceController extends AppBaseController
                 $input['invoiceno'] = Invoice::generateInvoiceNumber();
             }
         }
-        
+        $input['status'] = 0; // Set default status to 0 (New)
         $invoice = $this->invoiceRepository->create($input);
-
         Flash::success('Invoice created successfully.');
         
 

@@ -56,11 +56,13 @@
 </div>
 
 @can('paymentapprove')
+@if(isset($invoicePayment))
 <!-- Status Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('status', 'Status:') !!}
     {{ Form::select('status', array(0 => 'New', 1 => 'Completed', 2 => 'Cancelled'), null, ['class' => 'form-control']) }}
 </div>
+@endif
 @endcan
 
 <!-- Attachment Field -->

@@ -31,44 +31,14 @@ class LorryDataTable extends DataTable
     public function query(Lorry $model)
     {
         return $model->newQuery()
-        ->leftJoin(DB::raw('(select sd.lorry_id, DATE_FORMAT(sd.nextdate,"%d-%m-%Y") as "tyrenextdate" from servicedetails sd where sd.type = "Tyre" order by nextdate desc limit 1)tyre'), function($join)
-        {
-            $join->on('lorrys.id', '=', 'tyre.lorry_id');
-        })
-        ->leftJoin(DB::raw('(select sd.lorry_id, DATE_FORMAT(sd.nextdate,"%d-%m-%Y") as "insurancenextdate" from servicedetails sd where sd.type = "Insurance" order by nextdate desc limit 1)insurance'), function($join)
-        {
-            $join->on('lorrys.id', '=', 'insurance.lorry_id');
-        })
-        ->leftJoin(DB::raw('(select sd.lorry_id, DATE_FORMAT(sd.nextdate,"%d-%m-%Y") as "permitnextdate" from servicedetails sd where sd.type = "Permit" order by nextdate desc limit 1)permit'), function($join)
-        {
-            $join->on('lorrys.id', '=', 'permit.lorry_id');
-        })
-        ->leftJoin(DB::raw('(select sd.lorry_id, DATE_FORMAT(sd.nextdate,"%d-%m-%Y") as "roadtaxnextdate" from servicedetails sd where sd.type = "Road Tax" order by nextdate desc limit 1)roadtax'), function($join)
-        {
-            $join->on('lorrys.id', '=', 'roadtax.lorry_id');
-        })
-        ->leftJoin(DB::raw('(select sd.lorry_id, DATE_FORMAT(sd.nextdate,"%d-%m-%Y") as "inspectionnextdate" from servicedetails sd where sd.type = "Inspection" order by nextdate desc limit 1)inspection'), function($join)
-        {
-            $join->on('lorrys.id', '=', 'inspection.lorry_id');
-        })
-        ->leftJoin(DB::raw('(select sd.lorry_id, DATE_FORMAT(sd.nextdate,"%d-%m-%Y") as "othernextdate" from servicedetails sd where sd.type = "Other" order by nextdate desc limit 1)other'), function($join)
-        {
-            $join->on('lorrys.id', '=', 'other.lorry_id');
-        })
-        ->leftJoin(DB::raw('(select sd.lorry_id, DATE_FORMAT(sd.nextdate,"%d-%m-%Y") as "fireextinguishernextdate" from servicedetails sd where sd.type = "Fire Extinguisher" order by nextdate desc limit 1)fireextinguisher'), function($join)
-        {
-            $join->on('lorrys.id', '=', 'fireextinguisher.lorry_id');
-        })
-        ->select('lorrys.id','lorrys.lorryno','lorrys.status','lorrys.remark'
-        ,DB::raw('concat(lorrys.id,":",coalesce(tyre.tyrenextdate,"NAN")) as tyrenextdateshow'),DB::raw('tyre.tyrenextdate as tyrenextdate')
-        ,DB::raw('concat(lorrys.id,":",coalesce(insurance.insurancenextdate,"NAN")) as insurancenextdateshow'),DB::raw('insurance.insurancenextdate as insurancenextdate')
-        ,DB::raw('concat(lorrys.id,":",coalesce(permit.permitnextdate,"NAN")) as permitnextdateshow'),DB::raw('permit.permitnextdate as permitnextdate')
-        ,DB::raw('concat(lorrys.id,":",coalesce(roadtax.roadtaxnextdate,"NAN")) as roadtaxnextdateshow'),DB::raw('roadtax.roadtaxnextdate as roadtaxnextdate')
-        ,DB::raw('concat(lorrys.id,":",coalesce(inspection.inspectionnextdate,"NAN")) as inspectionnextdateshow'),DB::raw('inspection.inspectionnextdate as inspectionnextdate')
-        ,DB::raw('concat(lorrys.id,":",coalesce(other.othernextdate,"NAN")) as othernextdateshow'),DB::raw('other.othernextdate as othernextdate')
-        ,DB::raw('concat(lorrys.id,":",coalesce(fireextinguisher.fireextinguishernextdate,"NAN")) as fireextinguishernextdateshow'),DB::raw('fireextinguisher.fireextinguishernextdate as fireextinguishernextdate'))
-        ->groupby('lorrys.id','lorrys.lorryno','lorrys.status','lorrys.remark'
-        ,'tyre.tyrenextdate','insurance.insurancenextdate','permit.permitnextdate','roadtax.roadtaxnextdate','inspection.inspectionnextdate','other.othernextdate','fireextinguisher.fireextinguishernextdate');
+            ->leftJoin('drivers', 'lorrys.driver_id', '=', 'drivers.id')
+            ->select(
+                'lorrys.id',
+                'lorrys.lorryno',
+                'lorrys.status',
+                'lorrys.remark',
+                DB::raw('COALESCE(drivers.name, "-") as driver_name')
+            );
     }
 
     /**
@@ -149,10 +119,9 @@ class LorryDataTable extends DataTable
                         'visible' => true,
                         'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
                     ],
-                    
                     [
-                    'targets' => 2,
-                    'render' => 'function(data, type){return data == 1 ? "Active" : "Inactive";}'
+                        'targets' => 3,
+                        'render' => 'function(data, type){return data == 1 ? "Active" : "Inactive";}'
                     ],
                 ],
                 'initComplete' => 'function(){
@@ -185,23 +154,33 @@ class LorryDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            'checkbox'=> new \Yajra\DataTables\Html\Column(['title' => '<input type="checkbox" id="selectallcheckbox">',
-            'data' => 'id',
-            'name' => 'id',
-            'orderable' => false,
-            'searchable' => false]),
-
-            'lorryno'=> new \Yajra\DataTables\Html\Column(['title' => trans('Vans'),
-            'data' => 'lorryno',
-            'name' => 'lorryno']),
-
-            'status'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.status'),
-            'data' => 'status',
-            'name' => 'status']),
-
-            'remark'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorries.remark'),
-            'data' => 'remark',
-            'name' => 'remark']),
+            'checkbox'=> new \Yajra\DataTables\Html\Column([
+                'title' => '<input type="checkbox" id="selectallcheckbox">',
+                'data' => 'id',
+                'name' => 'id',
+                'orderable' => false,
+                'searchable' => false
+            ]),
+            'lorryno'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('Vans'),
+                'data' => 'lorryno',
+                'name' => 'lorryno'
+            ]),
+            'driver_name'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('Driver'),
+                'data' => 'driver_name',
+                'name' => 'driver_name'
+            ]),
+            'status'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('lorries.status'),
+                'data' => 'status',
+                'name' => 'status'
+            ]),
+            'remark'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('lorries.remark'),
+                'data' => 'remark',
+                'name' => 'remark'
+            ]),
         ];
     }
 

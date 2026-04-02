@@ -56,17 +56,17 @@
 
 
 <!-- Agent Id Field -->
-<div class="form-group col-sm-6">
+<!-- <div class="form-group col-sm-6">
     {!! Form::label('agent_id',  __('invoices.agent'))  !!}
     {!! Form::select('agent_id', $agentItems, null, ['class' => 'form-control select2-agent', 'placeholder' => 'Pick a Agent...']) !!}
-</div>
+</div> -->
 
 
 <!-- Supervisor Id Field -->
-<div class="form-group col-sm-6">
+<!-- <div class="form-group col-sm-6">
     {!! Form::label('supervisor_id',  __('invoices.supervisor'))  !!}
     {!! Form::select('supervisor_id', $supervisorItems, null, ['class' => 'form-control select2-supervisor', 'placeholder' => 'Pick a Supervisor...']) !!}
-</div>
+</div> -->
 
 
 <!-- Paymentterm Field -->
@@ -81,12 +81,13 @@
     {!! Form::text('chequeno', null, ['class' => 'form-control','maxlength' => 20,'maxlength' => 20]) !!}
 </div>
 
+@if(isset($invoice))
 <!-- Status Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('status',  __('invoices.status'))  !!}<span class="asterisk"> *</span>
     {{ Form::select('status', array(0 => 'New' , 1 => 'Completed'), null, ['class' => 'form-control']) }}
 </div>
-
+@endif
 <!-- Remark Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('remark',  __('invoices.remark'))  !!}
