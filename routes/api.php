@@ -143,7 +143,7 @@ Route::group(['prefix' => 'v1'], function () {
 
 });
 
-Route::namespace('API')->group(function () {
+Route::namespace('App\Http\Controllers\Api\autocount_plugin')->group(function () {
    
     // product
     Route::post('/products/update', 'ProductController@update');
@@ -155,7 +155,6 @@ Route::namespace('API')->group(function () {
     Route::get('/invoice/pending', 'InvoiceController@syncPending');
     Route::post('/invoice/update', 'InvoiceController@update');
     Route::post('/invoice/update-log', 'InvoiceController@updateLog');
-
 
 });
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\API;
+namespace App\Http\Controllers\Api\autocount_plugin;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -17,9 +17,6 @@ class InvoiceController extends Controller
      */
     public function syncPending(Request $request)
     {
-        // 1. Create the log the second the request hits
-        $apiLog = ApiLog::createLog($request);
-
         try {
             // Step 1: Get invoices (without customers join)
             $invoices = Invoice::query()
@@ -117,7 +114,6 @@ class InvoiceController extends Controller
         }
 
         // 2. Update the exact same log record with the final payload and status
-        $apiLog->updateResponse($responseData, $statusCode);
 
         return response()->json($responseData, $statusCode);
     }
@@ -127,9 +123,6 @@ class InvoiceController extends Controller
      */
     public function update(Request $request)
     {
-        // 1. Create the log immediately
-        $apiLog = ApiLog::createLog($request);
-
         try {
             // 2. Use Validator::make instead of $request->validate() so we can log validation errors
             $validator = Validator::make($request->all(), [
@@ -176,13 +169,13 @@ class InvoiceController extends Controller
         }
 
         // 3. Update the exact same log record with the result
-        $apiLog->updateResponse($responseData, $statusCode);
+        //$apiLog->updateResponse($responseData, $statusCode);
 
         return response()->json($responseData, $statusCode);
     }
 
     public function updateLog(Request $request)
     {
-        ApiLog::createLog($request);
+       // ApiLog::createLog($request);
     }
 }

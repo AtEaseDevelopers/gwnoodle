@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\API;
+namespace App\Http\Controllers\Api\autocount_plugin;
 
 use App\Models\Agent;
 use App\Models\AgentCustomer;
