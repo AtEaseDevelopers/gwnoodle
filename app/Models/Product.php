@@ -53,6 +53,12 @@ class Product extends Model
         'created_at' => 'nullable',
         'updated_at' => 'nullable'
     ];
+
+    public static $status = [
+        'active' => 'active',
+        'inactive' => 'inactive',
+        'removed' => 'removed',
+    ];
     
     // Relationships
     public function batches()

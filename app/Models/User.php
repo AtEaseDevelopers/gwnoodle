@@ -46,4 +46,12 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+    
+    public static $user_status = [
+        'active' => 'active',
+        'inactive' => 'inactive',
+        'locked' => 'locked',
+        'terminated' => 'terminated',
+        'removed' => 'removed',
+    ];
 }
