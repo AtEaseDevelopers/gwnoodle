@@ -26,70 +26,7 @@ class CustomerController extends Controller
      *
      * @return \Illuminate\Contracts\Support\Renderable
      */
-    public function sync(Request $request)
-    {
-        $users = User::select("users.*", 'branches.label as branch_label', 'agents.id as agent_id', 'agents.username as agent_username', 'agents.name as agent_name');
-        $users->leftJoin('branches', 'branches.id', '=', 'users.branch_id');
-        $users->leftJoin('agent_customers', 'agent_customers.user_id', '=', 'users.id');
-        $users->leftJoin('agents', 'agents.id', '=', 'agent_customers.agent_id');
-        $users->where('users.status', '!=', User::$user_status['removed']);
 
-        if($request->input('branch_id')){
-            $branchEmail = $request->input('branch_id');
-            $users->whereHas('branch', function ($query) use ($branchEmail) {
-                $query->where('service_configs', 'LIKE', "%".$branchEmail."%");
-            });
-        }
-        if($filter_agent = $request->input('agent_id')){
-            $users->where('agent_customers.agent_id', $filter_agent);
-        }
-       // $users->where('agent_customers.status', AgentCustomer::$status['active']);
-
-        if($filter_name = $request->input('name')){
-            $users->where('users.name', 'LIKE', "%$filter_name%");
-        }
-        if($filter_email = $request->input('email')){
-            $users->where('users.email', 'LIKE', "%$filter_email%");
-        }
-        if($filter_category = $request->input('category')){
-            $users->where('users.category', $filter_category);
-        }
-        if($filter_shipping_state = $request->input('shipping_state')){
-            $users->where('users.shipping_state', $filter_shipping_state);
-        }
-        if($filter_status = $request->input('status')){
-            $users->where('users.status', $filter_status);
-        }
-
-        $users = $users->get();
-
-        return $users;
-    }
-    
-    public function update1(Request $request)
-    {
-        $data = $request->input();
-        
-        Log::error(json_encode($data));
-        
-        $customer = User::where("name", $data['CompanyName']);
-        
-        if($customer)
-        {
-            $customer->update([
-            'api_account_no' => $data['AccNo'],
-            'api_id' => '{[!MzAwLTAwMDE!]}',
-            'api_data' =>json_encode($data),
-            ]);
-        }
-        else
-        {
-            return $data;
-        }
-
-        return "OK";
-    }
-    
     public function update(Request $request)
     {
         // 1. Create the log the second the request hits

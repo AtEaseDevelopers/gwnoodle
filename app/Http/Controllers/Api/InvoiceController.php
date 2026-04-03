@@ -183,7 +183,6 @@ class InvoiceController extends Controller
 
     public function updateLog(Request $request)
     {
-        // update error log for invoice sync
-        $apiLog = ApiLog::createLog($request);
+        ApiLog::createLog($request);
     }
 }
