@@ -58,6 +58,7 @@ Route::group(['prefix' => 'v1'], function () {
     Route::get('/driver/get-invoice-no', [App\Http\Controllers\Api\V1\DriverController::class, 'getInvoiceNo']);
 
     Route::post('/driver/invoice', [App\Http\Controllers\Api\V1\DriverController::class, 'addinvoice']);
+    Route::post('/driver/invoice/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'editInvoice']);
     Route::post('/driver/invoice/pdf', [App\Http\Controllers\Api\V1\DriverController::class, 'invoicepdf']);
 
      //Invoice Payment

@@ -2031,9 +2031,297 @@ class DriverController extends Controller
         }
     }
     
+    public function editInvoice(Request $request, $id)
+    {
+        try {
+            $data = $request->all();
+            
+            // Check driver session
+            $driver = Driver::where('session', $request->header('session'))->first();
+            if (empty($driver)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                    'data' => null
+                ], 401);
+            }
+            
+            // Find existing invoice
+            $invoice = Invoice::where('id', $id)
+                ->where('driver_id', $driver->id)
+                ->first();
+            
+            if (empty($invoice)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'Invoice not found or you do not have permission to edit',
+                    'data' => null
+                ], 404);
+            }
+            
+            // if ($invoice->status == 1) {
+            //     return response()->json([
+            //         'result' => false,
+            //         'message' => __LINE__ . $this->message_separator . 'Invoice cannot be edited.',
+            //         'data' => null
+            //     ], 400);
+            // }
+            
+            // Validate request
+            $validator = Validator::make($request->all(), [
+                'invoiceno' => 'nullable|string|max:255',
+                'date' => 'date_format:Y-m-d',
+                'customer_id' => 'required|numeric',
+                'paymentterm' => 'required|numeric|gt:0|lt:6',
+                'remark' => 'present|nullable|string',
+                'cheque_no' => 'nullable|string',
+                'invoicedetail' => 'required|array|min:1',
+                'invoicedetail.*.product_id' => 'required|numeric',
+                'invoicedetail.*.product_batch_id' => 'required|numeric',
+                'invoicedetail.*.quantity' => 'required|numeric|min:1',
+                'invoicedetail.*.price' => 'required|numeric|min:0',
+                'invoicedetail.*.id' => 'nullable|numeric' // For existing details
+            ]);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                    'data' => null
+                ], 400);
+            }
+            
+            // Validate customer
+            $customer = Customer::where('id', $data['customer_id'])->first();
+            if (empty($customer)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'api.message.invalid_customer',
+                    'data' => null
+                ], 400);
+            }
+            
+            // Get trip for inventory updates
+            $trip = Trip::where('driver_id', $driver->id)->orderby('date', 'desc')->first();
+            
+            DB::beginTransaction();
+            
+            // ============================================
+            // STEP 1: RESTORE OLD INVENTORY QUANTITIES
+            // ============================================
+            $oldDetails = InvoiceDetail::where('invoice_id', $invoice->id)->get();
+            
+            foreach ($oldDetails as $oldDetail) {
+                // Restore quantity to product batch
+                $oldBatch = ProductBatch::find($oldDetail->product_batch_id);
+                if ($oldBatch) {
+                    $oldBatch->quantity = $oldBatch->quantity + $oldDetail->quantity;
+                    $oldBatch->save();
+                }
+                
+                // Restore inventory balance
+                if ($trip) {
+                    $inventorybalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
+                    if ($inventorybalance) {
+                        $inventorybalance->updateBatchQuantity(
+                            $oldDetail->product_batch_id,
+                            $oldDetail->quantity,
+                            'add' // Add back the quantity
+                        );
+                    }
+                }
+                
+                // Reverse inventory transaction (create reversal record)
+                $reversalTransaction = new InventoryTransaction();
+                $reversalTransaction->type = 1; // Stock In (reversal)
+                $reversalTransaction->product_id = $oldDetail->product_id;
+                $reversalTransaction->batch_id = $oldDetail->product_batch_id;
+                $reversalTransaction->quantity = $oldDetail->quantity;
+                $reversalTransaction->date = now();
+                $reversalTransaction->lorry_id = $trip->lorry_id ?? null;
+                $reversalTransaction->user = $driver->name;
+                $reversalTransaction->remark = 'Invoice # [' . $invoice->invoiceno . '] - Edit reversal (removed items)';
+                $reversalTransaction->save();
+            }
+            
+            // Delete old invoice details
+            InvoiceDetail::where('invoice_id', $invoice->id)->delete();
+            
+            // ============================================
+            // STEP 2: VALIDATE AND PROCESS NEW QUANTITIES
+            // ============================================
+            
+            // Validate product batches and check quantities
+            foreach ($data['invoicedetail'] as $item) {
+                $productBatch = ProductBatch::where('id', $item['product_batch_id'])
+                    ->where('product_id', $item['product_id'])
+                    ->first();
+                
+                if (empty($productBatch)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Invalid product batch for product ID: ' . $item['product_id'],
+                        'data' => null
+                    ], 400);
+                }
+                
+                if ($productBatch->quantity < $item['quantity']) {
+                    DB::rollBack();
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Insufficient batch quantity for product batch: ' . $productBatch->batch_code . '. Available: ' . $productBatch->quantity . ', Requested: ' . $item['quantity'],
+                        'data' => null
+                    ], 400);
+                }
+            }
+            
+            // ============================================
+            // STEP 3: UPDATE INVOICE HEADER
+            // ============================================
+            $invoice->date = $data['date'] ?? date('Y-m-d H:i:s');
+            $invoice->customer_id = $data['customer_id'];
+            $invoice->paymentterm = $data['paymentterm'];
+            $invoice->chequeno = $data['cheque_no'] ?? null;
+            $invoice->remark = $data['remark'] ?? null;
+            
+            // Only update invoice number if provided and different
+            if (!empty($data['invoiceno']) && $data['invoiceno'] != $invoice->invoiceno) {
+                // Check if new invoice number already exists
+                $existingInvoice = Invoice::where('invoiceno', $data['invoiceno'])->first();
+                if ($existingInvoice && $existingInvoice->id != $invoice->id) {
+                    DB::rollBack();
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Invoice number already exists',
+                        'data' => null
+                    ], 400);
+                }
+                $invoice->invoiceno = $data['invoiceno'];
+            }
+            
+            $invoice->save();
+            
+            // ============================================
+            // STEP 4: CREATE NEW INVOICE DETAILS
+            // ============================================
+            $totalprice = 0;
+            
+            foreach ($data['invoicedetail'] as $item) {
+                $productBatch = ProductBatch::find($item['product_batch_id']);
+                
+                // Create invoice detail
+                $invoicedetail = new InvoiceDetail();
+                $invoicedetail->invoice_id = $invoice->id;
+                $invoicedetail->product_id = $item['product_id'];
+                $invoicedetail->product_batch_id = $item['product_batch_id'];
+                $invoicedetail->quantity = $item['quantity'];
+                $invoicedetail->price = $item['price'];
+                $invoicedetail->totalprice = $item['quantity'] * $item['price'];
+                $invoicedetail->remark = $item['remark'] ?? null;
+                $invoicedetail->save();
+                
+                $totalprice += $invoicedetail->totalprice;
+                
+                // Deduct quantity from product batch
+                $productBatch->quantity = $productBatch->quantity - $item['quantity'];
+                $productBatch->save();
+                
+                // Create inventory transaction record
+                $inventoryTransaction = new InventoryTransaction();
+                $inventoryTransaction->type = 2; // Stock Out
+                $inventoryTransaction->product_id = $item['product_id'];
+                $inventoryTransaction->batch_id = $item['product_batch_id'];
+                $inventoryTransaction->quantity = -$item['quantity'];
+                $inventoryTransaction->date = now();
+                $inventoryTransaction->lorry_id = $trip->lorry_id ?? null;
+                $inventoryTransaction->user = $driver->name;
+                $inventoryTransaction->remark = 'Invoice #' . $invoice->invoiceno . ' - Sale of product (edited)';
+                $inventoryTransaction->save();
+                
+                // Update lorry inventory balance
+                if ($trip) {
+                    $inventorybalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
+                    if ($inventorybalance) {
+                        $inventorybalance->updateBatchQuantity(
+                            $item['product_batch_id'],
+                            $item['quantity'],
+                            'subtract'
+                        );
+                    }
+                }
+            }
+            
+            // ============================================
+            // STEP 5: UPDATE INVOICE PAYMENT
+            // ============================================
+            if ($data['paymentterm'] == 1) {
+                // Check if payment already exists
+                $existingPayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
+                
+                if ($existingPayment) {
+                    // Update existing payment
+                    $existingPayment->amount = $totalprice;
+                    $existingPayment->save();
+                } else {
+                    // Create new payment
+                    $invoicepayment = new InvoicePayment();
+                    $invoicepayment->invoice_id = $invoice->id;
+                    $invoicepayment->type = 1;
+                    $invoicepayment->customer_id = $invoice->customer_id;
+                    $invoicepayment->amount = $totalprice;
+                    $invoicepayment->status = 1;
+                    $invoicepayment->driver_id = $driver->id;
+                    $invoicepayment->approve_by = $driver->name;
+                    $invoicepayment->approve_at = date('Y-m-d H:i:s');
+                    $invoicepayment->save();
+                }
+            } else {
+                // If payment term changed from cash to credit, delete existing payment
+                InvoicePayment::where('invoice_id', $invoice->id)->delete();
+            }
+            
+            DB::commit();
+            
+            // ============================================
+            // STEP 6: RETURN UPDATED INVOICE
+            // ============================================
+            $updatedInvoice = Invoice::where('id', $invoice->id)
+                ->with([
+                    'customer', 
+                    'driver', 
+                    'invoicedetail.product', 
+                    'invoicedetail.batch'
+                ])
+                ->first();
+            
+            // Calculate customer credit
+            $creditData = $this->calculateCustomerCredit(
+                $updatedInvoice->customer_id, 
+                $updatedInvoice->updated_at
+            );
+            
+            $updatedInvoice->newcredit = round($creditData['credit'] ?? 0, 2);
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Invoice updated successfully',
+                'data' => $updatedInvoice
+            ], 200);
+            
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
     public function getInvoiceNo(Request $request)
     {
-        try{
+    try{
             $data = $request->all();
             //check session
             $driver = Driver::where('session', $request->header('session'))->first();
@@ -2061,6 +2349,7 @@ class DriverController extends Controller
             ], 500);
         }
     }
+
     private function calculateCustomerCredit($customerId, $asOfDate)
     {
         try {
