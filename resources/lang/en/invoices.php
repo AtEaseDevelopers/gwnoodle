@@ -47,4 +47,5 @@ return [
     'status' => 'Status',
     'supervisor' => 'Supervisor',
     'total_price' => 'Total Price',
+    'autocount_status' => 'Autocount Status',
 ];
