@@ -289,6 +289,16 @@ Route::group(['middleware' => ['auth']], function() {
         Route::get('/report/sellerinformationrecord', [App\Http\Controllers\ReportController::class, 'seller_information_record'])->name('seller_information_record');
         Route::get('/report/customerstatementofaccount', [App\Http\Controllers\ReportController::class, 'customer_statement_of_account'])->name('customer_statement_of_account');
         Route::get('/report/daily_sales_report_excel', [App\Http\Controllers\ReportController::class, 'daily_sales_report_excel'])->name('daily_sales_report_excel');
+        Route::get('/stock-balance-report', [App\Http\Controllers\ReportController::class, 'generateStockBalanceReport'])->name('stock_balance_report_view');
+
+        Route::get('/stock-received-report', [App\Http\Controllers\ReportController::class, 'stockReceivedReportView'])->name('stock_received_report_view');
+        Route::post('/stock-received-report/generate', [App\Http\Controllers\ReportController::class, 'generateStockReceivedReport'])->name('stock_received_report_generate');
+
+        Route::get('/daily-sales-report', [App\Http\Controllers\ReportController::class, 'dailySalesReportView'])->name('daily_sales_report_view');
+
+        Route::get('/finished-goods-traceability', [App\Http\Controllers\ReportController::class, 'finishedGoodsTraceabilityView'])->name('finished_goods_traceability_view');
+
+        Route::get('/stock-card-report', [App\Http\Controllers\ReportController::class, 'stockCardReportView'])->name('stock_card_report_view');
 
     });
 

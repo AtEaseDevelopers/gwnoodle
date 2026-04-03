@@ -30,6 +30,7 @@ class InventoryTransaction extends Model
         'remark',
         'date',
         'user',
+        'stock_received',
     ];
 
     protected $casts = [

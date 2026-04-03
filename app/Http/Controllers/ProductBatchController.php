@@ -458,7 +458,7 @@ class ProductBatchController extends AppBaseController
                     'type' => 1, // Stock In
                     'remark' => ($request->remark ?? 'Stock in from barcode scan') . ' - Warehouse: ' . $warehouse->name,
                     'date' => now(),
-                    'user' => Auth::user()->name ?? 'system'
+                    'user' => Auth::user()->name ?? 'system',
                 ]);
 
                 DB::commit();
@@ -557,7 +557,9 @@ class ProductBatchController extends AppBaseController
                     'type' => 1,
                     'remark' => ($request->remark ?? 'Bulk stock in from barcode scan') . ' - Warehouse: ' . $warehouse->name,
                     'date' => now(),
-                    'user' => Auth::user()->name ?? 'system'
+                    'user' => Auth::user()->name ?? 'system',
+                    'stock_received'=>1
+
                 ]);
 
                 $totalUnits += $quantity;

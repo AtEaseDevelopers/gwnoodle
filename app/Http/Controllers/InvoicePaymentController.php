@@ -64,7 +64,7 @@ class InvoicePaymentController extends AppBaseController
     public function store(CreateInvoicePaymentRequest $request)
     {
         $input = $request->all();
-        
+
         if($input['type'] == 1 && !isset($input['status'])){
             $input['status'] = 1;
             $input['approve_by'] = Auth::user()->name;
@@ -114,6 +114,9 @@ class InvoicePaymentController extends AppBaseController
             }
             $this->invoicePaymentRepository->create($input);
         }
+        $invoice = Invoice::where('id', $input['invoice_id'])->first();
+        $invoice->status = 1;
+        $invoice->save();
 
         Flash::success('Payment saved successfully.');
 

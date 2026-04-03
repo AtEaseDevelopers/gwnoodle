@@ -249,89 +249,140 @@ class ReportController extends AppBaseController
     {
         $data = $request->all();
         $report_id = $data['_report_id'];
-        $sp = Report::where('id',$report_id)->pluck('sqlvalue')->first();
-        if($sp == 'SELLER_INFORMATION_RECORD'){
-            $param = '';
+        $sp = Report::where('id', $report_id)->pluck('sqlvalue')->first();
+        
+        if ($sp == 'STOCK_BALANCE_REPORT') {
+            // Extract parameters for stock balance report
+            $filters = [];
             foreach ($data as $key => $value) {
-                if($key != '_token' && $key != '_report_id'){
-                    if(is_array($value)){
-                        $array = '';
-                        foreach($value as $arr){
-                            $array = $array.$arr.',';
-                        }
-                        $array = rtrim($array, ",");
-                        $param = $param . $key . '=' . $array . '&';
-                    }else{
-                        $param = $param . $key . '=' . $value . '&';
-                    }
+                if ($key != '_token' && $key != '_report_id' && $value) {
+                    $filters[$key] = $value;
                 }
             }
-            return redirect(route('seller_information_record').'?'.$param); 
+            
+            // Generate the stock balance report
+            $service = new \App\Services\StockBalanceReportService();
+            $reportData = $service->generateReport($filters);
+            
+            // Check if PDF export is requested
+            if (isset($filters['export_pdf']) && $filters['export_pdf'] == 'true') {
+                $pdf = $service->generatePDF($reportData, $filters['paper_size'] ?? 'A4');
+                $filename = 'stock_balance_report_' . date('Y-m-d_H-i-s') . '.pdf';
+                return $pdf->download($filename);
+            }
+            
+            // Store report data in session and redirect to view
+            session()->put('stock_balance_report_data', $reportData);
+            session()->put('stock_balance_report_filters', $filters);
+            
+            return redirect()->route('stock_balance_report_view');
+        }
 
-            /*if($request->report_type == 'Run Report PDF'){
-                return redirect(route('seller_information_record').'?'.$param); 
+        if ($sp == 'STOCK_RECEIVED_REPORT') {
+
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+            $warehouse_id = isset($data['warehouse_id']) ? $data['warehouse_id'] : null;
+            $product_id = isset($data['product_id']) ? $data['product_id'] : null;
+
+            if ($warehouse_id && !is_array($warehouse_id)) {
+                $warehouse_id = [$warehouse_id];
+            }            
+
+            if ($product_id && !is_array($product_id)) {
+                $product_id = [$product_id];
             }
-            else{
-                return redirect(route('seller_information_record_excel').'?'.$param); 
-            }*/
+                // Redirect to the report view with date range parameters
+            return redirect()->route('stock_received_report_view', [
+                'date_from' => $date_from,
+                'date_to' => $date_to,
+                'warehouse_id' => $warehouse_id,
+                'product_id' => $product_id,
+            ]);
         }
-        if($sp == 'CUSTOMER_STATEMENT_OF_ACCOUNT'){
-            $param = '';
-            foreach ($data as $key => $value) {
-                if($key != '_token' && $key != '_report_id'){
-                    if(is_array($value)){
-                        $array = '';
-                        foreach($value as $arr){
-                            $array = $array.$arr.',';
-                        }
-                        $array = rtrim($array, ",");
-                        $param = $param . $key . '=' . $array . '&';
-                    }else{
-                        $param = $param . $key . '=' . $value . '&';
-                    }
-                }
+
+        if ($sp == 'DAILY_SALES_REPORT') {
+            // Extract parameters for daily sales report
+            $date = isset($data['date']) ? $data['date'] : date('Y-m-d');
+            $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
+            $payment_term = isset($data['payment_term']) ? $data['payment_term'] : null;
+            // Redirect to the report view with parameters
+            return redirect()->route('daily_sales_report_view', [
+                'date' => $date,
+                'customer_id' => $customer_id,
+                'payment_term' => $payment_term,
+            ]);
+        }
+
+        if ($sp == 'FINISHED_GOODS_TRACEABILITY') {
+            // Extract parameters for traceability report
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+            
+            // Handle filters
+            $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
+            $product_id = isset($data['product_id']) ? $data['product_id'] : null;
+            $batch_id = isset($data['batch_id']) ? $data['batch_id'] : null;
+            
+            // Redirect to the report view with parameters
+            return redirect()->route('finished_goods_traceability_view', [
+                'date_from' => $date_from,
+                'date_to' => $date_to,
+                'customer_id' => $customer_id,
+                'product_id' => $product_id,
+                'batch_id' => $batch_id,
+            ]);
+        }
+
+        if ($sp == 'STOCK_CARD_REPORT') {
+            // Extract parameters for stock card report
+            $product_id = isset($data['product_id']) ? $data['product_id'] : null;
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d', strtotime('-30 days'));
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+            $warehouse_id = isset($data['warehouse_id']) ? $data['warehouse_id'] : null;
+            $batch_id = isset($data['batch_id']) ? $data['batch_id'] : null;
+            
+            // Validate product_id is required
+            if (!$product_id) {
+                return back()->with('error', 'Product is required for Stock Card Report');
             }
-            return redirect(route('customer_statement_of_account').'?'.$param);   
-        }
-        
-         if($sp == 'DAILY_SALES_REPORT'){
-            $param = '';
-            foreach ($data as $key => $value) {
-                if($key != '_token' && $key != '_report_id'){
-                    if(is_array($value)){
-                        $array = '';
-                        foreach($value as $arr){
-                            $array = $array.$arr.',';
-                        }
-                        $array = rtrim($array, ",");
-                        $param = $param . $key . '=' . $array . '&';
-                    }else{
-                        $param = $param . $key . '=' . $value . '&';
-                    }
-                }
+            
+            // Handle arrays for multiselect
+            if (!is_array($product_id)) {
+                $product_id = [$product_id];
             }
-             return redirect(route('daily_sales_report_excel').'?'.$param); 
+            if ($warehouse_id && !is_array($warehouse_id)) {
+                $warehouse_id = [$warehouse_id];
+            }
+            if ($batch_id && !is_array($batch_id)) {
+                $batch_id = [$batch_id];
+            }
+            
+            // Redirect to the report view
+            return redirect()->route('stock_card_report_view', [
+                'product_id' => $product_id,
+                'date_from' => $date_from,
+                'date_to' => $date_to,
+                'warehouse_id' => $warehouse_id,
+                'batch_id' => $batch_id,
+            ]);
         }
-        
+
         $param = '';
         foreach ($data as $key => $value) {
-            if($key != '_token'){
-                if(is_array($value)){
+            if ($key != '_token') {
+                if (is_array($value)) {
                     $array = '';
-                    foreach($value as $arr){
-                        $array = $array.$arr.',';
+                    foreach ($value as $arr) {
+                        $array = $array . $arr . ',';
                     }
                     $array = rtrim($array, ",");
                     $param = $param . "'" . $array . "',";
-                }else{
-                    
-                    
-                    if($key== 'datefrom')
-                        $value .=  ' 00:00:00';
-                    else
-                    if($key== 'dateto')
-                    {
-                        $value .=  ' 23:59:59';
+                } else {
+                    if ($key == 'datefrom')
+                        $value .= ' 00:00:00';
+                    else if ($key == 'dateto') {
+                        $value .= ' 23:59:59';
                     }
                     
                     $param = $param . "'" . $value . "',";
@@ -339,12 +390,335 @@ class ReportController extends AppBaseController
             }
         }
         $param = rtrim($param, ",");
-        $query = 'call '.$sp."(".$param.");";
+        $query = 'call ' . $sp . "(" . $param . ");";
         $result = DB::select($query)[0];
         $result = $result->ID;
         return redirect(route('showreport', $result));
     }
     
+    public function generateStockBalanceReport(Request $request)
+    {
+        $service = new \App\Services\StockBalanceReportService();
+        
+        $filters = [
+            'warehouse_id' => $request->warehouse_id,
+            'product_id' => $request->product_id,
+            'batch_no' => $request->batch_no,
+            'show_zero_stock' => $request->show_zero_stock
+        ];
+        
+        // Generate report data
+        $reportData = $service->generateReportOptimized($filters);
+        
+        // Calculate dynamic height based on content
+        $totalRows = 0;
+        foreach ($reportData['warehouses'] as $warehouse) {
+            foreach ($warehouse['products'] as $product) {
+                $totalRows += count($product['batches']);
+            }
+        }
+        
+        // Base height + additional per row
+        $minHeight = 450;
+        $heightPerRow = 23;
+        $calculatedHeight = $minHeight + ($totalRows * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 500); // Minimum 500 points
+
+        try {
+            $pdf = Pdf::loadView('reports.stock_balance', [
+                'reportData' => $reportData,
+                'filters' => $filters
+            ]);
+            
+            // Set custom paper size
+            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait'); // 595 is A4 width in points
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10
+            ]);
+            
+            // Stream to browser (view in browser)
+            return $pdf->stream('stock_balance_report_' . date('Y-m-d_H-i-s') . '.pdf');
+            
+        } catch(Exception $e) {
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+    
+    public function stockReceivedReportView(Request $request)
+    {
+        // Get parameters directly from request
+        $date_from = $request->date_from ?? $request->date ?? date('Y-m-d');
+        $date_to = $request->date_to ?? $request->date ?? date('Y-m-d');
+
+        // Handle warehouse_id (could be array or string)
+        $warehouse_id = $request->warehouse_id;
+        if ($warehouse_id && !is_array($warehouse_id)) {
+            $warehouse_id = [$warehouse_id];
+        }
+        
+        // Handle product_id (could be array or string)
+        $product_id = $request->product_id;
+        if ($product_id && !is_array($product_id)) {
+            $product_id = [$product_id];
+        }
+        
+        $filters = [
+            'warehouse_id' => $request->warehouse_id,
+            'product_id' => $request->product_id,
+        ];
+        
+        $service = new \App\Services\StockReceivedReportService();
+        $reportData = $service->generateReport($date_from, $date_to, $filters);
+        
+        // Calculate PDF height based on number of items
+        $totalItems = count($reportData['items']);
+        $minHeight = 450;
+        $heightPerRow = 25;
+        $calculatedHeight = $minHeight + ($totalItems * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 500);
+        
+        try {
+            $pdf = Pdf::loadView('reports.stock_received', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'date_from' => $date_from,
+                'date_to' => $date_to
+            ]);
+            
+            // Set custom paper size
+            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+
+            ]);
+
+            // Stream to browser (view in browser)
+            return $pdf->stream('stock_received_report_' . $date_from . '_to_' . $date_to . '.pdf');
+            
+        } catch(Exception $e) {
+            dd($e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    public function dailySalesReportView(Request $request)
+    {
+        // Get parameters directly from request
+        $date = $request->date ?? date('Y-m-d');
+        
+        $filters = [
+            'customer_id' => $request->customer_id,
+            'payment_term' => $request->payment_term,
+        ];
+        
+        $service = new \App\Services\DailySalesReportService();
+        $reportData = $service->generateReport($date, $filters);
+        
+        // Calculate PDF height based on content
+        $totalInvoiceItems = count($reportData['invoices']);
+        $totalProductItems = count($reportData['products']);
+        $minHeight = 500;
+        $heightPerRow = 30;
+        $calculatedHeight = $minHeight + (($totalInvoiceItems + $totalProductItems) * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 600);
+        
+        try {
+            $pdf = Pdf::loadView('reports.daily_sales', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'selected_date' => $date
+            ]);
+            
+            // Set custom paper size
+            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+            ]);
+            
+            // Stream to browser
+            return $pdf->stream('daily_sales_report_' . $date . '.pdf');
+            
+        } catch(Exception $e) {
+            \Log::error('Daily Sales PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    public function finishedGoodsTraceabilityView(Request $request)
+    {
+        // Get parameters directly from request
+        $date_from = $request->date_from ?? date('Y-m-d');
+        $date_to = $request->date_to ?? date('Y-m-d');
+
+        // Handle filters that might be arrays (multiselect)
+        $customer_id = $request->customer_id;
+        $product_id = $request->product_id;
+        $batch_id = $request->batch_id;
+        
+        // Convert to array if they are strings (single selection)
+        if ($customer_id && !is_array($customer_id)) {
+            $customer_id = [$customer_id];
+        }
+        if ($product_id && !is_array($product_id)) {
+            $product_id = [$product_id];
+        }
+        if ($batch_id && !is_array($batch_id)) {
+            $batch_id = [$batch_id];
+        }
+
+        $filters = [
+            'customer_id' => $customer_id,
+            'product_id' => $product_id,
+            'batch_id' => $batch_id,
+        ];
+        
+        $service = new \App\Services\FinishedGoodsTraceabilityService();
+        $reportData = $service->generateReport($date_from, $date_to, $filters);
+        
+        // Calculate PDF height based on number of items
+        $totalItems = count($reportData['items']);
+        $minHeight = 500;
+        $heightPerRow = 30;
+        $calculatedHeight = $minHeight + ($totalItems * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 600);
+        
+        try {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.finished_goods_traceability', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'date_from' => $date_from,
+                'date_to' => $date_to
+            ]);
+            
+            // Set custom paper size (landscape for better visibility)
+            $pdf->setPaper('A4', 'landscape');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'chroot' => public_path(),
+            ]);
+            
+            // Stream to browser
+            return $pdf->stream('finished_goods_traceability_' . $date_from . '_to_' . $date_to . '.pdf');
+            
+        } catch(Exception $e) {
+            dd($e->getMessage());
+            \Log::error('Traceability PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    public function stockCardReportView(Request $request)
+    {
+        // Get parameters directly from request
+        $product_id = $request->product_id;
+        $date_from = $request->date_from ?? date('Y-m-d', strtotime('-30 days'));
+        $date_to = $request->date_to ?? date('Y-m-d');
+        
+        // Validate product_id is required
+        if (!$product_id) {
+            return back()->with('error', 'Product is required for Stock Card Report');
+        }
+        
+        // Handle product_id as array (multiselect)
+        if (!is_array($product_id)) {
+            $product_id = [$product_id];
+        }
+        
+        // Handle filters
+        $warehouse_id = $request->warehouse_id;
+        $batch_id = $request->batch_id;
+        
+        // Convert to array if needed
+        if ($warehouse_id && !is_array($warehouse_id)) {
+            $warehouse_id = [$warehouse_id];
+        }
+        if ($batch_id && !is_array($batch_id)) {
+            $batch_id = [$batch_id];
+        }
+        
+        $filters = [
+            'warehouse_id' => $warehouse_id,
+            'batch_id' => $batch_id,
+        ];
+        
+        $service = new \App\Services\StockCardService();
+        $reportData = $service->generateReport($product_id, $date_from, $date_to, $filters);
+        
+        if (!$reportData) {
+            return back()->with('error', 'No products found');
+        }
+        
+        // Calculate total transactions across all products for PDF height
+        $totalTransactions = 0;
+        foreach ($reportData['products'] as $product) {
+            $totalTransactions += count($product['transactions']);
+        }
+        
+        $minHeight = 550;
+        $heightPerRow = 35;
+        $calculatedHeight = $minHeight + ($totalTransactions * $heightPerRow);
+        $paperHeight = max($calculatedHeight, 700);
+        
+        try {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.stock_card', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'date_from' => $date_from,
+                'date_to' => $date_to
+            ]);
+            
+            // Set custom paper size (landscape for better visibility)
+            $pdf->setPaper('A4', 'landscape');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 15,
+                'margin_bottom' => 15,
+                'chroot' => public_path(),
+            ]);
+            
+            // Stream to browser
+            $productCodes = implode('_', array_column($reportData['products'], 'product.code'));
+            return $pdf->stream('stock_card_' . $productCodes . '_' . $date_from . '_to_' . $date_to . '.pdf');
+            
+        } catch(Exception $e) {
+            \Log::error('Stock Card PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+
+
+
     public function monthlysalereport(Request $request)
     {
         // return $request->all();

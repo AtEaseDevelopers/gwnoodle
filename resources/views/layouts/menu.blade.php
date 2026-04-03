@@ -355,7 +355,7 @@
         </ul>
     @endcan -->
 
-    @can('agent')
+    <!-- @can('agent')
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('agents*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('agents*') ? 'active' : '' }}" href="{{ route('agents.index') }}">
@@ -363,7 +363,7 @@
                 </a>
             </li>
         </ul>
-    @endcan
+    @endcan -->
 
     <!-- @can('supervisor')
         <ul class="nav-dropdown-items">

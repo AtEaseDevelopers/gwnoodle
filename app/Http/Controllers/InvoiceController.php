@@ -90,9 +90,8 @@ class InvoiceController extends AppBaseController
                 $input['invoiceno'] = Invoice::generateInvoiceNumber();
             }
         }
-        
+        $input['status'] = 0; // Set default status to 0 (New)
         $invoice = $this->invoiceRepository->create($input);
-
         Flash::success('Invoice created successfully.');
         
 
@@ -656,7 +655,6 @@ class InvoiceController extends AppBaseController
             Session::forget('invoice_detail_data');
             
         } catch (\Exception $e) {
-            dd($e->getMessage());
             DB::rollBack();
             Flash::error('Error saving invoice detail: ' . $e->getMessage());
             return redirect()->back()->withInput();

@@ -23,22 +23,22 @@
 </div>
 
 <!-- Kelindan Id Field -->
-<div class="form-group">
+<!-- <div class="form-group">
     {!! Form::label('kelindan_id', __('invoices.kelindan')) !!}:<span class="asterisk"> *</span>
     <p>{{ $invoice->kelindan->name ?? '' }}</p>
-</div>
+</div> -->
 
 <!-- Agent Id Field -->
-<div class="form-group">
+<!-- <div class="form-group">
     {!! Form::label('agent_id', __('invoices.agent')) !!}:<span class="asterisk"> *</span>
     <p>{{ $invoice->agent->name ?? '' }}</p>
-</div>
+</div> -->
 
 <!-- Supervisor Id Field -->
-<div class="form-group">
+<!-- <div class="form-group">
     {!! Form::label('supervisor_id', __('invoices.supervisor')) !!}:<span class="asterisk"> *</span>
     <p>{{ $invoice->supervisor->name ?? '' }}</p>
-</div>
+</div> -->
 
 <!-- Paymentterm Field -->
 <div class="form-group">
