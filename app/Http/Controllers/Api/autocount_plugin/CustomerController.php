@@ -31,9 +31,6 @@ class CustomerController extends Controller
 
     public function update(Request $request)
     {
-        // 1. Create the log the second the request hits
-        $apiLog = ApiLog::createLog($request);
-
         try {
             // Get the payload array we sent from C# (wrapped in a 'debtors' key)
             $process_data = $request->input('debtors', []);
@@ -102,9 +99,6 @@ class CustomerController extends Controller
             ];
             $statusCode = 500;
         }
-
-        // 4. Update the exact same log record with the final response payload and status
-        $apiLog->updateResponse($responseData, $statusCode);
 
         return response()->json($responseData, $statusCode);
     }

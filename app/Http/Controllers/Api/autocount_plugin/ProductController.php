@@ -15,9 +15,6 @@ class ProductController extends Controller
 
     public function update(Request $request)
     {
-        // 1. Create the log immediately when the request hits
-        $apiLog = ApiLog::createLog($request);
-
         // Depending on how your C# sends it, you might need $request->input('items', [])
         // If your C# sends a raw array, $request->all() is perfectly fine!
         $data = $request->all(); 
@@ -76,8 +73,6 @@ class ProductController extends Controller
             ];
             $statusCode = 500;
         }
-
-        $apiLog->updateResponse($responseData, $statusCode);
 
         return response()->json($responseData, $statusCode);
     }

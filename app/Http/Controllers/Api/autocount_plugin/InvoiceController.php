@@ -113,8 +113,6 @@ class InvoiceController extends Controller
             $statusCode = 500;
         }
 
-        // 2. Update the exact same log record with the final payload and status
-
         return response()->json($responseData, $statusCode);
     }
 
@@ -167,9 +165,6 @@ class InvoiceController extends Controller
             ];
             $statusCode = 500; // Server Error
         }
-
-        // 3. Update the exact same log record with the result
-        //$apiLog->updateResponse($responseData, $statusCode);
 
         return response()->json($responseData, $statusCode);
     }
