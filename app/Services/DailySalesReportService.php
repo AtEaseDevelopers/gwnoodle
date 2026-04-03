@@ -16,7 +16,7 @@ class DailySalesReportService
      * Generate daily sales report for a specific date
      * 
      * @param string $date Date in Y-m-d format
-     * @param array $filters Optional filters (customer_id, payment_term)
+     * @param array $filters Optional filters (customer_id, driver_id, trip_uuid)
      * @return array
      */
     public function generateReport($date, $filters = [])
@@ -41,21 +41,59 @@ class DailySalesReportService
                 'online' => 0,
                 'tng' => 0,
                 'cheque' => 0
+            ],
+            'filters_applied' => [
+                'driver' => 'All Drivers',
+                'trip' => 'All Trips'
             ]
         ];
 
         // Build query for invoices on the specific date
-        $query = Invoice::with(['customer', 'invoicedetail.product', 'invoicepayment'])
+        $query = Invoice::with(['customer', 'invoicedetail.product', 'invoicepayment', 'driver'])
             ->whereDate('date', $date)
             ->where('status', Invoice::STATUS_COMPLETED);
+        $invoices = $query->orderBy('invoiceno', 'asc')->get();
 
-            // Apply filters
-        if (isset($filters['customer_id']) && $filters['customer_id']) {
-            $query->where('customer_id', $filters['customer_id']);
+        // Apply driver filter
+        if (isset($filters['driver_id']) && $filters['driver_id']) {
+            // Check if it's an array (multiple drivers) or single value
+            if (is_array($filters['driver_id'])) {
+                $query->whereIn('driver_id', $filters['driver_id']);
+                
+                // Get driver names for display
+                $driverNames = \App\Models\Driver::whereIn('id', $filters['driver_id'])
+                    ->pluck('name')
+                    ->toArray();
+                $reportData['filters_applied']['driver'] = implode(', ', $driverNames);
+                $reportData['driver_filter_display'] = $driverNames;
+                $reportData['driver_filter_ids'] = $filters['driver_id'];
+            } else {
+                $query->where('driver_id', $filters['driver_id']);
+                
+                // Get driver name for display
+                $driver = \App\Models\Driver::find($filters['driver_id']);
+                $driverName = $driver ? $driver->name : 'Unknown Driver';
+                $reportData['filters_applied']['driver'] = $driverName;
+                $reportData['driver_filter_display'] = [$driverName];
+                $reportData['driver_filter_ids'] = [$filters['driver_id']];
+            }
+        } else {
+            $reportData['driver_filter_display'] = [];
+            $reportData['driver_filter_ids'] = [];
         }
 
-        if (isset($filters['payment_term']) && $filters['payment_term']) {
-            $query->where('paymentterm', $filters['payment_term']);
+        // Apply trip_uuid filter
+        if (isset($filters['trip_uuid']) && $filters['trip_uuid']) {
+            // Check if it's an array (multiple trips) or single value
+            if (is_array($filters['trip_uuid'])) {
+                $query->whereIn('trip_uuid', $filters['trip_uuid']);
+                $reportData['filters_applied']['trip'] = implode(', ', $filters['trip_uuid']);
+                $reportData['trip_filter_display'] = $filters['trip_uuid'];
+            } else {
+                $query->where('trip_uuid', $filters['trip_uuid']);
+                $reportData['filters_applied']['trip'] = $filters['trip_uuid'];
+                $reportData['trip_filter_display'] = [$filters['trip_uuid']];
+            }
         }
 
         // Get invoices ordered by invoice number
@@ -121,6 +159,8 @@ class DailySalesReportService
                 'customer_code' => $invoice->customer ? $invoice->customer->code : 'N/A',
                 'payment_term' => $this->getPaymentTermName($invoice->paymentterm),
                 'driver' => $invoice->driver ? $invoice->driver->name : 'N/A',
+                'driver_id' => $invoice->driver_id,
+                'trip_uuid' => $invoice->trip_uuid ?? 'N/A',
                 'total_amount' => $invoiceTotal,
                 'paid_amount' => $paidAmount,
                 'outstanding' => $outstanding,

@@ -580,7 +580,7 @@ Route::group(['middleware' => ['auth']], function() {
     });
     Route::group(['middleware' => ['permission:trip']], function() {
         Route::resource('trips', App\Http\Controllers\TripController::class);
-
+        Route::get('trips/view-report/{trip_uuid}/{driver_id}', [App\Http\Controllers\TripController::class, 'viewTripReport'])->name('trips.viewReport');
     });
     // Warehouse Routes
     Route::group(['middleware' => ['permission:warehouse']], function() {

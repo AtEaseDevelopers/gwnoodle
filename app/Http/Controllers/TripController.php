@@ -13,6 +13,8 @@ use Response;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Models\Trip;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class TripController extends AppBaseController
 {
@@ -146,6 +148,85 @@ class TripController extends AppBaseController
         return view('trips.show')->with('trip', (object)$result);
     }
 
+    public function viewTripReport($trip_uuid, $driver_id)
+    {
+        try {
+            // Verify that the trip exists and is an end trip
+            $trip = Trip::where('uuid', $trip_uuid)
+                ->where('driver_id', $driver_id)
+                ->where('type', Trip::END_TRIP)
+                ->first();
+            // Get the trip date for the report
+            if ($trip->date) {
+                // If it's a Carbon instance
+                if ($trip->date instanceof \Carbon\Carbon) {
+                    $date = $trip->date->toDateString(); // Returns Y-m-d format
+                } 
+                // If it's a string
+                elseif (is_string($trip->date)) {
+                    // Parse and get only date part
+                    $date = \Carbon\Carbon::parse($trip->date)->toDateString();
+                }
+                // If it's a different format
+                else {
+                    $date = date('Y-m-d', strtotime($trip->date));
+                }
+            }            
+            // Set filters with trip_uuid and driver_id
+            $filters = [
+                'customer_id' => null,
+                'driver_id' => $driver_id,
+                'trip_uuid' => $trip_uuid,
+            ];
+
+            // Generate the report
+            $service = new \App\Services\DailySalesReportService();
+            $reportData = $service->generateReport($date, $filters);
+            
+            // Calculate PDF height based on content
+            $totalInvoiceItems = count($reportData['invoices']);
+            $totalProductItems = count($reportData['products']);
+            $minHeight = 500;
+            $heightPerRow = 30;
+            $calculatedHeight = $minHeight + (($totalInvoiceItems + $totalProductItems) * $heightPerRow);
+            $paperHeight = max($calculatedHeight, 600);
+            
+            // Generate PDF
+            $pdf = Pdf::loadView('reports.daily_sales', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'selected_date' => $date,
+                'is_trip_report' => true, // Optional: to customize the report title
+                'trip_info' => [
+                    'trip_id' => $trip->id,
+                    'driver_name' => $trip->driver ? $trip->driver->name : 'N/A',
+                    'lorry_no' => $trip->lorry ? $trip->lorry->lorryno : 'N/A',
+                ]
+            ]);
+            
+            // Set custom paper size
+            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+            ]);
+            
+            // Stream to browser with trip-specific filename
+            $filename = 'trip_report_' . $trip_uuid . '_' . date('YmdHis') . '.pdf';
+            return $pdf->stream($filename);
+            
+        } catch(Exception $e) {
+            \Log::error('Trip Report PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate trip report: ' . $e->getMessage());
+        }
+    }
+    
     /**
      * Show the form for editing the specified Trip.
      *

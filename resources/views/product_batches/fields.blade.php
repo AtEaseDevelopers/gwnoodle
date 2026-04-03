@@ -90,6 +90,16 @@
                                         <small class="text-muted">Select expiry date (will be used for barcode generation)</small>
                                     </div>
 
+                                    <!-- Add-on Fields (Optional) -->
+                                    <div class="form-group">
+                                        <label for="add_on_fields">Add-on Fields <span class="text-muted">(Optional)</span></label>
+                                        <input type="text" class="form-control" id="add_on_fields" 
+                                               name="add_on_fields" 
+                                               placeholder="Enter add-on value (e.g., 001, ABC, EXTRA)" 
+                                               value="{{ old('add_on_fields') }}">
+                                        <small class="text-muted">Optional: If provided, will append "/value" to the barcode</small>
+                                    </div>
+
                                     <!-- Hidden display fields for JS (not shown to user) -->
                                     <input type="hidden" id="year_display" value="">
                                     <input type="hidden" id="month_display" value="">
@@ -120,6 +130,9 @@
                                                         $month = $date->format('m');
                                                         $day = $date->format('d');
                                                         $barcodeText = old('group') . old('user_id') . $year . '8' . $day . $month . $unitCode;
+                                                        if(old('add_on_fields')) {
+                                                            $barcodeText .=  old('add_on_fields');
+                                                        }
                                                         echo $barcodeText;
                                                     @endphp
                                                 @else
@@ -127,7 +140,7 @@
                                                 @endif
                                             </span>
                                         </div>
-                                        <small class="text-muted d-block mt-2">Format: Group(1) + UserID(2) + Year(2) + Fixed(1) + Day(2) + Month(2) + ProductCode</small>
+                                        <small class="text-muted d-block mt-2">Format: Group(1) + UserID(2) + Year(2) + Fixed(1) + Day(2) + Month(2) + ProductCode + <span class="text-primary">[Optional: /AddOnFields]</span></small>
                                     </div>
 
                                     <!-- Hidden field for batch_code -->
@@ -195,6 +208,7 @@ $(function () {
         var oldGroup = "{{ old('group') }}";
         var oldProductId = "{{ old('product_id') }}";
         var oldExpiryDate = "{{ old('expiry_date') }}";
+        var oldAddOnFields = "{{ old('add_on_fields') }}";
 
         if (oldUserId) {
             $('#user_id_input').val(oldUserId);
@@ -222,6 +236,10 @@ $(function () {
             $('#year_display').val(year);
             $('#month_display').val(month);
             $('#day_display').val(day);
+        }
+
+        if (oldAddOnFields) {
+            $('#add_on_fields').val(oldAddOnFields);
         }
 
         updateBarcodePreview();
@@ -271,6 +289,19 @@ $(function () {
         updateBarcodePreview();
     });
 
+    // Handle add-on fields change
+    $('#add_on_fields').on('input', function() {
+        // Optional: Add validation for add-on fields if needed
+        // For example, allow alphanumeric and specific special characters
+        var value = $(this).val();
+        // You can add validation here if needed
+        // Example: Allow only alphanumeric and underscore
+        // value = value.replace(/[^a-zA-Z0-9_]/g, '');
+        // $(this).val(value);
+        
+        updateBarcodePreview();
+    });
+
     // Update barcode preview
     function updateBarcodePreview() {
         var group = $('#barcode_group').val() || '';
@@ -280,10 +311,17 @@ $(function () {
         var day = $('#day_display').val() || '';
         var month = $('#month_display').val() || '';
         var productCode = $('#barcode_product_code').val() || '';
+        var addOnFields = $('#add_on_fields').val() || '';
 
         // Only show preview if all required fields are filled
         if (group && userId && userId.length === 2 && year && day && month && productCode) {
             var barcodeText = group + userId + year + fixed + day + month + productCode;
+            
+            // Append add-on fields if provided
+            if (addOnFields && addOnFields.trim() !== '') {
+                barcodeText += addOnFields;
+            }
+            
             $('#complete_barcode_preview').text(barcodeText);
             $('#batch_code').val(barcodeText);
         } else {

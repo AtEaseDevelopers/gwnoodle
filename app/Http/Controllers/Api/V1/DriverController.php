@@ -1927,7 +1927,7 @@ class DriverController extends Controller
             $invoice->status = 1;
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
-            $invoice->trip_id = $driver->trip_id;
+            $invoice->trip_uuid = $driver->trip_id;
             $invoice->save();
             
             $totalprice = 0;
@@ -6157,6 +6157,7 @@ class DriverController extends Controller
             // Create inventory transaction for lorry (stock out)
             InventoryTransaction::create([
                 'type' => InventoryTransaction::TYPE_RETURN,
+                'warehouse_id' => $request->warehouse_id,
                 'lorry_id' => $request->lorry_id,
                 'product_id' => $batch->product_id,
                 'batch_id' => $request->batch_id,

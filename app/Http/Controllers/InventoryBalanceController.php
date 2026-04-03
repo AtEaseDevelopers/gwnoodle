@@ -268,30 +268,32 @@ class InventoryBalanceController extends AppBaseController
             // Create inventory transaction for lorry (stock out)
             InventoryTransaction::create([
                 'type' => InventoryTransaction::TYPE_RETURN,
+                'warehouse_id' => $request->to_warehouse_id,
                 'lorry_id' => $request->lorry_id,
                 'product_id' => $batch->product_id,
                 'batch_id' => $request->batch_id,
                 'quantity' => -$request->quantity,
                 'date' => now(),
                 'user' => Auth::user()->name,
-                'remark' => 'Returned from lorry to warehouse'
+                'remark' => 'Returned from van to warehouse'
             ]);
 
             // Create inventory transaction for warehouse (stock in)
             InventoryTransaction::create([
                 'type' => InventoryTransaction::TYPE_STOCK_IN,
                 'warehouse_id' => $request->to_warehouse_id,
+                'lorry_id' => $request->lorry_id,
                 'product_id' => $batch->product_id,
                 'batch_id' => $request->batch_id,
                 'quantity' => $request->quantity,
                 'date' => now(),
                 'user' => Auth::user()->name,
-                'remark' => 'Received from lorry'
+                'remark' => 'Received from van'
             ]);
 
             DB::commit();
 
-            Flash::success($request->quantity . ' units returned from lorry to warehouse successfully.');
+            Flash::success($request->quantity . ' units returned from van to warehouse successfully.');
 
         } catch (\Exception $e) {
             DB::rollBack();

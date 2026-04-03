@@ -305,12 +305,15 @@ class ReportController extends AppBaseController
             // Extract parameters for daily sales report
             $date = isset($data['date']) ? $data['date'] : date('Y-m-d');
             $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
-            $payment_term = isset($data['payment_term']) ? $data['payment_term'] : null;
+            $driver_id = isset($data['driver_id']) ? $data['driver_id'] : null;
+            $trip_uuid = isset($data['trip_uuid']) ? $data['trip_uuid'] : null;
+
             // Redirect to the report view with parameters
             return redirect()->route('daily_sales_report_view', [
                 'date' => $date,
                 'customer_id' => $customer_id,
-                'payment_term' => $payment_term,
+                'driver_id' => $driver_id,
+                'trip_uuid' => $trip_uuid,
             ]);
         }
 
@@ -521,7 +524,8 @@ class ReportController extends AppBaseController
         
         $filters = [
             'customer_id' => $request->customer_id,
-            'payment_term' => $request->payment_term,
+            'driver_id' => $request->driver_id,
+            'trip_uuid' => $request->trip_uuid,
         ];
         
         $service = new \App\Services\DailySalesReportService();
