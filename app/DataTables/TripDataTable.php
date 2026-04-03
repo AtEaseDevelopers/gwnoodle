@@ -29,13 +29,13 @@ class TripDataTable extends DataTable
                     'driver_id' => $row->driver_id
                 ]);
                 
-                return '<a href="'.$reportUrl.'" class="btn btn-info btn-sm" target="_blank">
+                return '<a href="'.$reportUrl.'" class="btn btn-info btn-sm view-report-btn" target="_blank">
                             <i class="fa fa-file-pdf-o"></i> View Report
                         </a>';
             }
             
             // For start trips, return empty string or disabled button
-            return '<span class="text-muted">No Report</span>';
+            return '<span class="text-muted no-report">-</span>';
         });
         
         return $dataTable;
@@ -120,14 +120,19 @@ class TripDataTable extends DataTable
                 ],
                 'columnDefs' => [
                     [
-                        'targets' => 4, // Adjust based on your column index for 'type'
+                        'targets' => 3, // Index for 'type' column (adjust based on your column order)
                         'render' => 'function(data, type){return data == 1 ? "Start Trip" : "End Trip";}'
                     ],
                     [
                         'targets' => -1, // Last column (action)
                         'orderable' => false,
                         'searchable' => false,
-                        'className' => 'dt-body-center'
+                        'className' => 'dt-body-left', // Change to left alignment
+                        'width' => '120px', // Set fixed width for action column
+                    ],
+                    [
+                        'targets' => '_all',
+                        'className' => 'dt-body-left', // Left align all columns by default
                     ],
                 ],
                 'initComplete' => 'function(){
@@ -173,32 +178,48 @@ class TripDataTable extends DataTable
             'id'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('trips.trip_id'),
                 'data' => 'id',
-                'name' => 'id'
+                'name' => 'id',
+                'width' => '80px', // Set width
+                'className' => 'dt-body-left',
             ]),
-            'date',
+            'date'=> new \Yajra\DataTables\Html\Column([
+                'title' => 'Date',
+                'data' => 'date',
+                'name' => 'date',
+                'width' => '150px', // Set width
+                'className' => 'dt-body-left',
+            ]),
             'driver_id'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('trips.driver'),
                 'data' => 'driver.name',
-                'name' => 'driver.name'
+                'name' => 'driver.name',
+                'width' => '200px', // Set width
+                'className' => 'dt-body-left',
             ]),
             'lorry_id'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('trips.lorry'),
                 'data' => 'lorry.lorryno',
-                'name' => 'lorry.lorryno'
+                'name' => 'lorry.lorryno',
+                'width' => '120px', // Set width
+                'className' => 'dt-body-left',
             ]),
             'type'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('trips.type'),
                 'data' => 'type',
-                'name' => 'type'
+                'name' => 'type',
+                'width' => '100px', // Set width
+                'className' => 'dt-body-left',
             ]),
             'action'=> new \Yajra\DataTables\Html\Column([
-                'title' => trans('table_buttons.action'),
+                'title' => 'Actions',
                 'data' => 'action',
                 'name' => 'action',
                 'orderable' => false,
                 'searchable' => false,
                 'exportable' => false,
-                'printable' => false
+                'printable' => false,
+                'width' => '100px', // Fixed smaller width for action column
+                'className' => 'dt-body-left', // Left align
             ]),
         ];
     }
