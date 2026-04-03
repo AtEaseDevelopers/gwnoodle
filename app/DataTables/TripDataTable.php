@@ -120,7 +120,7 @@ class TripDataTable extends DataTable
                 ],
                 'columnDefs' => [
                     [
-                        'targets' => 3, // Index for 'type' column (adjust based on your column order)
+                        'targets' => 4, // Index for 'type' column (adjust based on your column order)
                         'render' => 'function(data, type){return data == 1 ? "Start Trip" : "End Trip";}'
                     ],
                     [
