@@ -11,7 +11,8 @@ use App\Models\ApiLog;
 
 class ProductController extends Controller
 {
-    
+    const BATCH_SIZE = 5; // testing with 5, adjust as needed
+
     public function update(Request $request)
     {
         // 1. Create the log immediately when the request hits
@@ -28,7 +29,12 @@ class ProductController extends Controller
                 throw new \Exception("Invalid payload format. Expected an array of records.");
             }
 
-            foreach ($data as $record) {
+            foreach ($data as $index => $record) {
+                
+                if ($index >= self::BATCH_SIZE) {
+                    break; // Stop processing after reaching the batch size limit
+                }
+
                 $validationErrors = $this->manualValidation($record);
 
                 if (!empty($validationErrors)) {

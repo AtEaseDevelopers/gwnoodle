@@ -27,6 +27,8 @@ class CustomerController extends Controller
      * @return \Illuminate\Contracts\Support\Renderable
      */
 
+    const BATCH_SIZE = 5; // testing with 5, adjust as needed
+
     public function update(Request $request)
     {
         // 1. Create the log the second the request hits
@@ -36,7 +38,11 @@ class CustomerController extends Controller
             // Get the payload array we sent from C# (wrapped in a 'debtors' key)
             $process_data = $request->input('debtors', []);
             
-            foreach ($process_data as $customer_data) {
+            foreach ($process_data as $index => $customer_data) {
+
+                if ($index >= self::BATCH_SIZE) {
+                    break; // Stop processing after reaching the batch size limit
+                }
                 
                 if (empty($customer_data['AccNo'])) continue;
 
