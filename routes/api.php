@@ -140,6 +140,21 @@ Route::group(['prefix' => 'v1'], function () {
 
 });
 
+Route::namespace('API')->group(function () {
+   
+    // product
+    Route::post('/products/update', 'ProductController@update');
+
+    // customer
+    Route::post('/customers/update', 'CustomerController@update');
+       
+    // invoices
+    Route::get('/invoice/pending', 'InvoiceController@syncPending');
+    Route::post('/invoice/update', 'InvoiceController@update');
+    Route::post('/invoice/update-log', 'InvoiceController@updateLog');
+
+
+});
 
 Route::fallback(function(){
     return response()->json([
