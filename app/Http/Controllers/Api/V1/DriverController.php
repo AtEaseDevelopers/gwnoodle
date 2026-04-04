@@ -3964,43 +3964,47 @@ class DriverController extends Controller
             $trip = Trip::where('driver_id', $driver->id)
                 ->orderBy('date', 'desc')
                 ->first();
-                
-            if ($trip->type == Trip::END_TRIP) {
-                $end_time = $trip->date;
+            if($trip){
+                if ($trip->type == Trip::END_TRIP) {
+                    $end_time = $trip->date;
 
-                $start_trip = Trip::where('driver_id', $driver->id)
-                    ->orderBy('date', 'desc')
-                    ->where('type', Trip::START_TRIP) // Assuming START_TRIP is 1
-                    ->first();
+                    $start_trip = Trip::where('driver_id', $driver->id)
+                        ->orderBy('date', 'desc')
+                        ->where('type', Trip::START_TRIP) // Assuming START_TRIP is 1
+                        ->first();
 
-                $start_time = $start_trip->date ?? null;
-                
-                // When we have both start and end trip, return both in the array
-                $tripArray = [
-                    [
-                        'trip_id' => $start_trip->uuid ?? '',
-                        'start_time' => $start_time ?? '',
-                        'type' => 'Start Trip',
-                    ],
-                    [
-                        'trip_id' => $trip->uuid,
-                        'end_time' => $end_time ?? '',
-                        'type' => 'End Trip',
-                    ]
-                ];
-            } else {
-                // When we only have start trip, return only one array
-                $start_time = $trip->date;
-                $end_time = null;
-                
-                $tripArray = [
-                    [
-                        'trip_id' => $trip->uuid,
-                        'start_time' => $start_time ?? '',
-                        'type' => 'Start Trip',
-                    ]
-                ];
+                    $start_time = $start_trip->date ?? null;
+                    
+                    // When we have both start and end trip, return both in the array
+                    $tripArray = [
+                        [
+                            'trip_id' => $start_trip->uuid ?? '',
+                            'start_time' => $start_time ?? '',
+                            'type' => 'Start Trip',
+                        ],
+                        [
+                            'trip_id' => $trip->uuid,
+                            'end_time' => $end_time ?? '',
+                            'type' => 'End Trip',
+                        ]
+                    ];
+                } else {
+                    // When we only have start trip, return only one array
+                    $start_time = $trip->date;
+                    $end_time = null;
+                    
+                    $tripArray = [
+                        [
+                            'trip_id' => $trip->uuid,
+                            'start_time' => $start_time ?? '',
+                            'type' => 'Start Trip',
+                        ]
+                    ];
+                }
+            }else{
+                $tripArray = [];
             }
+            
 
             $result = [
                 'sales_summary' => [
