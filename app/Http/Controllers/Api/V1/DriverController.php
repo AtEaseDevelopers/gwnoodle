@@ -2495,7 +2495,7 @@ class DriverController extends Controller
 	}
 	
 
-    public function getcustomerinvoice(Request $request, $id)
+    public function getcustomerinvoice(Request $request, $id = null)
     {
         try {
             $customer = Customer::find($id);
