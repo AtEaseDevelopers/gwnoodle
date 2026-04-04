@@ -2523,7 +2523,6 @@ class DriverController extends Controller
                     ->orderBy('date', 'desc')
                     ->get(['id', 'invoiceno', 'date']);
             }
-            dd($invoices);
 
             // Calculate total amount for each invoice
             $invoiceData = [];
