@@ -1235,7 +1235,7 @@ class DriverController extends Controller
         }
     }
 
-    public function getcustomer(Request $request){
+    public function getcustomer(Request $request, $id = null){
         try{
             $data = $request->all();
             //check session
@@ -1247,12 +1247,21 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
+            if ($id){
+                $customers = Customer::select('customers.*', 'assigns.sequence')
+                    ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
+                    ->where('assigns.driver_id', $driver->id)
+                    ->where('customers.id', $id)
+                    ->orderBy('assigns.sequence', 'asc')
+                    ->get();    
+            }else{
+                $customers = Customer::select('customers.*', 'assigns.sequence')
+                    ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
+                    ->where('assigns.driver_id', $driver->id)
+                    ->orderBy('assigns.sequence', 'asc')
+                    ->get();
+            }
             
-            $customers = Customer::select('customers.*', 'assigns.sequence')
-                ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
-                ->where('assigns.driver_id', $driver->id)
-                ->orderBy('assigns.sequence', 'asc')
-                ->get();
             
             // Add credit amount for each customer
             foreach ($customers as $customer) {
