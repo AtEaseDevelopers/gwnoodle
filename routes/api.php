@@ -46,7 +46,7 @@ Route::group(['prefix' => 'v1'], function () {
     Route::post('/driver/product', [App\Http\Controllers\Api\V1\DriverController::class, 'getproduct']);
 
     //Customer
-    Route::get('/driver/customer', [App\Http\Controllers\Api\V1\DriverController::class, 'getcustomer']);
+    Route::get('/driver/customer/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getcustomer']);
     Route::post('/driver/customer/detail', [App\Http\Controllers\Api\V1\DriverController::class, 'customerdetail']);
     Route::post('/driver/customer/makepayment', [App\Http\Controllers\Api\V1\DriverController::class, 'customermakepayment']);
     Route::post('/driver/customer/invoice', [App\Http\Controllers\Api\V1\DriverController::class, 'customerinvoice']);
@@ -58,6 +58,7 @@ Route::group(['prefix' => 'v1'], function () {
     Route::get('/driver/get-invoice-no', [App\Http\Controllers\Api\V1\DriverController::class, 'getInvoiceNo']);
 
     Route::post('/driver/invoice', [App\Http\Controllers\Api\V1\DriverController::class, 'addinvoice']);
+    Route::post('/driver/invoice/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'editInvoice']);
     Route::post('/driver/invoice/pdf', [App\Http\Controllers\Api\V1\DriverController::class, 'invoicepdf']);
 
      //Invoice Payment

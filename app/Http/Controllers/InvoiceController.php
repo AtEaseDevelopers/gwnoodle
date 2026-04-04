@@ -752,26 +752,30 @@ class InvoiceController extends AppBaseController
     private function calculateCustomerCredit($customerId, $asOfDate)
     {
         try {
-            // Get total invoiced amount (what the customer owes)
+            // Get total invoiced amount for credit invoices
             $totalInvoiced = Invoice::where('invoices.customer_id', $customerId)
-                ->where('invoices.status', 1)
+                ->where('invoices.paymentterm', Invoice::PAYMENT_TERM_CREDIT)
                 ->where('invoices.updated_at', '<=', $asOfDate)
                 ->join('invoice_details', 'invoices.id', '=', 'invoice_details.invoice_id')
                 ->selectRaw('COALESCE(SUM(invoice_details.totalprice), 0) as total')
-                ->value('total'); 
+                ->value('total');
 
-            // Get total paid amount (what the customer has paid)
+            // Get total paid amount for credit invoices (only completed payments)
             $totalPaid = InvoicePayment::where('customer_id', $customerId)
-                ->where('status', 1)
+                ->where('status', 1) // Completed payment
                 ->where('approve_at', '<=', $asOfDate)
+                ->whereHas('invoice', function($query) {
+                    $query->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT)
+                        ->where('status', Invoice::STATUS_COMPLETED);
+                })
                 ->sum('amount') ?? 0;
 
             $outstandingBalance = $totalInvoiced - $totalPaid;
 
             return [
-                'totalprice' => $totalInvoiced,
-                'paid' => $totalPaid,
-                'credit' => $outstandingBalance
+                'totalprice' => round($totalInvoiced, 2),
+                'paid' => round($totalPaid, 2),
+                'credit' => round($outstandingBalance, 2)
             ];
             
         } catch (\Exception $e) {

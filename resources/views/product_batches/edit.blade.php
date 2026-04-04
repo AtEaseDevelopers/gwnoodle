@@ -69,10 +69,8 @@
                                                             {!! Form::label('batch_code', 'Batch Code') !!} <span class="text-danger">*</span>
                                                             {!! Form::text('batch_code', null, [
                                                                 'class' => 'form-control',
-                                                                'readonly' => true,
                                                                 'id' => 'batch_code'
                                                             ]) !!}
-                                                            <small class="text-muted">Batch code cannot be changed</small>
                                                         </div>
 
                                                         <!-- Expiry Date -->

@@ -6,6 +6,7 @@ use App\Models\Trip;
 use Yajra\DataTables\Services\DataTable;
 use Yajra\DataTables\EloquentDataTable;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\URL;
 
 class TripDataTable extends DataTable
 {
@@ -19,7 +20,24 @@ class TripDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
         
-        // Return the dataTable without any action column
+        // Add action column
+        $dataTable->addColumn('action', function($row) {
+            // Only show view report button for end trips (type = 0)
+            if ($row->type == Trip::END_TRIP) {
+                $reportUrl = route('trips.viewReport', [
+                    'trip_uuid' => $row->uuid,
+                    'driver_id' => $row->driver_id
+                ]);
+                
+                return '<a href="'.$reportUrl.'" class="btn btn-info btn-sm view-report-btn" target="_blank">
+                            <i class="fa fa-file-pdf-o"></i> View Report
+                        </a>';
+            }
+            
+            // For start trips, return empty string or disabled button
+            return '<span class="text-muted no-report">-</span>';
+        });
+        
         return $dataTable;
     }
 
@@ -56,11 +74,6 @@ class TripDataTable extends DataTable
                 'order'     => [[1, 'desc']],
                 'lengthMenu' => [[ 10, 50, 100, 300 ],[ '10 rows', '50 rows', '100 rows', '300 rows' ]],
                 'buttons' => [
-                    // [
-                    //     'extend' => 'create',
-                    //     'className' => 'btn btn-default btn-sm no-corner',
-                    //     'text' => '<i class="fa fa-plus"></i> ' . trans('table_buttons.create'),
-                    // ],
                     [
                         'extend' => 'print',
                         'className' => 'btn btn-default btn-sm no-corner',
@@ -82,7 +95,7 @@ class TripDataTable extends DataTable
                         'exportOptions' => ['columns' => ':visible:not(:last-child)'],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'filename' => 'trips_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'pdfHtml5',
@@ -92,7 +105,7 @@ class TripDataTable extends DataTable
                         'exportOptions' => ['columns' => ':visible:not(:last-child)'],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'title' => null,
-                        'filename' => 'invoice' . date('dmYHis')
+                        'filename' => 'trips_' . date('dmYHis')
                     ],
                     [
                         'extend' => 'colvis',
@@ -106,21 +119,21 @@ class TripDataTable extends DataTable
                     ],
                 ],
                 'columnDefs' => [
-                    // [
-                    //     'targets' => -1,
-                    //     'visible' => true,
-                    //     'className' => 'dt-body-right'
-                    // ],
-                    // [
-                    //     'targets' => 0,
-                    //     'visible' => true,
-                    //     'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
-                    // ],
                     [
-                        'targets' => 4,
+                        'targets' => 4, // Index for 'type' column (adjust based on your column order)
                         'render' => 'function(data, type){return data == 1 ? "Start Trip" : "End Trip";}'
                     ],
-                    
+                    [
+                        'targets' => -1, // Last column (action)
+                        'orderable' => false,
+                        'searchable' => false,
+                        'className' => 'dt-body-left', // Change to left alignment
+                        'width' => '120px', // Set fixed width for action column
+                    ],
+                    [
+                        'targets' => '_all',
+                        'className' => 'dt-body-left', // Left align all columns by default
+                    ],
                 ],
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
@@ -130,16 +143,24 @@ class TripDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == \'Type\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Start Trip</option><option value="2">End Trip</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Start Trip</option><option value="0">End Trip</option></select>\';
+                                $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
+                                    column.search($(this).val(),true,false).draw();
+                                    ShowLoad();
+                                });
                             }else if(columns[index].title == \'Date\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
+                                $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
+                                    column.search($(this).val(),true,false).draw();
+                                    ShowLoad();
+                                });
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
+                                $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
+                                    column.search($(this).val(),true,false).draw();
+                                    ShowLoad();
+                                });
                             }
-                            $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
-                                column.search($(this).val(),true,false).draw();
-                                ShowLoad();
-                            })
                         }
                     });
                 }'
@@ -154,31 +175,52 @@ class TripDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            'id'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.trip_id'),
-            'data' => 'id',
-            'name' => 'id']),
-
-            'date',
-
-            'driver_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.driver'),
-            'data' => 'driver.name',
-            'name' => 'driver.name']),
-
-            // 'kelindan_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.kelindan'),
-            // 'data' => 'kelindan.name',
-            // 'name' => 'kelindan.name']),
-
-            'lorry_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.lorry'),
-            'data' => 'lorry.lorryno',
-            'name' => 'lorry.lorryno']),
-
-            // 'cash'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.closing_cash'),
-            // 'data' => 'cash',
-            // 'name' => 'cash']),
-
-            'type'=> new \Yajra\DataTables\Html\Column(['title' => trans('trips.type'),
-            'data' => 'type',
-            'name' => 'type']),
+            'id'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('trips.trip_id'),
+                'data' => 'id',
+                'name' => 'id',
+                'width' => '80px', // Set width
+                'className' => 'dt-body-left',
+            ]),
+            'date'=> new \Yajra\DataTables\Html\Column([
+                'title' => 'Date',
+                'data' => 'date',
+                'name' => 'date',
+                'width' => '150px', // Set width
+                'className' => 'dt-body-left',
+            ]),
+            'driver_id'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('trips.driver'),
+                'data' => 'driver.name',
+                'name' => 'driver.name',
+                'width' => '200px', // Set width
+                'className' => 'dt-body-left',
+            ]),
+            'lorry_id'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('trips.lorry'),
+                'data' => 'lorry.lorryno',
+                'name' => 'lorry.lorryno',
+                'width' => '120px', // Set width
+                'className' => 'dt-body-left',
+            ]),
+            'type'=> new \Yajra\DataTables\Html\Column([
+                'title' => trans('trips.type'),
+                'data' => 'type',
+                'name' => 'type',
+                'width' => '100px', // Set width
+                'className' => 'dt-body-left',
+            ]),
+            'action'=> new \Yajra\DataTables\Html\Column([
+                'title' => 'Actions',
+                'data' => 'action',
+                'name' => 'action',
+                'orderable' => false,
+                'searchable' => false,
+                'exportable' => false,
+                'printable' => false,
+                'width' => '100px', // Fixed smaller width for action column
+                'className' => 'dt-body-left', // Left align
+            ]),
         ];
     }
 

@@ -44,7 +44,7 @@ class Invoice extends Model
         'status',
         'remark',
         'chequeno',
-        'trip_id',
+        'trip_uuid',
     ];
 
     /**
@@ -103,11 +103,6 @@ class Invoice extends Model
     public function defaultDriver()
     {
         return $this->belongsTo(\App\Models\Driver::class, 'default_driver_id', 'id');
-    }
-
-    public function trip()
-    {
-        return $this->belongsTo(\App\Models\Trip::class, 'trip_id', 'id');
     }
 
     public function kelindan()

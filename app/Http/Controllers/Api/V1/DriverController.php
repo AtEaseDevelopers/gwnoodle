@@ -1235,7 +1235,7 @@ class DriverController extends Controller
         }
     }
 
-    public function getcustomer(Request $request){
+    public function getcustomer(Request $request, $id = null){
         try{
             $data = $request->all();
             //check session
@@ -1248,28 +1248,28 @@ class DriverController extends Controller
                 ], 401);
             }
             
-            $customers = Customer::select('customers.*', 'assigns.sequence')
-                ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
-                ->where('assigns.driver_id', $driver->id)
-                ->orderBy('assigns.sequence', 'asc')
-                ->get();
+            if ($id){
+                $customers = Customer::select('customers.*', 'assigns.sequence')
+                    ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
+                    ->where('assigns.driver_id', $driver->id)
+                    ->where('customers.id', $id)
+                    ->orderBy('assigns.sequence', 'asc')
+                    ->get();    
+            }else{
+                $customers = Customer::select('customers.*', 'assigns.sequence')
+                    ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
+                    ->where('assigns.driver_id', $driver->id)
+                    ->orderBy('assigns.sequence', 'asc')
+                    ->get();
+            }
             
             // Add credit amount for each customer
             foreach ($customers as $customer) {
-                // Get all credit invoices for this customer (payment term = 2)
-                $invoices = Invoice::where('customer_id', $customer->id)
-                    ->where('status', Invoice::STATUS_COMPLETED)
-                    ->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT) // 2 = Credit
-                    ->with(['invoicedetail'])
-                    ->get();
-                
-                // Calculate total credit amount from invoice details
-                $totalCredit = 0;
-                foreach ($invoices as $invoice) {
-                    $totalCredit += $invoice->invoicedetail->sum('totalprice');
-                }
-                // Add credit amount to customer object
-                $customer->credit_amount = round($totalCredit, 2);
+                // Calculate credit amount using the same logic as calculateCustomerCredit
+                $creditData = $this->calculateCustomerCredit($customer->id, now());
+                $customer->credit_amount = $creditData['credit'];
+                $customer->total_credit_invoiced = $creditData['totalprice'];
+                $customer->total_credit_paid = $creditData['paid'];
             }
             
             //process
@@ -1598,11 +1598,15 @@ class DriverController extends Controller
             $cancellableStatuses = [Invoice::STATUS_COMPLETED];
 
             // Format the response
-            $formattedInvoices = $invoices->map(function($invoice) use ($driverTripId, $cancellableStatuses) {
+            $formattedInvoices = $invoices->map(function($invoice) use ($driver,$driverTripId, $cancellableStatuses) {
                 
                 // Check if this specific invoice can be cancelled
                 $allowCancel = true;
-                
+                $allowEdit = false;
+
+                if($invoice->trip_uuid == $driver->trip_id){
+                    $allowEdit = true;
+                }
                 // Rule 1: Driver must have an active trip
                 if (!$driverTripId) {
                     $allowCancel = false;
@@ -1618,7 +1622,8 @@ class DriverController extends Controller
                 if (isset($invoice->status) && !in_array($invoice->status, $cancellableStatuses)) {
                     $allowCancel = false;
                 }
-                                
+                 
+                
                 return [
                     'id' => $invoice->id,
                     'invoiceno' => $invoice->invoiceno,
@@ -1632,6 +1637,7 @@ class DriverController extends Controller
                     ],                    
                     'paymentterm' => $invoice->paymentterm,
                     'status' => $invoice->getStatusTextAttribute(),
+                    'allow_edit' => $allowEdit, // This field indicates if the invoice can be cancelled
                     'remark' => $invoice->remark,
                     'total' => number_format($invoice->total, 2),
                     'created_at' => $invoice->created_at->format('Y-m-d H:i:s'),
@@ -1640,6 +1646,8 @@ class DriverController extends Controller
                     'items' => $invoice->invoicedetail->map(function($detail) {
                         return [
                             'product_id' => $detail->product_id,
+                            'batch_code' => $detail->batch->batch_code,
+                            'batch_id' => $detail->product_batch_id,
                             'product_name' => optional($detail->product)->name ?? 'N/A',
                             'quantity' => (float) $detail->quantity,
                             'price' => (float) $detail->price,
@@ -1924,10 +1932,15 @@ class DriverController extends Controller
             $invoice->customer_id = $data['customer_id'];
             $invoice->driver_id = $driver->id;
             $invoice->paymentterm = $data['paymentterm'];
-            $invoice->status = 1;
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
-            $invoice->trip_id = $driver->trip_id;
+            $invoice->trip_uuid = $driver->trip_id;
+
+            if($data['paymentterm'] == 1){
+                $invoice->status = Invoice::STATUS_COMPLETED;
+            }else{
+                $invoice->status = Invoice::STATUS_NEW;
+            }
             $invoice->save();
             
             $totalprice = 0;
@@ -2031,9 +2044,297 @@ class DriverController extends Controller
         }
     }
     
+    public function editInvoice(Request $request, $id)
+    {
+        try {
+            $data = $request->all();
+            
+            // Check driver session
+            $driver = Driver::where('session', $request->header('session'))->first();
+            if (empty($driver)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
+                    'data' => null
+                ], 401);
+            }
+            
+            // Find existing invoice
+            $invoice = Invoice::where('id', $id)
+                ->where('driver_id', $driver->id)
+                ->first();
+            
+            if (empty($invoice)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'Invoice not found or you do not have permission to edit',
+                    'data' => null
+                ], 404);
+            }
+            
+            // if ($invoice->status == 1) {
+            //     return response()->json([
+            //         'result' => false,
+            //         'message' => __LINE__ . $this->message_separator . 'Invoice cannot be edited.',
+            //         'data' => null
+            //     ], 400);
+            // }
+            
+            // Validate request
+            $validator = Validator::make($request->all(), [
+                'invoiceno' => 'nullable|string|max:255',
+                'date' => 'date_format:Y-m-d',
+                'customer_id' => 'required|numeric',
+                'paymentterm' => 'required|numeric|gt:0|lt:6',
+                'remark' => 'present|nullable|string',
+                'cheque_no' => 'nullable|string',
+                'invoicedetail' => 'required|array|min:1',
+                'invoicedetail.*.product_id' => 'required|numeric',
+                'invoicedetail.*.product_batch_id' => 'required|numeric',
+                'invoicedetail.*.quantity' => 'required|numeric|min:1',
+                'invoicedetail.*.price' => 'required|numeric|min:0',
+                'invoicedetail.*.id' => 'nullable|numeric' // For existing details
+            ]);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . $validator->errors()->first(),
+                    'data' => null
+                ], 400);
+            }
+            
+            // Validate customer
+            $customer = Customer::where('id', $data['customer_id'])->first();
+            if (empty($customer)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'api.message.invalid_customer',
+                    'data' => null
+                ], 400);
+            }
+            
+            // Get trip for inventory updates
+            $trip = Trip::where('driver_id', $driver->id)->orderby('date', 'desc')->first();
+            
+            DB::beginTransaction();
+            
+            // ============================================
+            // STEP 1: RESTORE OLD INVENTORY QUANTITIES
+            // ============================================
+            $oldDetails = InvoiceDetail::where('invoice_id', $invoice->id)->get();
+            
+            foreach ($oldDetails as $oldDetail) {
+                // Restore quantity to product batch
+                $oldBatch = ProductBatch::find($oldDetail->product_batch_id);
+                if ($oldBatch) {
+                    $oldBatch->quantity = $oldBatch->quantity + $oldDetail->quantity;
+                    $oldBatch->save();
+                }
+                
+                // Restore inventory balance
+                if ($trip) {
+                    $inventorybalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
+                    if ($inventorybalance) {
+                        $inventorybalance->updateBatchQuantity(
+                            $oldDetail->product_batch_id,
+                            $oldDetail->quantity,
+                            'add' // Add back the quantity
+                        );
+                    }
+                }
+                
+                // Reverse inventory transaction (create reversal record)
+                $reversalTransaction = new InventoryTransaction();
+                $reversalTransaction->type = 1; // Stock In (reversal)
+                $reversalTransaction->product_id = $oldDetail->product_id;
+                $reversalTransaction->batch_id = $oldDetail->product_batch_id;
+                $reversalTransaction->quantity = $oldDetail->quantity;
+                $reversalTransaction->date = now();
+                $reversalTransaction->lorry_id = $trip->lorry_id ?? null;
+                $reversalTransaction->user = $driver->name;
+                $reversalTransaction->remark = 'Invoice # [' . $invoice->invoiceno . '] - Edit reversal (removed items)';
+                $reversalTransaction->save();
+            }
+            
+            // Delete old invoice details
+            InvoiceDetail::where('invoice_id', $invoice->id)->delete();
+            
+            // ============================================
+            // STEP 2: VALIDATE AND PROCESS NEW QUANTITIES
+            // ============================================
+            
+            // Validate product batches and check quantities
+            foreach ($data['invoicedetail'] as $item) {
+                $productBatch = ProductBatch::where('id', $item['product_batch_id'])
+                    ->where('product_id', $item['product_id'])
+                    ->first();
+                
+                if (empty($productBatch)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Invalid product batch for product ID: ' . $item['product_id'],
+                        'data' => null
+                    ], 400);
+                }
+                
+                if ($productBatch->quantity < $item['quantity']) {
+                    DB::rollBack();
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Insufficient batch quantity for product batch: ' . $productBatch->batch_code . '. Available: ' . $productBatch->quantity . ', Requested: ' . $item['quantity'],
+                        'data' => null
+                    ], 400);
+                }
+            }
+            
+            // ============================================
+            // STEP 3: UPDATE INVOICE HEADER
+            // ============================================
+            $invoice->date = $data['date'] ?? date('Y-m-d H:i:s');
+            $invoice->customer_id = $data['customer_id'];
+            $invoice->paymentterm = $data['paymentterm'];
+            $invoice->chequeno = $data['cheque_no'] ?? null;
+            $invoice->remark = $data['remark'] ?? null;
+            
+            // Only update invoice number if provided and different
+            if (!empty($data['invoiceno']) && $data['invoiceno'] != $invoice->invoiceno) {
+                // Check if new invoice number already exists
+                $existingInvoice = Invoice::where('invoiceno', $data['invoiceno'])->first();
+                if ($existingInvoice && $existingInvoice->id != $invoice->id) {
+                    DB::rollBack();
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'Invoice number already exists',
+                        'data' => null
+                    ], 400);
+                }
+                $invoice->invoiceno = $data['invoiceno'];
+            }
+            
+            $invoice->save();
+            
+            // ============================================
+            // STEP 4: CREATE NEW INVOICE DETAILS
+            // ============================================
+            $totalprice = 0;
+            
+            foreach ($data['invoicedetail'] as $item) {
+                $productBatch = ProductBatch::find($item['product_batch_id']);
+                
+                // Create invoice detail
+                $invoicedetail = new InvoiceDetail();
+                $invoicedetail->invoice_id = $invoice->id;
+                $invoicedetail->product_id = $item['product_id'];
+                $invoicedetail->product_batch_id = $item['product_batch_id'];
+                $invoicedetail->quantity = $item['quantity'];
+                $invoicedetail->price = $item['price'];
+                $invoicedetail->totalprice = $item['quantity'] * $item['price'];
+                $invoicedetail->remark = $item['remark'] ?? null;
+                $invoicedetail->save();
+                
+                $totalprice += $invoicedetail->totalprice;
+                
+                // Deduct quantity from product batch
+                $productBatch->quantity = $productBatch->quantity - $item['quantity'];
+                $productBatch->save();
+                
+                // Create inventory transaction record
+                $inventoryTransaction = new InventoryTransaction();
+                $inventoryTransaction->type = 2; // Stock Out
+                $inventoryTransaction->product_id = $item['product_id'];
+                $inventoryTransaction->batch_id = $item['product_batch_id'];
+                $inventoryTransaction->quantity = -$item['quantity'];
+                $inventoryTransaction->date = now();
+                $inventoryTransaction->lorry_id = $trip->lorry_id ?? null;
+                $inventoryTransaction->user = $driver->name;
+                $inventoryTransaction->remark = 'Invoice #' . $invoice->invoiceno . ' - Sale of product (edited)';
+                $inventoryTransaction->save();
+                
+                // Update lorry inventory balance
+                if ($trip) {
+                    $inventorybalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
+                    if ($inventorybalance) {
+                        $inventorybalance->updateBatchQuantity(
+                            $item['product_batch_id'],
+                            $item['quantity'],
+                            'subtract'
+                        );
+                    }
+                }
+            }
+            
+            // ============================================
+            // STEP 5: UPDATE INVOICE PAYMENT
+            // ============================================
+            if ($data['paymentterm'] == 1) {
+                // Check if payment already exists
+                $existingPayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
+                
+                if ($existingPayment) {
+                    // Update existing payment
+                    $existingPayment->amount = $totalprice;
+                    $existingPayment->save();
+                } else {
+                    // Create new payment
+                    $invoicepayment = new InvoicePayment();
+                    $invoicepayment->invoice_id = $invoice->id;
+                    $invoicepayment->type = 1;
+                    $invoicepayment->customer_id = $invoice->customer_id;
+                    $invoicepayment->amount = $totalprice;
+                    $invoicepayment->status = 1;
+                    $invoicepayment->driver_id = $driver->id;
+                    $invoicepayment->approve_by = $driver->name;
+                    $invoicepayment->approve_at = date('Y-m-d H:i:s');
+                    $invoicepayment->save();
+                }
+            } else {
+                // If payment term changed from cash to credit, delete existing payment
+                InvoicePayment::where('invoice_id', $invoice->id)->delete();
+            }
+            
+            DB::commit();
+            
+            // ============================================
+            // STEP 6: RETURN UPDATED INVOICE
+            // ============================================
+            $updatedInvoice = Invoice::where('id', $invoice->id)
+                ->with([
+                    'customer', 
+                    'driver', 
+                    'invoicedetail.product', 
+                    'invoicedetail.batch'
+                ])
+                ->first();
+            
+            // Calculate customer credit
+            $creditData = $this->calculateCustomerCredit(
+                $updatedInvoice->customer_id, 
+                $updatedInvoice->updated_at
+            );
+            
+            $updatedInvoice->newcredit = round($creditData['credit'] ?? 0, 2);
+            
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__ . $this->message_separator . 'Invoice updated successfully',
+                'data' => $updatedInvoice
+            ], 200);
+            
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__ . $this->message_separator . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
     public function getInvoiceNo(Request $request)
     {
-        try{
+    try{
             $data = $request->all();
             //check session
             $driver = Driver::where('session', $request->header('session'))->first();
@@ -2061,29 +2362,34 @@ class DriverController extends Controller
             ], 500);
         }
     }
+
     private function calculateCustomerCredit($customerId, $asOfDate)
     {
         try {
-            // Get total invoiced amount (what the customer owes)
+            // Get total invoiced amount for CREDIT payment term invoices only
             $totalInvoiced = Invoice::where('invoices.customer_id', $customerId)
-                ->where('invoices.status', 1)
+                ->where('invoices.paymentterm', Invoice::PAYMENT_TERM_CREDIT) // Only credit payment term (2)
                 ->where('invoices.updated_at', '<=', $asOfDate)
                 ->join('invoice_details', 'invoices.id', '=', 'invoice_details.invoice_id')
                 ->selectRaw('COALESCE(SUM(invoice_details.totalprice), 0) as total')
                 ->value('total'); 
 
-            // Get total paid amount (what the customer has paid)
+            // Get total paid amount for CREDIT invoices only (completed payments)
             $totalPaid = InvoicePayment::where('customer_id', $customerId)
-                ->where('status', 1)
+                ->where('status', 1) // Completed payment
                 ->where('approve_at', '<=', $asOfDate)
+                ->whereHas('invoice', function($query) {
+                    $query->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT) // Only payments for credit invoices
+                        ->where('status', Invoice::STATUS_COMPLETED);
+                })
                 ->sum('amount') ?? 0;
 
             $outstandingBalance = $totalInvoiced - $totalPaid;
 
             return [
-                'totalprice' => $totalInvoiced,
-                'paid' => $totalPaid,
-                'credit' => $outstandingBalance
+                'totalprice' => round($totalInvoiced, 2),
+                'paid' => round($totalPaid, 2),
+                'credit' => round($outstandingBalance, 2)
             ];
             
         } catch (\Exception $e) {
@@ -2186,71 +2492,232 @@ class DriverController extends Controller
 	}
 	
 
-    public function getcustomerinvoice(Request $request, $id)
+    public function getcustomerinvoice(Request $request, $id = null)
     {
         try {
-            $customer = Customer::find($id);
-            if (empty($customer)) {
+            // Get the authenticated driver from session
+            $driver = Driver::where('session', $request->header('session'))->first();
+            if (!$driver) {
                 return response()->json([
                     'result' => false,
-                    'message' => 'Customer not found',
+                    'message' => 'Invalid session',
+                    'data' => null,
+                ], 401);
+            }
+            
+            // Get all customer IDs assigned to this driver
+            $assignedCustomerIds = Assign::where('driver_id', $driver->id)
+                ->pluck('customer_id')
+                ->toArray();
+            
+            if (empty($assignedCustomerIds)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => 'No customers assigned to this driver',
                     'data' => null,
                 ], 404);
             }
-
-            // Get unpaid invoices for the customer
-            $invoices = Invoice::where('customer_id', $id)
-                ->whereDoesntHave('invoicepayment', function ($query) {
-                    $query->where('status', 1);
-                })
-                ->where('status', 0)
-                ->orderBy('date', 'desc')
-                ->get(['id', 'invoiceno', 'date']);
-
-            // Calculate total amount for each invoice
-            $invoiceData = [];
-            $totalOutstanding = 0;
-
-            foreach ($invoices as $invoice) {
-                $totalAmount = InvoiceDetail::where("invoice_id", $invoice->id)->sum('totalprice');
-                $totalOutstanding += $totalAmount;
+            
+            // Validate customer if ID provided
+            if ($id) {
+                // Check if customer is assigned to this driver
+                $customer = Customer::where('id', $id)
+                    ->whereIn('id', $assignedCustomerIds)
+                    ->first();
+                    
+                if (!$customer) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => 'Customer not found or not assigned to this driver',
+                        'data' => null,
+                    ], 404);
+                }
+            }
+            
+            // Build query to get all invoices with their details and payments
+            $query = Invoice::with(['invoicedetail', 'invoicepayment'])
+                ->whereIn('customer_id', $assignedCustomerIds) // Only show invoices for assigned customers
+                ->orderBy('date', 'desc');
+            
+            if ($id) {
+                $query->where('customer_id', $id);
+            }
+            
+            $invoices = $query->get();
+            
+            if ($invoices->isEmpty()) {
+                $message = $id ? 'No invoices found for this customer' : 'No invoices found for your assigned customers';
+                return response()->json([
+                    'result' => false,
+                    'message' => $message,
+                    'data' => null,
+                ], 404);
+            }
+            
+            if ($id) {
+                // Single customer response
+                $invoiceData = [];
+                $totalOutstanding = 0;
                 
-                $invoiceData[] = [
-                    'id' => $invoice->id,
-                    'invoice_no' => $invoice->invoiceno,
-                    'date' => $invoice->date,
-                    'total_amount' => (float) $totalAmount,
-                    'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
-                ];
-            }
-
-            if (empty($invoiceData)) {
+                foreach ($invoices as $invoice) {
+                    $totalAmount = $invoice->invoicedetail->sum('totalprice');
+                    
+                    // Check if invoice has any completed payment
+                    $hasCompletedPayment = $invoice->invoicepayment->contains(function($payment) {
+                        return $payment->status == 1;
+                    });
+                    
+                    // Only add to outstanding if no completed payment
+                    if (!$hasCompletedPayment) {
+                        $totalOutstanding += $totalAmount;
+                    }
+                    
+                    // Prepare payment records
+                    $paymentRecords = [];
+                    foreach ($invoice->invoicepayment as $payment) {
+                        $paymentRecords[] = [
+                            'id' => $payment->id,
+                            'amount' => (float) $payment->amount,
+                            'formatted_amount' => 'RM ' . number_format($payment->amount, 2),
+                            'status' => $payment->status,
+                            'status_text' => $payment->status == 1 ? 'Completed' : 'Pending',
+                            'payment_date' => $payment->approve_at ?? $payment->created_at,
+                            'remark' => $payment->remark,
+                            'chequeno' => $payment->chequeno
+                        ];
+                    }
+                    
+                    $invoiceData[] = [
+                        'id' => $invoice->id,
+                        'invoice_no' => $invoice->invoiceno,
+                        'date' => $invoice->date,
+                        'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
+                        'payment_term_code' => $invoice->paymentterm,
+                        'total_amount' => (float) $totalAmount,
+                        'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                        'is_paid' => $hasCompletedPayment,
+                        'invoice_payments' => $paymentRecords,
+                        'payment_count' => count($paymentRecords)
+                    ];
+                }
+                
                 return response()->json([
-                    'result' => false,
-                    'message' => 'No unpaid invoices found for this customer',
-                    'data' => null,
-                ], 404);
+                    'result' => true,
+                    'message' => 'Invoices retrieved successfully',
+                    'data' => [
+                        'customer_id' => (int) $id,
+                        'customer_name' => $customer->company,
+                        'total_outstanding' => (float) $totalOutstanding,
+                        'formatted_outstanding' => 'RM ' . number_format($totalOutstanding, 2),
+                        'invoice_count' => count($invoiceData),
+                        'invoices' => $invoiceData
+                    ]
+                ], 200);
+                
+            } else {
+                // All customers response - Group by customer
+                $allCustomersData = [];
+                $totalOutstandingAll = 0;
+                
+                // Group invoices by customer
+                $groupedByCustomer = $invoices->groupBy('customer_id');
+                
+                foreach ($groupedByCustomer as $customerId => $customerInvoices) {
+                    $customerModel = Customer::find($customerId);
+                    if (!$customerModel) continue;
+                    
+                    $customerInvoicesData = [];
+                    $customerTotalOutstanding = 0;
+                    
+                    foreach ($customerInvoices as $invoice) {
+                        $totalAmount = $invoice->invoicedetail->sum('totalprice');
+                        
+                        // Check if invoice has any completed payment
+                        $hasCompletedPayment = $invoice->invoicepayment->contains(function($payment) {
+                            return $payment->status == 1;
+                        });
+                        
+                        // Only add to outstanding if no completed payment
+                        if (!$hasCompletedPayment) {
+                            $customerTotalOutstanding += $totalAmount;
+                            $totalOutstandingAll += $totalAmount;
+                        }
+                        
+                        // Prepare payment records
+                        $paymentRecords = [];
+                        foreach ($invoice->invoicepayment as $payment) {
+                            $paymentRecords[] = [
+                                'id' => $payment->id,
+                                'amount' => (float) $payment->amount,
+                                'formatted_amount' => 'RM ' . number_format($payment->amount, 2),
+                                'status' => $payment->status,
+                                'status_text' => $payment->status == 1 ? 'Completed' : 'Pending',
+                                'payment_date' => $payment->approve_at ?? $payment->created_at,
+                                'remark' => $payment->remark,
+                                'chequeno' => $payment->chequeno
+                            ];
+                        }
+                        
+                        $customerInvoicesData[] = [
+                            'id' => $invoice->id,
+                            'invoice_no' => $invoice->invoiceno,
+                            'date' => $invoice->date,
+                            'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
+                            'payment_term_code' => $invoice->paymentterm,
+                            'total_amount' => (float) $totalAmount,
+                            'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                            'is_paid' => $hasCompletedPayment,
+                            'invoice_payments' => $paymentRecords,
+                            'payment_count' => count($paymentRecords)
+                        ];
+                    }
+                    
+                    $allCustomersData[] = [
+                        'customer_id' => $customerId,
+                        'customer_name' => $customerModel->company,
+                        'total_outstanding' => (float) $customerTotalOutstanding,
+                        'formatted_outstanding' => 'RM ' . number_format($customerTotalOutstanding, 2),
+                        'invoice_count' => count($customerInvoicesData),
+                        'invoices' => $customerInvoicesData
+                    ];
+                }
+                
+                return response()->json([
+                    'result' => true,
+                    'message' => 'Invoices retrieved successfully',
+                    'data' => [
+                        'total_outstanding_all' => (float) $totalOutstandingAll,
+                        'formatted_outstanding_all' => 'RM ' . number_format($totalOutstandingAll, 2),
+                        'total_customers' => count($allCustomersData),
+                        'customers' => $allCustomersData
+                    ]
+                ], 200);
             }
-
-            return response()->json([
-                'result' => true,
-                'message' => 'Invoices retrieved successfully',
-                'data' => [
-                    'customer_id' => (int) $id,
-                    'customer_name' => $customer->name,
-                    'total_outstanding' => (float) $totalOutstanding,
-                    'formatted_outstanding' => 'RM ' . number_format($totalOutstanding, 2),
-                    'invoice_count' => count($invoiceData),
-                    'invoices' => $invoiceData
-                ]
-            ], 200);
-
+            
         } catch (Exception $e) {
             return response()->json([
                 'result' => false,
                 'message' => 'Failed to retrieve invoices: ' . $e->getMessage(),
                 'data' => null
-            ], 500);
+            ], 200);
+        }
+    }
+    // Helper method to get payment term text
+    private function getPaymentTermText($paymentTerm)
+    {
+        switch($paymentTerm) {
+            case Invoice::PAYMENT_TERM_CASH:
+                return 'Cash';
+            case Invoice::PAYMENT_TERM_CREDIT:
+                return 'Credit';
+            case Invoice::PAYMENT_TERM_ONLINE:
+                return 'Online Payment';
+            case Invoice::PAYMENT_TERM_TNG:
+                return 'Touch n Go';
+            case Invoice::PAYMENT_TERM_CHEQUE:
+                return 'Cheque';
+            default:
+                return 'Unknown';
         }
     }
 
@@ -3612,118 +4079,126 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
+            
             $trip = Trip::where('driver_id', $driver->id)->where('uuid',$driver->trip_id)->first();
 
-            $lorryId = $trip->lorry_id;
-            $inventoryBalances = NULL;
-            if($lorryId) {
-                $inventoryBalances = InventoryBalance::where('lorry_id', $lorryId)->first()->getBatchesWithDetailsAttribute();
-            }
-        
-            $invoices = Invoice::where('trip_id', $driver->trip_id)
-            ->where('status', Invoice::STATUS_COMPLETED)
-            ->with(['invoicedetail.product'])
-            ->get(); 
-
-            
+            // Initialize default empty values
+            $invoices = collect(); // Empty collection instead of null
             $salesByPaymentTerm = [
-                'cash' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CASH;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'credit' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CREDIT;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'online_payment' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_ONLINE;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'tng' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_TNG;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'cheque' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CHEQUE;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
+                'cash' => 0,
+                'credit' => 0,
+                'online_payment' => 0,
+                'tng' => 0,
+                'cheque' => 0,
             ];
+            $productsSold = [];
+            $inventoryBalances = []; // Initialize this variable as it was undefined
 
-            $productsSold = $invoices->flatMap(function($invoice) {
-                    return $invoice->invoicedetail;
-                })
-                ->groupBy('product_id')
-                ->map(function($details, $productId) {
-                    $firstDetail = $details->first();
-                    return [
-                        'name' => $firstDetail->product ? $firstDetail->product->name : 'Unknown Product',
-                        'quantity' => $details->sum('quantity')
+            if($driver->trip_id != null){
+                $invoices = Invoice::where('trip_uuid', $driver->trip_id)
+                    ->where('status', Invoice::STATUS_COMPLETED)
+                    ->with(['invoicedetail.product'])
+                    ->get(); 
+
+                // Only calculate if invoices collection is not empty
+                if($invoices->isNotEmpty()) {
+                    $salesByPaymentTerm = [
+                        'cash' => round($invoices->filter(function($invoice) {
+                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CASH;
+                        })->sum(function($invoice) {
+                            return $invoice->invoicedetail->sum('totalprice');
+                        }), 2),
+                        
+                        'credit' => round($invoices->filter(function($invoice) {
+                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CREDIT;
+                        })->sum(function($invoice) {
+                            return $invoice->invoicedetail->sum('totalprice');
+                        }), 2),
+                        
+                        'online_payment' => round($invoices->filter(function($invoice) {
+                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_ONLINE;
+                        })->sum(function($invoice) {
+                            return $invoice->invoicedetail->sum('totalprice');
+                        }), 2),
+                        
+                        'tng' => round($invoices->filter(function($invoice) {
+                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_TNG;
+                        })->sum(function($invoice) {
+                            return $invoice->invoicedetail->sum('totalprice');
+                        }), 2),
+                        
+                        'cheque' => round($invoices->filter(function($invoice) {
+                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CHEQUE;
+                        })->sum(function($invoice) {
+                            return $invoice->invoicedetail->sum('totalprice');
+                        }), 2),
                     ];
-                })
-                ->values()
-                ->toArray();
 
-            $trip = Trip::where('driver_id', $driver->id)
-                ->orderBy('date', 'desc')
-                ->first();
-                
-            if ($trip->type == Trip::END_TRIP) {
-                $end_time = $trip->date;
+                    $productsSold = $invoices->flatMap(function($invoice) {
+                            return $invoice->invoicedetail;
+                        })
+                        ->groupBy('product_id')
+                        ->map(function($details, $productId) {
+                            $firstDetail = $details->first();
+                            return [
+                                'name' => $firstDetail->product ? $firstDetail->product->name : 'Unknown Product',
+                                'quantity' => $details->sum('quantity')
+                            ];
+                        })
+                        ->values()
+                        ->toArray();
+                }
+            }
+            
+            // Handle trip data
+            $tripArray = [];
+            if($trip){
+                if ($trip->type == Trip::END_TRIP) {
+                    $end_time = $trip->date;
 
-                $start_trip = Trip::where('driver_id', $driver->id)
-                    ->orderBy('date', 'desc')
-                    ->where('type', Trip::START_TRIP) // Assuming START_TRIP is 1
-                    ->first();
+                    $start_trip = Trip::where('driver_id', $driver->id)
+                        ->orderBy('date', 'desc')
+                        ->where('type', Trip::START_TRIP)
+                        ->first();
 
-                $start_time = $start_trip->date ?? null;
-                
-                // When we have both start and end trip, return both in the array
-                $tripArray = [
-                    [
-                        'trip_id' => $start_trip->uuid ?? '',
-                        'start_time' => $start_time ?? '',
-                        'type' => 'Start Trip',
-                    ],
-                    [
-                        'trip_id' => $trip->uuid,
-                        'end_time' => $end_time ?? '',
-                        'type' => 'End Trip',
-                    ]
-                ];
-            } else {
-                // When we only have start trip, return only one array
-                $start_time = $trip->date;
-                $end_time = null;
-                
-                $tripArray = [
-                    [
-                        'trip_id' => $trip->uuid,
-                        'start_time' => $start_time ?? '',
-                        'type' => 'Start Trip',
-                    ]
-                ];
+                    $start_time = $start_trip->date ?? null;
+                    
+                    $tripArray = [
+                        [
+                            'trip_id' => $start_trip->uuid ?? '',
+                            'start_time' => $start_time ?? '',
+                            'type' => 'Start Trip',
+                        ],
+                        [
+                            'trip_id' => $trip->uuid,
+                            'end_time' => $end_time ?? '',
+                            'type' => 'End Trip',
+                        ]
+                    ];
+                } else {
+                    $start_time = $trip->date;
+                    $end_time = null;
+                    
+                    $tripArray = [
+                        [
+                            'trip_id' => $trip->uuid,
+                            'start_time' => $start_time ?? '',
+                            'type' => 'Start Trip',
+                        ]
+                    ];
+                }
             }
 
             $result = [
                 'sales_summary' => [
-                    'total_invoices' => $invoices->count(),
+                    'total_invoices' => $invoices ? $invoices->count() : 0,
                     'by_payment_term' => $salesByPaymentTerm,
                 ],
-
                 'productsold' => $productsSold,
-                'inventory_balance'=> $inventoryBalances,
-
+                'inventory_balance' => $inventoryBalances, // Fixed variable name (was missing 's')
                 'trip' => $tripArray
             ];
+            
             return response()->json([
                 'result' => true,
                 'message' => __LINE__.$this->message_separator.'api.message.get_dashboard_successfully',
@@ -5868,6 +6343,7 @@ class DriverController extends Controller
             // Create inventory transaction for lorry (stock out)
             InventoryTransaction::create([
                 'type' => InventoryTransaction::TYPE_RETURN,
+                'warehouse_id' => $request->warehouse_id,
                 'lorry_id' => $request->lorry_id,
                 'product_id' => $batch->product_id,
                 'batch_id' => $request->batch_id,
