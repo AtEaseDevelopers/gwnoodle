@@ -139,13 +139,16 @@ class InvoiceDataTable extends DataTable
                         'render' => 'function(data, type){var totalprice = 0; $.each(data,function(index,value){ totalprice=totalprice+parseFloat(value.totalprice) }); return totalprice.toFixed(2);}'
                     ],
                     [
-                    'targets' => 5,
-                    'render' => 'function(data, type, row){
+                        'targets' => 5, // Payment term column index
+                        'render' => 'function(data, type, row){
                             var paymentTerms = {
-                                1: \'Cash\',
-                                2: \'Credit\',
+                                1: "Cash",
+                                2: "Credit",
+                                3: "Online Payment",
+                                4: "Touch n Go",
+                                5: "Cheque"
                             };
-                            return paymentTerms[data] || \'Unknown\';
+                            return paymentTerms[data] || "Unknown";
                         }'
                     ],
                     [
