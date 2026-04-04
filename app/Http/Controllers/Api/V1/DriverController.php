@@ -1611,7 +1611,11 @@ class DriverController extends Controller
                 
                 // Check if this specific invoice can be cancelled
                 $allowCancel = true;
-                
+                $allowEdit = false;
+
+                if($invoice->trip_uuid == $driver->trip_id){
+                    $allowEdit = true;
+                }
                 // Rule 1: Driver must have an active trip
                 if (!$driverTripId) {
                     $allowCancel = false;
@@ -1627,7 +1631,8 @@ class DriverController extends Controller
                 if (isset($invoice->status) && !in_array($invoice->status, $cancellableStatuses)) {
                     $allowCancel = false;
                 }
-                                
+                 
+                
                 return [
                     'id' => $invoice->id,
                     'invoiceno' => $invoice->invoiceno,
@@ -1641,6 +1646,7 @@ class DriverController extends Controller
                     ],                    
                     'paymentterm' => $invoice->paymentterm,
                     'status' => $invoice->getStatusTextAttribute(),
+                    'allow_edit' => $allowEdit, // This field indicates if the invoice can be cancelled
                     'remark' => $invoice->remark,
                     'total' => number_format($invoice->total, 2),
                     'created_at' => $invoice->created_at->format('Y-m-d H:i:s'),
