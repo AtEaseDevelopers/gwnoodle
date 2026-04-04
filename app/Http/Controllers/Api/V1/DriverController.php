@@ -1247,6 +1247,7 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
+            
             if ($id){
                 $customers = Customer::select('customers.*', 'assigns.sequence')
                     ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
@@ -1262,23 +1263,13 @@ class DriverController extends Controller
                     ->get();
             }
             
-            
             // Add credit amount for each customer
             foreach ($customers as $customer) {
-                // Get all credit invoices for this customer (payment term = 2)
-                $invoices = Invoice::where('customer_id', $customer->id)
-                    ->where('status', Invoice::STATUS_COMPLETED)
-                    ->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT) // 2 = Credit
-                    ->with(['invoicedetail'])
-                    ->get();
-                
-                // Calculate total credit amount from invoice details
-                $totalCredit = 0;
-                foreach ($invoices as $invoice) {
-                    $totalCredit += $invoice->invoicedetail->sum('totalprice');
-                }
-                // Add credit amount to customer object
-                $customer->credit_amount = round($totalCredit, 2);
+                // Calculate credit amount using the same logic as calculateCustomerCredit
+                $creditData = $this->calculateCustomerCredit($customer->id, now());
+                $customer->credit_amount = $creditData['credit'];
+                $customer->total_credit_invoiced = $creditData['totalprice'];
+                $customer->total_credit_paid = $creditData['paid'];
             }
             
             //process
