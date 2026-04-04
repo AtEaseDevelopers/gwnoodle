@@ -11,7 +11,7 @@ use App\Models\ApiLog;
 
 class ProductController extends Controller
 {
-    const BATCH_SIZE = 5; // testing with 5, adjust as needed
+    const BATCH_SIZE = 10; // testing with 5, adjust as needed
 
     public function update(Request $request)
     {
@@ -36,7 +36,7 @@ class ProductController extends Controller
 
                 if (!empty($validationErrors)) {
                     $processedResults[] = [
-                        'unit_code ' => $record['ItemCode'] ?? null,
+                        'unit_code' => $record['ItemCode'] ?? null,
                         'status'     => 'validation_error',
                         'errors'     => $validationErrors,
                     ];
@@ -45,7 +45,7 @@ class ProductController extends Controller
 
                 // 2. Clean 'updateOrCreate' logic (Replaces the big if/else block)
                 Product::updateOrCreate(
-                    ['unit_code ' => $record['ItemCode']],
+                    ['unit_code' => $record['ItemCode']],
                     [
                         'name'                => $record['Description'] ?? null,
                         'price'               => $record['Price'] ?? 0,
@@ -77,22 +77,30 @@ class ProductController extends Controller
         return response()->json($responseData, $statusCode);
     }
     
-    protected function manualValidation(array $record)
+   protected function manualValidation(array $record)
     {
         $errors = [];
 
-        if (empty($record['ItemCode']) || !is_string($record['ItemCode'])) {
+        // Check if ItemCode is missing or truly an empty string
+        if (!isset($record['ItemCode']) || trim($record['ItemCode']) === '') {
             $errors['ItemCode'] = 'The ItemCode field is required and must be a string.';
         }
-        if (empty($record['Price']) || !is_numeric($record['Price'])) {
+
+        // Allow Price to be 0, but it must be numeric if provided
+        if (!array_key_exists('Price', $record) || ($record['Price'] !== null && !is_numeric($record['Price']))) {
             $errors['Price'] = 'The Price field is required and must be a number.';
         }
-        if (empty($record['Cost']) || !is_numeric($record['Cost'])) {
-            $errors['Cost'] = 'The Cost field is required and must be a number.';
+
+        // Allow Cost to be null or 0. Only error if it has a weird string value.
+        if (array_key_exists('Cost', $record) && $record['Cost'] !== null && !is_numeric($record['Cost'])) {
+            $errors['Cost'] = 'The Cost field must be a number.';
         }
-        if (empty($record['UOM']) || !is_string($record['UOM'])) {
+
+        // Check if UOM is missing or empty
+        if (!isset($record['UOM']) || trim($record['UOM']) === '') {
             $errors['UOM'] = 'The UOM field is required and must be a string.';
         }
+
         return $errors;
     }
 }

@@ -137,8 +137,7 @@ class InvoiceController extends Controller
                 $statusCode = 422; // Unprocessable Entity
             } else {
                 // Find Invoice
-                $invoice = Invoice::where('invoice_no', $request->invoice_no)->first();
-
+                $invoice = Invoice::find($request->id);
                 if (!$invoice) {
                     $responseData = [
                         'status'  => 'error',

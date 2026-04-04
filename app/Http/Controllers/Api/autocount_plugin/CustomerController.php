@@ -16,18 +16,7 @@ use Illuminate\Support\Facades\Log;
 
 class CustomerController extends Controller
 {
-    /**
-     * Create a new controller instance.
-     *
-     * @return void
-     */
-    /**
-     * Show the application dashboard.
-     *
-     * @return \Illuminate\Contracts\Support\Renderable
-     */
-
-    const BATCH_SIZE = 5; // testing with 5, adjust as needed
+    const BATCH_SIZE = 10; // testing with 5, adjust as needed
 
     public function update(Request $request)
     {
@@ -49,34 +38,35 @@ class CustomerController extends Controller
                     $customer_data['Address3'] ?? null,
                     $customer_data['Address4'] ?? null
                 ]);
-                $full_address = implode(', ', $addressParts);
 
-                $status   = (isset($customer_data['IsActive']) && $customer_data['IsActive'] === 'T') ? 1 : 0;
-                $postcode = isset($customer_data['ZipCode']) ? (int)preg_replace('/\D/', '', $customer_data['ZipCode']) : 0;
+                $full_address = implode(', ', $addressParts);
+                $status       = (isset($customer_data['IsActive']) && $customer_data['IsActive'] === 'T') ? 1 : 0;
+            
+                // MAPPED: 'ZipCode' is now 'PostCode'
+                $postcode = isset($customer_data['PostCode']) ? (int)preg_replace('/\D/', '', $customer_data['PostCode']) : 0;
 
                 // Use Laravel's updateOrCreate to automatically Insert OR Update
                 $customer = Customer::updateOrCreate(
                     ['code' => $customer_data['AccNo']], 
                     [
                         'company'                  => $customer_data['CompanyName'] ?? '',
-                        'customer_type'            => $customer_data['DebtorType'] ?? null,
-                        'chinese_name'             => $customer_data['Name2'] ?? null,
+                        'customer_type'            => $customer_data['DebtorType'] ?? 'unknown',     // MAPPED: 'Type' is now 'DebtorType'
+                        //'chinese_name'             => $customer_data['Desc2'] ?? null, 
                         'phone'                    => $customer_data['Phone1'] ?? null,
                         'address'                  => $full_address,
                         'status'                   => $status,
-                        'tin'                      => $customer_data['TIN'] ?? null,
-                        'sst_registration_no'      => $customer_data['TaxRegNo'] ?? null,
-                        'registration_no'          => $customer_data['BRN'] ?? null,
-                        'tourism_tax_registration' => $customer_data['TourismTaxRegNo'] ?? null,
-                        'msic'                     => $customer_data['MSIC'] ?? null,
-                        'city'                     => $customer_data['City'] ?? null,
-                        'country'                  => $customer_data['Country'] ?? null,
+                        'tin'                      => $customer_data['TIN'] ?? null,                       
+                        'sst_registration_no'      => $customer_data['SSTRegisterNo'] ?? null,        // MAPPED: 'TaxRegNo' is now 'SSTRegisterNo' (or could use GSTRegisterNo)
+                        'registration_no'          => $customer_data['RegisterNo'] ?? null,           // MAPPED: 'BRN' is now 'RegisterNo' 
+                        'tourism_tax_registration' => $customer_data['TourismTaxRegisterNo'] ?? null, // MAPPED: 'TourismTaxRegNo' is now 'TourismTaxRegisterNo'                        
+                        'msic'                     => $customer_data['MSICCode'] ?? null,             // MAPPED: 'MSIC' is now 'MSICCode'
+                        'city'                     => null,
+                        'country'                  => $customer_data['CountryCode'] ?? null, 
                         'postcode'                 => $postcode,
                         'email'                    => $customer_data['EmailAddress'] ?? null,
-                        'group'                    => $customer_data['Area'] ?? null,
-                        
-                        'paymentterm'              => ($customer_data['DisplayTerm'] === 'Cash') ? 1 : 3, // Assuming 'Cash' = 1, others = 3 (Credit Note) - adjust as needed
-                        'state'                    => StateCode::where('state', $customer_data['State'])->value('id') ?? null,
+                        'group'                    => $customer_data['AreaCode'] ?? null, // MAPPED: 'Area' is now 'AreaCode'
+                        'paymentterm'              => (isset($customer_data['DisplayTerm']) && $customer_data['DisplayTerm'] === 'Cash') ? 1 : 3, 
+                        'state'                    => StateCode::where('state', $customer_data['StateCode'] ?? '')->value('id') ?? null,  // MAPPED: 'State' is now 'StateCode'
                         'driver_id'                => Agent::where('employeeid', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
                     ]
                 );
