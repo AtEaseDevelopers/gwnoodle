@@ -1646,7 +1646,7 @@ class DriverController extends Controller
                     'items' => $invoice->invoicedetail->map(function($detail) {
                         return [
                             'product_id' => $detail->product_id,
-                            'batch_code' => $detail->batch_code,
+                            'batch_code' => $detail->batch->batch_code,
                             'batch_id' => $detail->product_batch_id,
                             'product_name' => optional($detail->product)->name ?? 'N/A',
                             'quantity' => (float) $detail->quantity,
