@@ -2498,7 +2498,15 @@ class DriverController extends Controller
     public function getcustomerinvoice(Request $request, $id = null)
     {
         try {
-            if($id){
+            // Build base query for unpaid invoices
+            $query = Invoice::where('status', Invoice::STATUS_COMPLETED)
+                ->whereDoesntHave('invoicepayment', function ($query) {
+                    $query->where('status', 1); // No completed payments
+                })
+                ->orderBy('date', 'desc');
+            
+            // Filter by customer if ID provided
+            if ($id) {
                 $customer = Customer::find($id);
                 if (empty($customer)) {
                     return response()->json([
@@ -2507,49 +2515,62 @@ class DriverController extends Controller
                         'data' => null,
                     ], 404);
                 }
+                $query->where('customer_id', $id);
+                $invoices = $query->get();
                 
-                // Get unpaid invoices for the customer (invoices with no completed payments)
-                $invoices = Invoice::where('customer_id', $id)
-                    ->where('status', Invoice::STATUS_COMPLETED) // Status 1 (completed invoices)
-                    ->whereDoesntHave('invoicepayment', function ($query) {
-                        $query->where('status', 1); // No completed payments
-                    })
-                    ->orderBy('date', 'desc')
-                    ->get(['id', 'invoiceno', 'date', 'paymentterm']);
-            } else {
-                // Get all customers with unpaid invoices
-                $customers = Customer::has('invoices', '>', 0)->get();
+                if ($invoices->isEmpty()) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => 'No unpaid invoices found for this customer',
+                        'data' => null,
+                    ], 404);
+                }
                 
+                // Calculate totals for specific customer
                 $invoiceData = [];
                 $totalOutstanding = 0;
                 
-                foreach ($customers as $customer) {
-                    $invoices = Invoice::where('customer_id', $customer->id)
-                        ->where('status', Invoice::STATUS_COMPLETED)
-                        ->whereDoesntHave('invoicepayment', function ($query) {
-                            $query->where('status', 1);
-                        })
-                        ->orderBy('date', 'desc')
-                        ->get(['id', 'invoiceno', 'date', 'paymentterm']);
+                foreach ($invoices as $invoice) {
+                    $totalAmount = InvoiceDetail::where("invoice_id", $invoice->id)->sum('totalprice');
+                    $totalOutstanding += $totalAmount;
                     
-                    foreach ($invoices as $invoice) {
-                        $totalAmount = InvoiceDetail::where("invoice_id", $invoice->id)->sum('totalprice');
-                        $totalOutstanding += $totalAmount;
-                        
-                        $invoiceData[] = [
-                            'customer_id' => $customer->id,
-                            'customer_name' => $customer->name,
-                            'invoice_id' => $invoice->id,
-                            'invoice_no' => $invoice->invoiceno,
-                            'date' => $invoice->date,
-                            'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
-                            'total_amount' => (float) $totalAmount,
-                            'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
-                        ];
-                    }
+                    $invoiceData[] = [
+                        'id' => $invoice->id,
+                        'invoice_no' => $invoice->invoiceno,
+                        'date' => $invoice->date,
+                        'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
+                        'payment_term_code' => $invoice->paymentterm,
+                        'total_amount' => (float) $totalAmount,
+                        'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
+                    ];
                 }
                 
-                if (empty($invoiceData)) {
+                return response()->json([
+                    'result' => true,
+                    'message' => 'Invoices retrieved successfully',
+                    'data' => [
+                        'customer_id' => (int) $id,
+                        'customer_name' => $customer->company, // Using company name instead of name
+                        'total_outstanding' => (float) $totalOutstanding,
+                        'formatted_outstanding' => 'RM ' . number_format($totalOutstanding, 2),
+                        'invoice_count' => count($invoiceData),
+                        'invoices' => $invoiceData
+                    ]
+                ], 200);
+                
+            } else {
+                // Get all customers with unpaid invoices
+                $customersWithUnpaidInvoices = Customer::whereIn('id', function($query) {
+                    $query->select('customer_id')
+                        ->from('invoices')
+                        ->where('status', Invoice::STATUS_COMPLETED)
+                        ->whereDoesntHave('invoicepayment', function ($q) {
+                            $q->where('status', 1);
+                        })
+                        ->groupBy('customer_id');
+                })->get();
+                
+                if ($customersWithUnpaidInvoices->isEmpty()) {
                     return response()->json([
                         'result' => false,
                         'message' => 'No unpaid invoices found',
@@ -2557,57 +2578,52 @@ class DriverController extends Controller
                     ], 404);
                 }
                 
+                $allInvoiceData = [];
+                $totalOutstandingAll = 0;
+                
+                foreach ($customersWithUnpaidInvoices as $customer) {
+                    $invoices = Invoice::where('customer_id', $customer->id)
+                        ->where('status', Invoice::STATUS_COMPLETED)
+                        ->whereDoesntHave('invoicepayment', function ($query) {
+                            $query->where('status', 1);
+                        })
+                        ->orderBy('date', 'desc')
+                        ->get();
+                    
+                    $customerTotal = 0;
+                    
+                    foreach ($invoices as $invoice) {
+                        $totalAmount = InvoiceDetail::where("invoice_id", $invoice->id)->sum('totalprice');
+                        $customerTotal += $totalAmount;
+                        
+                        $allInvoiceData[] = [
+                            'customer_id' => $customer->id,
+                            'customer_name' => $customer->company,
+                            'invoice_id' => $invoice->id,
+                            'invoice_no' => $invoice->invoiceno,
+                            'date' => $invoice->date,
+                            'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
+                            'payment_term_code' => $invoice->paymentterm,
+                            'total_amount' => (float) $totalAmount,
+                            'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
+                        ];
+                    }
+                    
+                    $totalOutstandingAll += $customerTotal;
+                }
+                
                 return response()->json([
                     'result' => true,
                     'message' => 'Invoices retrieved successfully',
                     'data' => [
-                        'total_outstanding' => (float) $totalOutstanding,
-                        'formatted_outstanding' => 'RM ' . number_format($totalOutstanding, 2),
-                        'invoice_count' => count($invoiceData),
-                        'invoices' => $invoiceData
+                        'total_outstanding' => (float) $totalOutstandingAll,
+                        'formatted_outstanding' => 'RM ' . number_format($totalOutstandingAll, 2),
+                        'invoice_count' => count($allInvoiceData),
+                        'invoices' => $allInvoiceData
                     ]
                 ], 200);
             }
-
-            // Calculate total amount for each invoice (for specific customer)
-            $invoiceData = [];
-            $totalOutstanding = 0;
-
-            foreach ($invoices as $invoice) {
-                $totalAmount = InvoiceDetail::where("invoice_id", $invoice->id)->sum('totalprice');
-                $totalOutstanding += $totalAmount;
-                
-                $invoiceData[] = [
-                    'id' => $invoice->id,
-                    'invoice_no' => $invoice->invoiceno,
-                    'date' => $invoice->date,
-                    'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
-                    'total_amount' => (float) $totalAmount,
-                    'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
-                ];
-            }
-
-            if (empty($invoiceData)) {
-                return response()->json([
-                    'result' => false,
-                    'message' => 'No unpaid invoices found for this customer',
-                    'data' => null,
-                ], 404);
-            }
-
-            return response()->json([
-                'result' => true,
-                'message' => 'Invoices retrieved successfully',
-                'data' => [
-                    'customer_id' => (int) $id,
-                    'customer_name' => $customer->name,
-                    'total_outstanding' => (float) $totalOutstanding,
-                    'formatted_outstanding' => 'RM ' . number_format($totalOutstanding, 2),
-                    'invoice_count' => count($invoiceData),
-                    'invoices' => $invoiceData
-                ]
-            ], 200);
-
+            
         } catch (Exception $e) {
             return response()->json([
                 'result' => false,
@@ -2616,6 +2632,7 @@ class DriverController extends Controller
             ], 500);
         }
     }
+
 
     // Add this helper method to your controller
     private function getPaymentTermText($paymentTerm)
