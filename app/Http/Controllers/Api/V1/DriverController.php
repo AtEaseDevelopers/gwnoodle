@@ -2366,7 +2366,6 @@ class DriverController extends Controller
         try {
             // Get total invoiced amount for CREDIT payment term invoices only
             $totalInvoiced = Invoice::where('invoices.customer_id', $customerId)
-                ->where('invoices.status', Invoice::STATUS_COMPLETED)
                 ->where('invoices.paymentterm', Invoice::PAYMENT_TERM_CREDIT) // Only credit payment term (2)
                 ->where('invoices.updated_at', '<=', $asOfDate)
                 ->join('invoice_details', 'invoices.id', '=', 'invoice_details.invoice_id')
