@@ -2498,15 +2498,15 @@ class DriverController extends Controller
     public function getcustomerinvoice(Request $request, $id = null)
     {
         try {
-            $customer = Customer::find($id);
-            if (empty($customer)) {
-                return response()->json([
-                    'result' => false,
-                    'message' => 'Customer not found',
-                    'data' => null,
-                ], 404);
-            }
             if($id){
+                $customer = Customer::find($id);
+                if (empty($customer)) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => 'Customer not found',
+                        'data' => null,
+                    ], 404);
+                }
                 // Get unpaid invoices for the customer
                 $invoices = Invoice::where('customer_id', $id)
                     ->whereDoesntHave('invoicepayment', function ($query) {
