@@ -2515,7 +2515,7 @@ class DriverController extends Controller
                 }
             }
             
-            // Get all invoices with their details and payments
+            // Build query to get all invoices with their details and payments
             $query = Invoice::with(['invoicedetail', 'invoicepayment'])
                 ->where('status', Invoice::STATUS_COMPLETED)
                 ->orderBy('date', 'desc');
@@ -2526,16 +2526,8 @@ class DriverController extends Controller
             
             $invoices = $query->get();
             
-            // Filter invoices without completed payments
-            $unpaidInvoices = $invoices->filter(function($invoice) {
-                $hasCompletedPayment = $invoice->invoicepayment->contains(function($payment) {
-                    return $payment->status == 1; // Completed payment
-                });
-                return !$hasCompletedPayment;
-            });
-            
-            if ($unpaidInvoices->isEmpty()) {
-                $message = $id ? 'No unpaid invoices found for this customer' : 'No unpaid invoices found';
+            if ($invoices->isEmpty()) {
+                $message = $id ? 'No invoices found for this customer' : 'No invoices found';
                 return response()->json([
                     'result' => false,
                     'message' => $message,
@@ -2548,9 +2540,33 @@ class DriverController extends Controller
                 $invoiceData = [];
                 $totalOutstanding = 0;
                 
-                foreach ($unpaidInvoices as $invoice) {
+                foreach ($invoices as $invoice) {
                     $totalAmount = $invoice->invoicedetail->sum('totalprice');
-                    $totalOutstanding += $totalAmount;
+                    
+                    // Check if invoice has any completed payment
+                    $hasCompletedPayment = $invoice->invoicepayment->contains(function($payment) {
+                        return $payment->status == 1;
+                    });
+                    
+                    // Only add to outstanding if no completed payment
+                    if (!$hasCompletedPayment) {
+                        $totalOutstanding += $totalAmount;
+                    }
+                    
+                    // Prepare payment records
+                    $paymentRecords = [];
+                    foreach ($invoice->invoicepayment as $payment) {
+                        $paymentRecords[] = [
+                            'id' => $payment->id,
+                            'amount' => (float) $payment->amount,
+                            'formatted_amount' => 'RM ' . number_format($payment->amount, 2),
+                            'status' => $payment->status,
+                            'status_text' => $payment->status == 1 ? 'Completed' : 'Pending',
+                            'payment_date' => $payment->approve_at ?? $payment->created_at,
+                            'remark' => $payment->remark,
+                            'chequeno' => $payment->chequeno
+                        ];
+                    }
                     
                     $invoiceData[] = [
                         'id' => $invoice->id,
@@ -2559,7 +2575,10 @@ class DriverController extends Controller
                         'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
                         'payment_term_code' => $invoice->paymentterm,
                         'total_amount' => (float) $totalAmount,
-                        'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
+                        'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                        'is_paid' => $hasCompletedPayment,
+                        'invoice_payments' => $paymentRecords, // Can be empty array if no payments
+                        'payment_count' => count($paymentRecords)
                     ];
                 }
                 
@@ -2577,43 +2596,81 @@ class DriverController extends Controller
                 ], 200);
                 
             } else {
-                // All customers response
-                $allInvoiceData = [];
+                // All customers response - Group by customer
+                $allCustomersData = [];
                 $totalOutstandingAll = 0;
                 
-                // Group by customer
-                $groupedByCustomer = $unpaidInvoices->groupBy('customer_id');
+                // Group invoices by customer
+                $groupedByCustomer = $invoices->groupBy('customer_id');
                 
                 foreach ($groupedByCustomer as $customerId => $customerInvoices) {
                     $customerModel = Customer::find($customerId);
                     if (!$customerModel) continue;
                     
+                    $customerInvoicesData = [];
+                    $customerTotalOutstanding = 0;
+                    
                     foreach ($customerInvoices as $invoice) {
                         $totalAmount = $invoice->invoicedetail->sum('totalprice');
-                        $totalOutstandingAll += $totalAmount;
                         
-                        $allInvoiceData[] = [
-                            'customer_id' => $customerId,
-                            'customer_name' => $customerModel->company,
-                            'invoice_id' => $invoice->id,
+                        // Check if invoice has any completed payment
+                        $hasCompletedPayment = $invoice->invoicepayment->contains(function($payment) {
+                            return $payment->status == 1;
+                        });
+                        
+                        // Only add to outstanding if no completed payment
+                        if (!$hasCompletedPayment) {
+                            $customerTotalOutstanding += $totalAmount;
+                            $totalOutstandingAll += $totalAmount;
+                        }
+                        
+                        // Prepare payment records
+                        $paymentRecords = [];
+                        foreach ($invoice->invoicepayment as $payment) {
+                            $paymentRecords[] = [
+                                'id' => $payment->id,
+                                'amount' => (float) $payment->amount,
+                                'formatted_amount' => 'RM ' . number_format($payment->amount, 2),
+                                'status' => $payment->status,
+                                'status_text' => $payment->status == 1 ? 'Completed' : 'Pending',
+                                'payment_date' => $payment->approve_at ?? $payment->created_at,
+                                'remark' => $payment->remark,
+                                'chequeno' => $payment->chequeno
+                            ];
+                        }
+                        
+                        $customerInvoicesData[] = [
+                            'id' => $invoice->id,
                             'invoice_no' => $invoice->invoiceno,
                             'date' => $invoice->date,
                             'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
                             'payment_term_code' => $invoice->paymentterm,
                             'total_amount' => (float) $totalAmount,
-                            'formatted_amount' => 'RM ' . number_format($totalAmount, 2)
+                            'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                            'is_paid' => $hasCompletedPayment,
+                            'invoice_payments' => $paymentRecords, // Can be empty array if no payments
+                            'payment_count' => count($paymentRecords)
                         ];
                     }
+                    
+                    $allCustomersData[] = [
+                        'customer_id' => $customerId,
+                        'customer_name' => $customerModel->company,
+                        'total_outstanding' => (float) $customerTotalOutstanding,
+                        'formatted_outstanding' => 'RM ' . number_format($customerTotalOutstanding, 2),
+                        'invoice_count' => count($customerInvoicesData),
+                        'invoices' => $customerInvoicesData
+                    ];
                 }
                 
                 return response()->json([
                     'result' => true,
                     'message' => 'Invoices retrieved successfully',
                     'data' => [
-                        'total_outstanding' => (float) $totalOutstandingAll,
-                        'formatted_outstanding' => 'RM ' . number_format($totalOutstandingAll, 2),
-                        'invoice_count' => count($allInvoiceData),
-                        'invoices' => $allInvoiceData
+                        'total_outstanding_all' => (float) $totalOutstandingAll,
+                        'formatted_outstanding_all' => 'RM ' . number_format($totalOutstandingAll, 2),
+                        'total_customers' => count($allCustomersData),
+                        'customers' => $allCustomersData
                     ]
                 ], 200);
             }
@@ -2627,7 +2684,7 @@ class DriverController extends Controller
         }
     }
 
-    // Add this helper method to your controller
+    // Helper method to get payment term text
     private function getPaymentTermText($paymentTerm)
     {
         switch($paymentTerm) {
