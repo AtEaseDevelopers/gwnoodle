@@ -3917,7 +3917,7 @@ class DriverController extends Controller
             $inventoryBalances = []; // Initialize this variable as it was undefined
 
             if($driver->trip_id != null){
-                $invoices = Invoice::where('trip_id', $driver->trip_id)
+                $invoices = Invoice::where('trip_uuid', $driver->trip_id)
                     ->where('status', Invoice::STATUS_COMPLETED)
                     ->with(['invoicedetail.product'])
                     ->get(); 
