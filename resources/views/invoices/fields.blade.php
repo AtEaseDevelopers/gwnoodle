@@ -72,7 +72,13 @@
 <!-- Paymentterm Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('paymentterm',  __('invoices.payment_term'))  !!}
-    {{ Form::select('paymentterm', array(1 => 'Cash' , 2 => 'Credit'), null, ['class' => 'form-control']) }}
+    {{ Form::select('paymentterm', [
+        1 => 'Cash',
+        2 => 'Credit',
+        3 => 'Online Payment',
+        4 => 'Touch n Go',
+        5 => 'Cheque'
+    ], null, ['class' => 'form-control', 'placeholder' => 'Select Payment Term']) }}
 </div>
 
 <!-- ChequeNo Field -->
