@@ -754,7 +754,6 @@ class InvoiceController extends AppBaseController
         try {
             // Get total invoiced amount for credit invoices
             $totalInvoiced = Invoice::where('invoices.customer_id', $customerId)
-                ->where('invoices.status', Invoice::STATUS_COMPLETED)
                 ->where('invoices.paymentterm', Invoice::PAYMENT_TERM_CREDIT)
                 ->where('invoices.updated_at', '<=', $asOfDate)
                 ->join('invoice_details', 'invoices.id', '=', 'invoice_details.invoice_id')
