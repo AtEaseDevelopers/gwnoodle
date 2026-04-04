@@ -2506,15 +2506,24 @@ class DriverController extends Controller
                     'data' => null,
                 ], 404);
             }
-
-            // Get unpaid invoices for the customer
-            $invoices = Invoice::where('customer_id', $id)
-                ->whereDoesntHave('invoicepayment', function ($query) {
-                    $query->where('status', 1);
-                })
-                ->where('status', 0)
-                ->orderBy('date', 'desc')
-                ->get(['id', 'invoiceno', 'date']);
+            if($id){
+                // Get unpaid invoices for the customer
+                $invoices = Invoice::where('customer_id', $id)
+                    ->whereDoesntHave('invoicepayment', function ($query) {
+                        $query->where('status', 1);
+                    })
+                    ->where('status', 0)
+                    ->orderBy('date', 'desc')
+                    ->get(['id', 'invoiceno', 'date']);
+            }else{
+                $invoices = Invoice::whereDoesntHave('invoicepayment', function ($query) {
+                        $query->where('status', 1);
+                    })
+                    ->where('status', 0)
+                    ->orderBy('date', 'desc')
+                    ->get(['id', 'invoiceno', 'date']);
+            }
+            
 
             // Calculate total amount for each invoice
             $invoiceData = [];
