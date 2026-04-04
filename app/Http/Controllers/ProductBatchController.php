@@ -784,28 +784,36 @@ class ProductBatchController extends AppBaseController
         $barcode = imagecreatefromstring(base64_decode($barcodeBase64));
 
         $horizontalPadding = 80;
+        $topPadding = 80; // Added top padding
+        $bottomPadding = 110; // Space for text at bottom
+        
         $width = imagesx($barcode) + ($horizontalPadding * 2);
-        $height = imagesy($barcode) + 120;
+        $height = imagesy($barcode) + $topPadding + $bottomPadding;
 
         $canvas = imagecreatetruecolor($width, $height);
         $white = imagecolorallocate($canvas, 255, 255, 255);
         $black = imagecolorallocate($canvas, 0, 0, 0);
 
         imagefill($canvas, 0, 0, $white);
-        imagecopy($canvas, $barcode, $horizontalPadding, 0, 0, 0, imagesx($barcode), imagesy($barcode));
+        
+        // Place barcode with top padding
+        imagecopy($canvas, $barcode, $horizontalPadding, $topPadding, 0, 0, imagesx($barcode), imagesy($barcode));
 
         $fontPath = public_path('fonts/DejaVuSans.ttf');
         $fontSize = 40;
         $textBoundingBox = imagettfbbox($fontSize, 0, $fontPath, $batchCode);
         $textWidth = $textBoundingBox[2] - $textBoundingBox[0];
         $textX = max($horizontalPadding, (int) (($width - $textWidth) / 2));
+        
+        // Position text at bottom with some margin
+        $textY = $height - 30; // 30px from bottom
 
         imagettftext(
             $canvas,
             $fontSize,
             0,
             $textX,
-            $height - 20,
+            $textY,
             $black,
             $fontPath,
             $batchCode
