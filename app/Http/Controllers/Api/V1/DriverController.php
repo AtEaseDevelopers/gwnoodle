@@ -3901,13 +3901,6 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
-            $trip = Trip::where('driver_id', $driver->id)->where('uuid',$driver->trip_id)->first();
-
-            $lorryId = $trip->lorry_id;
-            $inventoryBalances = NULL;
-            if($lorryId) {
-                $inventoryBalances = InventoryBalance::where('lorry_id', $lorryId)->first()->getBatchesWithDetailsAttribute();
-            }
         
             $invoices = Invoice::where('trip_id', $driver->trip_id)
             ->where('status', Invoice::STATUS_COMPLETED)
@@ -3961,10 +3954,16 @@ class DriverController extends Controller
                 ->values()
                 ->toArray();
 
-            $trip = Trip::where('driver_id', $driver->id)
-                ->orderBy('date', 'desc')
-                ->first();
+            $trip = Trip::where('driver_id', $driver->id)->where('uuid',$driver->trip_id)->first();
+
             if($trip){
+
+                $lorryId = $trip->lorry_id;
+                $inventoryBalances = NULL;
+                if($lorryId) {
+                    $inventoryBalances = InventoryBalance::where('lorry_id', $lorryId)->first()->getBatchesWithDetailsAttribute();
+                }
+                
                 if ($trip->type == Trip::END_TRIP) {
                     $end_time = $trip->date;
 
