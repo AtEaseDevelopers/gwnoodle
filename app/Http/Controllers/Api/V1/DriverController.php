@@ -2517,7 +2517,6 @@ class DriverController extends Controller
             
             // Build query to get all invoices with their details and payments
             $query = Invoice::with(['invoicedetail', 'invoicepayment'])
-                ->where('status', Invoice::STATUS_COMPLETED)
                 ->orderBy('date', 'desc');
             
             if ($id) {
