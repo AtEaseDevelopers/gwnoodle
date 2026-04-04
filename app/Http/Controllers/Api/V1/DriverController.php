@@ -2503,13 +2503,40 @@ class DriverController extends Controller
     public function getcustomerinvoice(Request $request, $id = null)
     {
         try {
+            // Get the authenticated driver from session
+            $driver = Driver::where('session', $request->header('session'))->first();
+            if (!$driver) {
+                return response()->json([
+                    'result' => false,
+                    'message' => 'Invalid session',
+                    'data' => null,
+                ], 401);
+            }
+            
+            // Get all customer IDs assigned to this driver
+            $assignedCustomerIds = Assign::where('driver_id', $driver->id)
+                ->pluck('customer_id')
+                ->toArray();
+            
+            if (empty($assignedCustomerIds)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => 'No customers assigned to this driver',
+                    'data' => null,
+                ], 404);
+            }
+            
             // Validate customer if ID provided
             if ($id) {
-                $customer = Customer::find($id);
+                // Check if customer is assigned to this driver
+                $customer = Customer::where('id', $id)
+                    ->whereIn('id', $assignedCustomerIds)
+                    ->first();
+                    
                 if (!$customer) {
                     return response()->json([
                         'result' => false,
-                        'message' => 'Customer not found',
+                        'message' => 'Customer not found or not assigned to this driver',
                         'data' => null,
                     ], 404);
                 }
@@ -2517,6 +2544,8 @@ class DriverController extends Controller
             
             // Build query to get all invoices with their details and payments
             $query = Invoice::with(['invoicedetail', 'invoicepayment'])
+                ->where('status', Invoice::STATUS_COMPLETED)
+                ->whereIn('customer_id', $assignedCustomerIds) // Only show invoices for assigned customers
                 ->orderBy('date', 'desc');
             
             if ($id) {
@@ -2526,7 +2555,7 @@ class DriverController extends Controller
             $invoices = $query->get();
             
             if ($invoices->isEmpty()) {
-                $message = $id ? 'No invoices found for this customer' : 'No invoices found';
+                $message = $id ? 'No invoices found for this customer' : 'No invoices found for your assigned customers';
                 return response()->json([
                     'result' => false,
                     'message' => $message,
@@ -2576,7 +2605,7 @@ class DriverController extends Controller
                         'total_amount' => (float) $totalAmount,
                         'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
                         'is_paid' => $hasCompletedPayment,
-                        'invoice_payments' => $paymentRecords, // Can be empty array if no payments
+                        'invoice_payments' => $paymentRecords,
                         'payment_count' => count($paymentRecords)
                     ];
                 }
@@ -2647,7 +2676,7 @@ class DriverController extends Controller
                             'total_amount' => (float) $totalAmount,
                             'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
                             'is_paid' => $hasCompletedPayment,
-                            'invoice_payments' => $paymentRecords, // Can be empty array if no payments
+                            'invoice_payments' => $paymentRecords,
                             'payment_count' => count($paymentRecords)
                         ];
                     }
@@ -2679,10 +2708,9 @@ class DriverController extends Controller
                 'result' => false,
                 'message' => 'Failed to retrieve invoices: ' . $e->getMessage(),
                 'data' => null
-            ], 500);
+            ], 200);
         }
     }
-
     // Helper method to get payment term text
     private function getPaymentTermText($paymentTerm)
     {
