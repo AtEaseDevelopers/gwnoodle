@@ -1607,7 +1607,7 @@ class DriverController extends Controller
             $cancellableStatuses = [Invoice::STATUS_COMPLETED];
 
             // Format the response
-            $formattedInvoices = $invoices->map(function($invoice) use ($driverTripId, $cancellableStatuses) {
+            $formattedInvoices = $invoices->map(function($invoice) use ($driver,$driverTripId, $cancellableStatuses) {
                 
                 // Check if this specific invoice can be cancelled
                 $allowCancel = true;
