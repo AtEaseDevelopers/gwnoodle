@@ -2362,26 +2362,31 @@ class DriverController extends Controller
     private function calculateCustomerCredit($customerId, $asOfDate)
     {
         try {
-            // Get total invoiced amount (what the customer owes)
+            // Get total invoiced amount for CREDIT payment term invoices only
             $totalInvoiced = Invoice::where('invoices.customer_id', $customerId)
-                ->where('invoices.status', 1)
+                ->where('invoices.status', Invoice::STATUS_COMPLETED)
+                ->where('invoices.paymentterm', Invoice::PAYMENT_TERM_CREDIT) // Only credit payment term (2)
                 ->where('invoices.updated_at', '<=', $asOfDate)
                 ->join('invoice_details', 'invoices.id', '=', 'invoice_details.invoice_id')
                 ->selectRaw('COALESCE(SUM(invoice_details.totalprice), 0) as total')
                 ->value('total'); 
 
-            // Get total paid amount (what the customer has paid)
+            // Get total paid amount for CREDIT invoices only (completed payments)
             $totalPaid = InvoicePayment::where('customer_id', $customerId)
-                ->where('status', 1)
+                ->where('status', 1) // Completed payment
                 ->where('approve_at', '<=', $asOfDate)
+                ->whereHas('invoice', function($query) {
+                    $query->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT) // Only payments for credit invoices
+                        ->where('status', Invoice::STATUS_COMPLETED);
+                })
                 ->sum('amount') ?? 0;
 
             $outstandingBalance = $totalInvoiced - $totalPaid;
 
             return [
-                'totalprice' => $totalInvoiced,
-                'paid' => $totalPaid,
-                'credit' => $outstandingBalance
+                'totalprice' => round($totalInvoiced, 2),
+                'paid' => round($totalPaid, 2),
+                'credit' => round($outstandingBalance, 2)
             ];
             
         } catch (\Exception $e) {
