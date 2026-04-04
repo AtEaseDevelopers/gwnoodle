@@ -3901,69 +3901,67 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
-        
-            $invoices = Invoice::where('trip_id', $driver->trip_id)
-            ->where('status', Invoice::STATUS_COMPLETED)
-            ->with(['invoicedetail.product'])
-            ->get(); 
-
-            
-            $salesByPaymentTerm = [
-                'cash' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CASH;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'credit' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CREDIT;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'online_payment' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_ONLINE;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'tng' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_TNG;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-                
-                'cheque' => round($invoices->filter(function($invoice) {
-                    return $invoice->paymentterm == Invoice::PAYMENT_TERM_CHEQUE;
-                })->sum(function($invoice) {
-                    return $invoice->invoicedetail->sum('totalprice');
-                }), 2),
-            ];
-
-            $productsSold = $invoices->flatMap(function($invoice) {
-                    return $invoice->invoicedetail;
-                })
-                ->groupBy('product_id')
-                ->map(function($details, $productId) {
-                    $firstDetail = $details->first();
-                    return [
-                        'name' => $firstDetail->product ? $firstDetail->product->name : 'Unknown Product',
-                        'quantity' => $details->sum('quantity')
-                    ];
-                })
-                ->values()
-                ->toArray();
-
             $trip = Trip::where('driver_id', $driver->id)->where('uuid',$driver->trip_id)->first();
 
-            if($trip){
+            if($driver->trip_id != null){
+                $invoices = Invoice::where('trip_id', $driver->trip_id)
+                ->where('status', Invoice::STATUS_COMPLETED)
+                ->with(['invoicedetail.product'])
+                ->get(); 
 
-                $lorryId = $trip->lorry_id;
-                $inventoryBalances = NULL;
-                if($lorryId) {
-                    $inventoryBalances = InventoryBalance::where('lorry_id', $lorryId)->first()->getBatchesWithDetailsAttribute();
-                }
                 
+                $salesByPaymentTerm = [
+                    'cash' => round($invoices->filter(function($invoice) {
+                        return $invoice->paymentterm == Invoice::PAYMENT_TERM_CASH;
+                    })->sum(function($invoice) {
+                        return $invoice->invoicedetail->sum('totalprice');
+                    }), 2),
+                    
+                    'credit' => round($invoices->filter(function($invoice) {
+                        return $invoice->paymentterm == Invoice::PAYMENT_TERM_CREDIT;
+                    })->sum(function($invoice) {
+                        return $invoice->invoicedetail->sum('totalprice');
+                    }), 2),
+                    
+                    'online_payment' => round($invoices->filter(function($invoice) {
+                        return $invoice->paymentterm == Invoice::PAYMENT_TERM_ONLINE;
+                    })->sum(function($invoice) {
+                        return $invoice->invoicedetail->sum('totalprice');
+                    }), 2),
+                    
+                    'tng' => round($invoices->filter(function($invoice) {
+                        return $invoice->paymentterm == Invoice::PAYMENT_TERM_TNG;
+                    })->sum(function($invoice) {
+                        return $invoice->invoicedetail->sum('totalprice');
+                    }), 2),
+                    
+                    'cheque' => round($invoices->filter(function($invoice) {
+                        return $invoice->paymentterm == Invoice::PAYMENT_TERM_CHEQUE;
+                    })->sum(function($invoice) {
+                        return $invoice->invoicedetail->sum('totalprice');
+                    }), 2),
+                ];
+
+                $productsSold = $invoices->flatMap(function($invoice) {
+                        return $invoice->invoicedetail;
+                    })
+                    ->groupBy('product_id')
+                    ->map(function($details, $productId) {
+                        $firstDetail = $details->first();
+                        return [
+                            'name' => $firstDetail->product ? $firstDetail->product->name : 'Unknown Product',
+                            'quantity' => $details->sum('quantity')
+                        ];
+                    })
+                    ->values()
+                    ->toArray();
+            }else{
+                $salesByPaymentTerm = [];
+                $productsSold = [];
+            }
+            
+        
+            if($trip){
                 if ($trip->type == Trip::END_TRIP) {
                     $end_time = $trip->date;
 
