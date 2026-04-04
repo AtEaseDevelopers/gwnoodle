@@ -1939,10 +1939,15 @@ class DriverController extends Controller
             $invoice->customer_id = $data['customer_id'];
             $invoice->driver_id = $driver->id;
             $invoice->paymentterm = $data['paymentterm'];
-            $invoice->status = 1;
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
             $invoice->trip_uuid = $driver->trip_id;
+
+            if($data['paymentterm'] == 1){
+                $invoice->status = Invoice::STATUS_COMPLETED;
+            }else{
+                $invoice->status = Invoice::STATUS_NEW;
+            }
             $invoice->save();
             
             $totalprice = 0;
