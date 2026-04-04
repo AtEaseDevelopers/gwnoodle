@@ -4005,7 +4005,7 @@ class DriverController extends Controller
 
             $result = [
                 'sales_summary' => [
-                    'total_invoices' => $invoices->count(),
+                    'total_invoices' => $invoices ? $invoices->count() : 0 ,
                     'by_payment_term' => $salesByPaymentTerm,
                 ],
 
