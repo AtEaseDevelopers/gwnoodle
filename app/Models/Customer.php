@@ -28,7 +28,6 @@ class Customer extends Model
     public $fillable = [
         'code',
         'company',
-        'customer_type',
         'paymentterm',
         'group',
         'driver_id',

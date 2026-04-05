@@ -50,7 +50,6 @@ class CustomerController extends Controller
                     ['code' => $customer_data['AccNo']], 
                     [
                         'company'                  => $customer_data['CompanyName'] ?? '',
-                        'customer_type'            => $customer_data['DebtorType'] ?? 'unknown',     // MAPPED: 'Type' is now 'DebtorType'
                         //'chinese_name'             => $customer_data['Desc2'] ?? null, 
                         'phone'                    => $customer_data['Phone1'] ?? null,
                         'address'                  => $full_address,

@@ -26,6 +26,9 @@
                             <button type="button" class="btn btn-info btn-sm pull-right mr-2" onclick="submitConsolidatedEinvoice()" title="Submit Consolidated E-Invoice">
                                 <i class="fa fa-files-o"></i> Submit Consolidated E-Invoice
                             </button>
+                            <button type="button" class="btn btn-info btn-sm pull-right mr-2" onclick="submitAutocountInvoice()" title="Submit Autocount Invoice">
+                                <i class="fa fa-files-o"></i> Submit Autocount Invoice
+                            </button>
                             @endeinvoice
                          </div>
                          <div class="card-body">
@@ -299,6 +302,56 @@
                 error: function(error) {
                     HideLoad();
                     noti('e','Error', error.responseJSON?.message || 'Failed to submit consolidated e-invoice');
+                }
+            });
+        }
+
+        function submitAutocountInvoice(){
+            if(window.checkboxid.length == 0){
+                noti('i','Info','Please select at least one invoice');
+                return;
+            }
+            
+            $.confirm({
+                title: 'Submit to Autocount',
+                content: `
+                    <p>Confirm to queue <b>` + window.checkboxid.length + `</b> selected invoice(s) for Autocount sync?</p>
+                `,
+                buttons: {
+                    Submit: {
+                        text: 'Submit',
+                        btnClass: 'btn-info',
+                        action: function() {
+                            submitAutocountInvoiceRequest(window.checkboxid);
+                        }
+                    },
+                    Cancel: function() {
+                        return;
+                    }
+                }
+            });
+        }
+
+        function submitAutocountInvoiceRequest(ids){
+            ShowLoad();
+            $.ajax({
+                url: "{{ url('/invoices/massupdateautocountinvoice') }}",
+                type: "POST",
+                data: {
+                    ids: ids,
+                    _token: "{{ csrf_token() }}"
+                },
+                success: function(response){
+                    HideLoad();
+                    window.checkboxid = [];
+                    $('.buttons-reload').click();
+                    
+                    // You can adjust the success message based on what your controller actually returns
+                    noti('s', 'Success', response.message || 'Invoice(s) successfully queued for Autocount.');
+                },
+                error: function(error) {
+                    HideLoad();
+                    noti('e', 'Error', error.responseJSON?.message || 'Failed to submit invoices to Autocount');
                 }
             });
         }

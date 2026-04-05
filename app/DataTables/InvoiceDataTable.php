@@ -155,8 +155,91 @@ class InvoiceDataTable extends DataTable
                         'targets' => 6,
                         'render' => 'function(data, type){return data == 1 ? "Completed" : "New";}'
                     ],
+                    [
+                        'targets' => 7,
+                        'visible' => true,
+                        'render' => 'function(data, type, row){
+                            if (type === "display" && row.autocount_message) {
+                                var rawMsg = row.autocount_message;
+                                var formattedMsg = rawMsg;
+                                
+                                // Try to format JSON or Array beautifully
+                                try {
+                                    if (typeof rawMsg === "string" && (rawMsg.trim().startsWith("{") || rawMsg.trim().startsWith("["))) {
+                                        formattedMsg = JSON.stringify(JSON.parse(rawMsg), null, 2);
+                                    } else if (typeof rawMsg === "object") {
+                                        formattedMsg = JSON.stringify(rawMsg, null, 2);
+                                    }
+                                } catch (e) {
+                                    // If it fails, it is just a normal string. Keep it as is.
+                                }
+                                
+                                // Safely escape HTML characters so it does not break the span attribute
+                                var safeMsg = String(formattedMsg)
+                                    .replace(/&/g, "&amp;")
+                                    .replace(/"/g, "&quot;")
+                                    .replace(/\'/g, "&#39;")
+                                    .replace(/</g, "&lt;")
+                                    .replace(/>/g, "&gt;");
+                                
+                                return "<span class=\'autocount-error-popover\' data-msg=\'" + safeMsg + "\' style=\'cursor:pointer; border-bottom: 2px dotted #dc3545; color: #dc3545; font-weight: 500;\'>" + data + "</span>";
+                            }
+                            return data ? data : "";
+                        }'
+                    ],
                   
                 ],
+                'drawCallback' => 'function(settings) {
+                    if(typeof $.fn.popover !== "undefined") {
+                        $(".autocount-error-popover").each(function() {
+                            var $el = $(this);
+                            
+                            // Initialize Bootstrap Popover
+                            $el.popover({
+                                trigger: "manual",
+                                placement: "left",
+                                html: true,
+                                title: "AutoCount Message <small style=\'float:right; font-weight:normal; color:#6c757d;\'>Click to pin</small>",
+                                // Use .attr("data-msg") to prevent jQuery from re-parsing the JSON string
+                                content: "<div style=\'max-height: 250px; overflow-y: auto; user-select: text; font-family: monospace; font-size:12px; white-space: pre-wrap; word-wrap: break-word;\'>" + $el.attr("data-msg") + "</div>"
+                            });
+
+                            // 1. Hover to Peek
+                            $el.on("mouseenter", function() {
+                                if (!$el.data("pinned")) {
+                                    $el.popover("show");
+                                }
+                            });
+
+                            // 2. Mouse leave to hide (unless pinned)
+                            $el.on("mouseleave", function() {
+                                if (!$el.data("pinned")) {
+                                    $el.popover("hide");
+                                }
+                            });
+
+                            // 3. Click to Pin / Unpin
+                            $el.on("click", function(e) {
+                                e.stopPropagation();
+                                if ($el.data("pinned")) {
+                                    $el.data("pinned", false);
+                                    $el.popover("hide");
+                                } else {
+                                    $(".autocount-error-popover").data("pinned", false).popover("hide");
+                                    $el.data("pinned", true);
+                                    $el.popover("show");
+                                }
+                            });
+                        });
+                        
+                        // 4. Click anywhere outside the popover to close it
+                        $(document).off("click.closePopover").on("click.closePopover", function(e) {
+                            if (!$(e.target).closest(".popover").length && !$(e.target).hasClass("autocount-error-popover")) {
+                                $(".autocount-error-popover").data("pinned", false).popover("hide");
+                            }
+                        });
+                    }
+                }',
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
                     this.api()
@@ -260,6 +343,13 @@ class InvoiceDataTable extends DataTable
                 'title' => trans('invoices.status'),
                 'data' => 'status',
                 'name' => 'invoices.status'
+            ]),
+
+            'autocount_status' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('invoices.autocount_status'),
+                'data' => 'autocount_status',
+                'name' => 'invoices.autocount_status',
+                'searchable' => false
             ]),
         ];
 

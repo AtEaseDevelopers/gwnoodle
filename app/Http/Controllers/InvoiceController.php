@@ -436,6 +436,17 @@ class InvoiceController extends AppBaseController
         return $count;
     }
 
+    public function massupdateautocountinvoice(Request $request)
+    {
+        $data = $request->all();
+        $ids = $data['ids'];
+        $autocount_status = 'pending'; // all status will be updated to pending (success & failed)
+
+        $count = invoice::whereIn('id',$ids)->update(['autocount_status'=>$autocount_status]);
+
+        return $count;
+    }
+
     public function getcustomer($id)
     {
         $customer = Customer::where('id',$id)->first();
