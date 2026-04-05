@@ -12,6 +12,7 @@ use App\Models\ApiLog;
 class InvoiceController extends Controller
 {
 
+    const is_testing = true; // testing with 5, adjust as needed
     /**
      * Get all pending invoices for AutoCount sync
      */
@@ -49,6 +50,8 @@ class InvoiceController extends Controller
                     'products.name as product_name',
                     'products.unit_code',
                     'products.classification_code',
+                    'products.price as price',
+                    'products.cost as cost',
                 ])->get()->groupBy('invoice_id'); // 🔥 important
 
             // Step 4: Payment mapping
@@ -63,8 +66,8 @@ class InvoiceController extends Controller
             $data = $invoices->map(function ($inv) use ($customers, $paymentMap, $details) {
                 return [
                     'id'                    => $inv->id,
-                    'invoice_no'            => $inv->invoice_no,
-                    'date'                  => $inv->created_at,
+                    'invoice_no'            => $inv->invoiceno,
+                    'date'                  => $inv->date,
                     'customer_id'           => $inv->customer_id,
                     'customer_code'         => $customers[$inv->customer_id] ?? null,
                     'driver_employeeid'     => $inv->driver_employeeid,
@@ -72,10 +75,10 @@ class InvoiceController extends Controller
                     'agent_employeeid'      => $inv->agent_employeeid,
                     'supervisor_employeeid' => $inv->supervisor_employeeid,
                     'payment_term'          => $paymentMap[$inv->paymentterm] ?? 'Unknown',
-                    'amount'                => $inv->amount,
                     'chequeno'              => $inv->chequeno,
                     'payment_proof'         => $inv->paymentproof,
                     'remark'                => $inv->remark,
+                    'is_testing'            => self::is_testing,
                     'details' => isset($details[$inv->id])
                         ? $details[$inv->id]->map(function ($d) {
                             return [
@@ -84,7 +87,7 @@ class InvoiceController extends Controller
                                 'product_id'          => $d->product_id,
                                 'quantity'            => $d->quantity,
                                 'price'               => $d->price,
-                                'amount'              => $d->amount,
+                                'cost'                => $d->cost,
                                 'remark'              => $d->remark,
                                 'product_name'        => $d->product_name,
                                 'unit_code'           => $d->unit_code,
@@ -146,7 +149,8 @@ class InvoiceController extends Controller
                     $statusCode = 404; // Not Found
                 } else {
                     // Perform Update
-                    $invoice->autocount_status = $request->autocount_status;
+                    $invoice->autocount_status  = $request->autocount_status;
+                    $invoice->autocount_message = $request->all() ?? null; // Optional message field
                     $invoice->save();
 
                     $responseData = [

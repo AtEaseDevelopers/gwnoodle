@@ -12,9 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('invoices', function (Blueprint $table) {
-            // Add the column after 'status' and make it nullable
+            // Add the status column after 'status' and make it nullable
             $table->string('autocount_status', 50)->default('pending')->after('status');
-            // Add index
+            
+            // Add the message column after 'autocount_status'
+            $table->longText('autocount_message')->nullable()->after('autocount_status');
+            
+            // Add index for faster querying
             $table->index('autocount_status');
         });
     }
@@ -28,8 +32,8 @@ return new class extends Migration
             // Drop the index first
             $table->dropIndex(['autocount_status']);
 
-            // Drop the column
-            $table->dropColumn('autocount_status');
+            // Drop the columns (an array can be used to drop multiple columns at once)
+            $table->dropColumn(['autocount_message', 'autocount_status']);
         });
     }
 };
