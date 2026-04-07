@@ -228,10 +228,13 @@
             function getprice() {
                 var invoice_id = $('#invoice_id').val();
                 var product_id = $('#product_id').val();
+                
                 if(invoice_id != '' && product_id != ''){
+                    // Show loading indicator on price field
+                    $('#price').val('Loading...').css('background-color', '#f8f9fa');
                     
-                    var url = '{{ config("app.url") }}invoiceDetails/getprice/'+invoice_id+'/'+product_id;
-                    
+                    var url = '/invoiceDetails/getprice/' + invoice_id + '/' + product_id;
+
                     console.log('Fetching price from:', url);
                     
                     $.ajax({
@@ -243,10 +246,14 @@
                         },
                         success: function(data) {
                             console.log('Price response:', data);
-                            if(data.status){
-                                $('#price').val(data.data);
+                            if(data.status && data.data){
+                                $('#price').val(data.data).css('background-color', '');
+                                // Clear any previous price error messages
+                                $('#price-error').remove();
                             } else {
-                                noti('e', 'Please contact your administrator', data.message);
+                                // API returned success false or no data
+                                $('#price').val('').css('background-color', '#fff3cd');
+                                showPriceErrorMessage(data.message || 'Price information not available');
                             }
                         },
                         error: function(xhr, status, error) {
@@ -257,19 +264,72 @@
                                 error: error
                             });
                             
+                            $('#price').val('').css('background-color', '#f8d7da');
+                            
+                            let errorMessage = '';
+                            
                             if (xhr.status === 0) {
-                                noti('e', 'Network error - please check your connection', '');
+                                errorMessage = 'Network error - Please check your connection and refresh the page';
                             } else if (xhr.status === 404) {
-                                noti('e', 'API endpoint not found', '');
+                                errorMessage = 'Price API endpoint not found - Please contact administrator';
                             } else if (xhr.status === 500) {
-                                noti('e', 'Server error', xhr.responseText);
+                                errorMessage = 'Server error - Please try again later or contact administrator';
+                            } else if (xhr.status === 422) {
+                                errorMessage = 'Invalid invoice or product selected';
                             } else {
-                                noti('e', 'Please contact your administrator', error);
+                                errorMessage = 'Failed to fetch price - Please refresh the page and try again';
+                            }
+                            
+                            showPriceErrorMessage(errorMessage);
+                            
+                            // Show a notification that persists longer
+                            if (typeof noti === 'function') {
+                                noti('e', 'Price Load Error', errorMessage);
+                            } else {
+                                alert('Error: ' + errorMessage);
                             }
                         }
                     }); 
+                } else {
+                    // Clear price if no selection
+                    $('#price').val('').css('background-color', '');
+                    $('#price-error').remove();
                 }
             }
+
+            // Helper function to show price error message
+            function showPriceErrorMessage(message) {
+                // Remove existing price error message
+                $('#price-error').remove();
+                
+                // Add error message below price field
+                var errorHtml = '<div id="price-error" class="invalid-feedback d-block" style="margin-top: 5px;">' +
+                                '<i class="fa fa-exclamation-circle"></i> ' + message + 
+                                ' <button type="button" class="btn btn-link btn-sm p-0 ml-2" onclick="retryLoadPrice()">' +
+                                '<i class="fa fa-refresh"></i> Retry</button>' +
+                                '</div>';
+                
+                $('#price').closest('.form-group').append(errorHtml);
+                $('#price').addClass('is-invalid');
+            }
+
+            // Function to retry loading price
+            window.retryLoadPrice = function() {
+                $('#price-error').remove();
+                $('#price').removeClass('is-invalid').css('background-color', '');
+                getprice();
+            }
+
+            // Modify the invoice and product change handlers to clear price errors
+            $("#invoice_id, #product_id").change(function() {
+                // Clear price error when selection changes
+                $('#price-error').remove();
+                $('#price').removeClass('is-invalid').css('background-color', '');
+                
+                if ($(this).attr('id') === 'invoice_id') {
+                    getprice();
+                }
+            });
             
             // Validate form before submission
             function validateForm() {
