@@ -12,7 +12,8 @@ use App\Models\ApiLog;
 class InvoiceController extends Controller
 {
 
-    const is_testing = true; // testing with 5, adjust as needed
+    const is_testing   = true; // testing with 5, adjust as needed
+    const cut_off_date = '2026-07-04 00:00:00'; // only sync invoices created after this date (for testing)
     /**
      * Get all pending invoices for AutoCount sync
      */
@@ -27,6 +28,10 @@ class InvoiceController extends Controller
                 ->leftJoin('supervisors',  'invoices.supervisor_id',  '=', 'supervisors.id')
                 ->where('invoices.status', 1)
                 ->where('invoices.autocount_status', 'pending')
+                // Check if the cut_off_date is NOT empty
+                ->when(!empty(self::cut_off_date), function ($query) {
+                    $query->where('invoices.created_at', '>=', self::cut_off_date);
+                })
                 ->select([
                     'invoices.*',
                     'drivers.employeeid     as driver_employeeid',
@@ -77,7 +82,7 @@ class InvoiceController extends Controller
                     'payment_term'          => $paymentMap[$inv->paymentterm] ?? 'Unknown',
                     'chequeno'              => $inv->chequeno,
                     'payment_proof'         => $inv->paymentproof,
-                    'remark'                => $inv->remark,
+                    'remark'                => $inv->remark . (self::is_testing ? ' [TESTING]' : ''),
                     'is_testing'            => self::is_testing,
                     'details' => isset($details[$inv->id])
                         ? $details[$inv->id]->map(function ($d) {
