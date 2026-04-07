@@ -13,7 +13,7 @@ class InvoiceController extends Controller
 {
 
     const is_testing   = true; // testing with 5, adjust as needed
-    const cut_off_date = '2026-07-04 00:00:00'; // only sync invoices created after this date (for testing)
+    const cut_off_date = '2026-04-07 00:00:00'; // only sync invoices created after this date (for testing)
     /**
      * Get all pending invoices for AutoCount sync
      */
