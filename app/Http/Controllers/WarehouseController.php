@@ -28,7 +28,7 @@ class WarehouseController extends Controller
             ->orderBy('expiry_date')
             ->get()
             ->mapWithKeys(function ($batch) {
-                return [$batch->id => $batch->batch_code . ' - ' . $batch->product->name ?? '-' . ' (' . $batch->quantity . ' units)'];
+                return [$batch->id => $batch->batch_code . ' - ' . ($batch->product ? $batch->product->name : '-') . ' (' . $batch->quantity . ' units)'];
             });
 
         return $warehouseDataTable->render('warehouses.index', compact('products', 'batches','warehouses'));
