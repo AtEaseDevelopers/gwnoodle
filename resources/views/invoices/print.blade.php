@@ -195,7 +195,7 @@
             </tr>
             <tr>
                 <td class="ta-l">Date :</td>
-                <td class="ta-r">{{ date_format(date_create($invoice['date']),'D d/M/Y H:i') ?? '-' }}</td>
+                <td class="ta-r">{{ date_format(date_create($invoice['date']),'D d/M/Y ') ?? '-' }}</td>
             </tr>
             <tr>
                 <td class="ta-l">S/Driver :</td>
@@ -266,7 +266,7 @@
         <table>
             </tbody>
                 <tr class="item-row">
-                    <td class="ta-l" style="width: 25%;">Total :</td>
+                    <td class="ta-l" style="width: 25%;"></td>
                     <td class="ta-l" style="width: 30%;">{{ $totalquantity }}</td>
                     <td class="ta-r" style="width: 20%;">{{ number_format($totalamount, 2) }}</td>
                 </tr>
@@ -280,14 +280,7 @@
                 <td class="ta-r">Total :</td>
                 <td class="ta-r" style = "font-size: 20px;">{{ number_format($totalamount, 2) }}</td>
             </tr>
-            <tr>
-                <td class="ta-r">Rounding Adj :</td>
-                <td class="ta-r">0.00</td>
-            </tr>
-            <tr>
-                <td class="ta-r">Final Total :</td>
-                <td class="ta-r">{{ number_format($totalamount, 2) }}</td>
-            </tr>
+            
         </table>
 
         <div class="divider-solid"></div>
@@ -298,10 +291,7 @@
                 <td class="ta-l">payments :</td>
                 <td class="ta-r">Cash {{ number_format($totalamount, 2) }}</td>
             </tr>
-            <tr>
-                <td class="ta-l">changes :</td>
-                <td class="ta-r">0.00</td>
-            </tr>
+         
         </table>
 
         <div class="divider"></div>
