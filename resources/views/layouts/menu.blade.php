@@ -437,11 +437,11 @@
 
     @can('code')
         <ul class="nav-dropdown-items">
-            <li class="nav-item {{ Request::is('codes*') ? 'active' : '' }}">
+            <!-- <li class="nav-item {{ Request::is('codes*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('codes*') ? 'active' : '' }}" href="{{ route('codes.index') }}">
                     <span>{{ trans('side_menu.codes') }}</span>
                 </a>
-            </li>
+            </li> -->
             <li class="nav-item {{ Request::is('customer_group*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('customer_group*') ? 'active' : '' }}" href="{{ route('customer_group.index') }}">
                     <span>{{ trans('side_menu.customer_group') }}</span>
