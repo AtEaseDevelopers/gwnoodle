@@ -11,7 +11,7 @@ use App\Models\ApiLog;
 
 class ProductController extends Controller
 {
-    const BATCH_SIZE = 10; // testing with 5, adjust as needed
+    const BATCH_SIZE = 0; // if 0 means no limit
 
     public function update(Request $request)
     {
@@ -28,8 +28,10 @@ class ProductController extends Controller
 
             foreach ($data as $index => $record) {
                 
-                if ($index >= self::BATCH_SIZE) {
-                    break; // Stop processing after reaching the batch size limit
+                if (self::BATCH_SIZE > 0) {
+                    if ($index >= self::BATCH_SIZE) {
+                        break; // Stop processing after reaching the batch size limit
+                    }
                 }
 
                 $validationErrors = $this->manualValidation($record);
