@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
 
 class CustomerController extends Controller
 {
-    const BATCH_SIZE = 10; // testing with 5, adjust as needed
+    const BATCH_SIZE = 0; // if 0 means no limit
 
     public function update(Request $request)
     {
@@ -26,8 +26,10 @@ class CustomerController extends Controller
             
             foreach ($process_data as $index => $customer_data) {
 
-                if ($index >= self::BATCH_SIZE) {
-                    break; // Stop processing after reaching the batch size limit
+                if (self::BATCH_SIZE > 0) {
+                    if ($index >= self::BATCH_SIZE) {
+                        break; // Stop processing after reaching the batch size limit
+                    }
                 }
                 
                 if (empty($customer_data['AccNo'])) continue;
