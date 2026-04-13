@@ -4957,7 +4957,7 @@ class DriverController extends Controller
                     'batch_id' => $batch->id,
                     'batch_code' => $batch->batch_code,
                     'current_quantity' => $availableQty,
-                    'counted_quantity' => null, // Driver will update this later
+                    'counted_quantity' => $availableQty, 
                     'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
                 ];
                 
