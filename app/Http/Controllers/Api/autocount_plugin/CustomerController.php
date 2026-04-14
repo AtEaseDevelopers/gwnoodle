@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\ApiLog;
+use Facade\FlareClient\Api;
 //use App\Models\Branch;
 use Illuminate\Support\Facades\Log;
 
@@ -47,6 +48,17 @@ class CustomerController extends Controller
                 // MAPPED: 'ZipCode' is now 'PostCode'
                 $postcode = isset($customer_data['PostCode']) ? (int)preg_replace('/\D/', '', $customer_data['PostCode']) : 0;
 
+                // if ($customer_data['AccNo'] === '3000-1001') {
+                //     ApiLog::create([
+                //             'method'       => $request->method(),
+                //             'url'          => $request->fullUrl(),
+                //             'headers'      => $request->headers->all(), // $casts will auto-convert this to JSON
+                //             'request_body' => $customer_data['FullTIN'] ?? $customer_data['TIN'] ?? 'ttt',          // $casts will auto-convert this to JSON
+                //             'ip_address'   => $request->ip(),
+                //             'driver_id'    => null,
+                //             // response_body and status_code are intentionally left blank until it finishes
+                //         ]);
+                // }
                 // Use Laravel's updateOrCreate to automatically Insert OR Update
                 $customer = Customer::updateOrCreate(
                     ['code' => $customer_data['AccNo']], 
@@ -54,20 +66,20 @@ class CustomerController extends Controller
                         'company'                  => $customer_data['CompanyName'] ?? '',
                         //'chinese_name'             => $customer_data['Desc2'] ?? null, 
                         'phone'                    => $customer_data['Phone1'] ?? null,
-                        'address'                  => $full_address,
+                        'billing_address'          => $full_address,
                         'status'                   => $status,
-                        'tin'                      => $customer_data['TIN'] ?? null,                       
+                        'tin'                      => $customer_data['FullTIN'] ?? $customer_data['TIN'] ?? null,                       
                         'sst_registration_no'      => $customer_data['SSTRegisterNo'] ?? null,        // MAPPED: 'TaxRegNo' is now 'SSTRegisterNo' (or could use GSTRegisterNo)
                         'registration_no'          => $customer_data['RegisterNo'] ?? null,           // MAPPED: 'BRN' is now 'RegisterNo' 
                         'tourism_tax_registration' => $customer_data['TourismTaxRegisterNo'] ?? null, // MAPPED: 'TourismTaxRegNo' is now 'TourismTaxRegisterNo'                        
                         'msic'                     => $customer_data['MSICCode'] ?? null,             // MAPPED: 'MSIC' is now 'MSICCode'
                         'city'                     => null,
                         'country'                  => $customer_data['CountryCode'] ?? null, 
-                        'postcode'                 => $postcode,
+                        'postcode'                 => $customer_data['PostCode'] ?? null,//$postcode,
                         'email'                    => $customer_data['EmailAddress'] ?? null,
                         'group'                    => $customer_data['AreaCode'] ?? null, // MAPPED: 'Area' is now 'AreaCode'
                         'paymentterm'              => (isset($customer_data['DisplayTerm']) && $customer_data['DisplayTerm'] === 'Cash') ? 1 : 3, 
-                        'state'                    => StateCode::where('state', $customer_data['StateCode'] ?? '')->value('id') ?? null,  // MAPPED: 'State' is now 'StateCode'
+                        'state'                    => StateCode::where('code', $customer_data['StateCode'] ?? '')->value('id') ?? null,  // MAPPED: 'State' is now 'StateCode'
                         'driver_id'                => Agent::where('employeeid', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
                     ]
                 );

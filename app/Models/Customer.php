@@ -42,6 +42,7 @@ class Customer extends Model
         //e-invoice fields
         'postcode',
         'area',
+        'tin',               // <--- ADD THE SINGLE QUOTES HERE
         'email',
         'state',
         'country',
