@@ -202,7 +202,7 @@ class UserController extends AppBaseController
         
         Flash::success('User updated successfully.');
         
-        return redirect(route('Managerusers.index'));
+        return redirect(route('users.index'));
     }
 
     /**
