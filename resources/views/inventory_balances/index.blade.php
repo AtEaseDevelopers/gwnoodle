@@ -30,7 +30,7 @@
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
-                    <h4 class="modal-title h6">{{ __('Stock In') }} - Move from Warehouse to Lorry</h4>
+                    <h4 class="modal-title h6">{{ __('Stock In') }} - Move from Warehouse to Van</h4>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">×</button>
                 </div>
                 <div class="modal-body">
@@ -46,9 +46,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="lorry_id_stockin" class="col-form-label">{{ __('Select Lorry') }}:</label>
+                        <label for="lorry_id_stockin" class="col-form-label">{{ __('Select Van') }}:</label>
                         <select name="lorry_id" id="lorry_id_stockin" class="form-control" required>
-                            <option value="">{{ __('Select Lorry') }}</option>
+                            <option value="">{{ __('Select Van') }}</option>
                             @foreach($lorryItems as $lorryId => $lorryName)
                                 <option value="{{ $lorryId }}">{{ $lorryName }}</option>
                             @endforeach
@@ -65,7 +65,7 @@
                                 </button>
                             </div>
                         </div>
-                        <small class="d-block text-muted" id="stockinBatchHelp">{{ __('Select warehouse and lorry first. Barcode scanner can input code followed by Enter.') }}</small>
+                        <small class="d-block text-muted" id="stockinBatchHelp">{{ __('Select warehouse and van first. Barcode scanner can input code followed by Enter.') }}</small>
                         <small class="d-none text-danger" id="stockinScanError"></small>
                         <small class="d-none text-success" id="stockinScanSuccess"></small>
                     </div>
@@ -110,15 +110,15 @@
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-warning text-white">
-                    <h4 class="modal-title h6">{{ __('Stock Out') }} - Return from Lorry to Warehouse</h4>
+                    <h4 class="modal-title h6">{{ __('Stock Out') }} - Return from Van to Warehouse</h4>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">×</button>
                 </div>
                 <div class="modal-body">
                     {!! Form::open(['route' => 'inventoryBalances.stockout', 'id' => 'stockoutForm']) !!}
                     <div class="form-group">
-                        <label for="lorry_id" class="col-form-label">{{ __('Select Lorry') }}:</label>
+                        <label for="lorry_id" class="col-form-label">{{ __('Select Van') }}:</label>
                         <select name="lorry_id" id="lorry_id" class="form-control select2" required>
-                            <option value="">{{ __('Select Lorry') }}</option>
+                            <option value="">{{ __('Select Van') }}</option>
                             @foreach($lorryItems as $lorryId => $lorryName)
                                 <option value="{{ $lorryId }}">{{ $lorryName }}</option>
                             @endforeach
@@ -128,7 +128,7 @@
                     <div class="form-group">
                         <label for="batch_id" class="col-form-label">{{ __('Select Batch to Return') }}:</label>
                         <select name="batch_id" id="batch_id" class="form-control" required disabled>
-                            <option value="">{{ __('First select a lorry') }}</option>
+                            <option value="">{{ __('First select a van') }}</option>
                         </select>
                         <small class="text-muted" id="batchQuantityInfo"></small>
                     </div>
@@ -547,7 +547,7 @@
             clearStockInItems();
 
             if (!warehouseId) {
-                setStockInHelp('{{ __("Select warehouse and lorry first. Barcode scanner can input code followed by Enter.") }}', 'muted');
+                setStockInHelp('{{ __("Select warehouse and van first. Barcode scanner can input code followed by Enter.") }}', 'muted');
                 toggleStockInScanner();
                 validateStockInForm();
                 updateDistributionSummary();
@@ -640,7 +640,7 @@
             hideStockInMessages();
 
             if (!$('#warehouse_id_stockin').val() || !$('#lorry_id_stockin').val()) {
-                showStockInError('Please select warehouse and lorry first.');
+                showStockInError('Please select warehouse and van first.');
                 return;
             }
 
@@ -1082,7 +1082,7 @@
                     }
                 });
             } else {
-                batchSelect.empty().append('<option value="">{{ __("First select a lorry") }}</option>');
+                batchSelect.empty().append('<option value="">{{ __("First select a van") }}</option>');
                 batchSelect.prop('disabled', true);
                 warehouseSelect.empty().append('<option value="">{{ __("Select batch first") }}</option>');
                 warehouseSelect.prop('disabled', true);
@@ -1100,12 +1100,12 @@
             const warehouseSelect = $('#to_warehouse_id');
 
             if (quantity > 0) {
-                $('#batchQuantityInfo').text('Available on lorry: ' + quantity + ' units');
+                $('#batchQuantityInfo').text('Available on van: ' + quantity + ' units');
                 $('#stockout_quantity').prop('disabled', false).attr('max', quantity).val('');
 
                 $('#batchDetailsText').html(
                     '<strong>Batch:</strong> ' + selected.text() + '<br>' +
-                    '<strong>Available on lorry:</strong> ' + quantity + ' units'
+                    '<strong>Available on van:</strong> ' + quantity + ' units'
                 );
                 $('#batchDetails').show();
 
@@ -1191,7 +1191,7 @@
             stockinWarehouseBatches = {};
             clearStockInItems();
             hideStockInMessages();
-            setStockInHelp('{{ __("Select warehouse and lorry first. Barcode scanner can input code followed by Enter.") }}', 'muted');
+            setStockInHelp('{{ __("Select warehouse and van first. Barcode scanner can input code followed by Enter.") }}', 'muted');
             $('#distributionSummary').hide();
             $('#stockinSubmitBtn').prop('disabled', true).removeClass('btn-danger').addClass('btn-success');
         });
