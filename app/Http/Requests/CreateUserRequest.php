@@ -26,6 +26,7 @@ class CreateUserRequest extends FormRequest
     {
        $rules = [
           'name'                  => 'required',
+          'username'              => 'required|string|max:255|unique:users,username',
           'email'                 => 'required|email|unique:users,email',
           'password'              => 'required|confirmed',
           'invoice_code'          => 'nullable|string|max:255|unique:users,invoice_code',

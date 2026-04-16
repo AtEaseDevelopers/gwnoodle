@@ -4,6 +4,12 @@
     {!! Form::text('name', null, ['class' => 'form-control', 'autofocus']) !!}
 </div>
 
+<!-- Username Field -->
+<div class="form-group col-sm-6">
+    {!! Form::label('username', __('Username')) !!}<span class="asterisk"> *</span>
+    {!! Form::text('username', null, ['class' => 'form-control']) !!}
+</div>
+
 <!-- Email Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('email', __('user.email')) !!}<span class="asterisk"> *</span>

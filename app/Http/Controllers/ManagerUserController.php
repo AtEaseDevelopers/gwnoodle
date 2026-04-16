@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-
+ 
 class ManagerUserController extends AppBaseController
 {
     /** @var UserRepository $userRepository*/
@@ -143,6 +143,7 @@ class ManagerUserController extends AppBaseController
         // Define validation rules
         $rules = [
             'name'     => 'required',
+            'username' => 'required|string|max:255|unique:users,username,' . $id,
             'email'    => 'required|email|unique:users,email,' . $id,
             'password' => 'confirmed',
             'role_id'  => 'required'

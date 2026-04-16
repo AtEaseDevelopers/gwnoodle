@@ -40,6 +40,7 @@ class ManagerUserDataTable extends DataTable
             ->select(
                 'users.id',
                 'users.name',
+                'users.username',  
                 'users.email',
                 'roles.name as role_name'
             );
@@ -151,6 +152,11 @@ class ManagerUserDataTable extends DataTable
                 'title' => trans('user.name'),
                 'data'  => 'name',
                 'name'  => 'users.name'
+            ]),
+            'username' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('Username'),
+                'data'  => 'username',
+                'name'  => 'users.username'
             ]),
             'email',
             'role' => new \Yajra\DataTables\Html\Column([
