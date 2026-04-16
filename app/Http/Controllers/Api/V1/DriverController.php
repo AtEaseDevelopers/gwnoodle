@@ -5229,7 +5229,7 @@ class DriverController extends Controller
             }
             //process
             $data = $request->all();
-            $user = User::where('email', $data['employeeid'])->first();
+            $user = User::where('username', $data['employeeid'])->first();
 
             if (empty($user) || !$user) {
                 return response()->json([
