@@ -5018,7 +5018,7 @@ class DriverController extends Controller
             // Get inventory balance for this lorry
             $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
 
-            if($inventoryBalance){
+            if(!$inventoryBalance){
                 // Get all batch IDs from the inventory
                 $batchIds = array_keys($inventoryBalance->batches);
 
