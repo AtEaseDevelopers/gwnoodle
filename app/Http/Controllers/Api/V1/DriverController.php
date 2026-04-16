@@ -563,6 +563,74 @@ class DriverController extends Controller
         }
     }
 
+    public function switchLorry(Request $request){
+        try{
+            $data = $request->all();
+            //check session
+            $driver = Driver::where('session', $request->header('session'))->first();
+            if(empty($driver)){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
+                    'data' => null
+                ], 401);
+            }
+            $validator = Validator::make($request->all(), [
+                'lorry_id' => 'required|numeric'
+            ]);
+
+            $trip = Trip::where('uuid', $driver->trip_id)->first();
+            if(!$trip){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'Trip not found.',
+                    'data' => null
+                ], 401);
+            } 
+
+            $currentLorryId = $trip->lorry_id;
+            $newLorryId = $request->lorry_id;
+            
+            $inventorybalance = InventoryBalance::where('lorry_id', $currentLorryId)->first();
+            if(!$inventorybalance){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'Inventory Balance for current Van not found.',
+                    'data' => null
+                ], 401);
+            }
+            //update trip lorry
+            $trip->lorry_id = $newLorryId;
+            $trip->save();
+
+            //update inventory balance lorry
+            $inventorybalance->lorry_id = $newLorryId;
+            $inventorybalance->save();
+
+            //update lorry status
+            $currentLorry = Lorry::where('id', $currentLorryId)->first();
+            $currentLorry->status = 1;
+            $currentLorry->save();
+
+            $newLorry = Lorry::where('id', $newLorryId)->first();
+            $newLorry->status = 0;
+            $newLorry->save();
+
+            return response()->json([
+                'result' => true,
+                'message' => __LINE__.$this->message_separator.'Van switched successfully.',
+                'data' => $newLorry
+            ], 200);
+        }
+        catch(Exception $e){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__.$this->message_separator.$e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
     //Task
     public function gettask(Request $request)
     {
@@ -1225,6 +1293,51 @@ class DriverController extends Controller
                     'data' => $product
                 ], 200);
             }
+        }
+        catch(Exception $e){
+            return response()->json([
+                'result' => false,
+                'message' => __LINE__.$this->message_separator.$e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
+    public function getproductInfoFromCode(Request $request){
+        try{
+            $data = $request->all();
+            //check session
+            $driver = Driver::where('session', $request->header('session'))->first();
+            if(empty($driver)){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
+                    'data' => null
+                ], 401);
+            }
+            $productCode = $request->input('product_code');
+            if(!$productCode){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'Product code is required',
+                    'data' => null
+                ], 401);
+            }
+
+            $product = ProductBatch::where('batch_code', $productCode)->first();
+            if($product){
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__.$this->message_separator.'Product Found.',
+                    'data' => $product
+                ], 200);
+            }else{
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__.$this->message_separator.'Product Not Found',
+                    'data' => null
+                ], 200);
+            }      
         }
         catch(Exception $e){
             return response()->json([

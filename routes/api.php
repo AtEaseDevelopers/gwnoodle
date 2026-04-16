@@ -36,6 +36,8 @@ Route::group(['prefix' => 'v1'], function () {
     // Route::get('/driver/kelindan', [App\Http\Controllers\Api\V1\DriverController::class, 'getkelindan']);
     //Lorry
     Route::get('/driver/lorry', [App\Http\Controllers\Api\V1\DriverController::class, 'getlorry']);
+    Route::post('/driver/lorry/switch', [App\Http\Controllers\Api\V1\DriverController::class, 'switchLorry']);
+
     //Task
     Route::get('/driver/task', [App\Http\Controllers\Api\V1\DriverController::class, 'gettask']);
     Route::get('/driver/taskpage', [App\Http\Controllers\Api\V1\DriverController::class, 'gettaskpage']);
@@ -44,6 +46,7 @@ Route::group(['prefix' => 'v1'], function () {
 
     //Product
     Route::post('/driver/product', [App\Http\Controllers\Api\V1\DriverController::class, 'getproduct']);
+    Route::post('/driver/product/barcode', [App\Http\Controllers\Api\V1\DriverController::class, 'getproductInfoFromCode']);
 
     //Customer
     Route::get('/driver/customer/{id?}', [App\Http\Controllers\Api\V1\DriverController::class, 'getcustomer']);
