@@ -799,22 +799,39 @@ class InventoryCountController extends Controller
                         throw new \Exception('Product batch not found: ' . $batchData['batch_code']);
                     }
                     
-                    // Calculate quantity difference
-                    $currentQty = $batchData['current_quantity'];
                     $countedQty = $batchData['counted_quantity'];
+                    $warehouseId = $batchData['warehouse_id'];
                     
-                    // Create inventory transaction for stock return
+                    // 1. UPDATE WAREHOUSE INVENTORY BALANCE (CRITICAL FIX)
+                    $warehouseInventory = \App\Models\WarehouseInventoryBalance::firstOrCreate(
+                        [
+                            'warehouse_id' => $warehouseId,
+                            'product_id' => $batchData['product_id'],
+                            'batch_id' => $batchData['batch_id'],
+                        ],
+                        ['quantity' => 0]
+                    );
+                    
+                    // Add the counted quantity back to warehouse
+                    $warehouseInventory->increaseQuantity($countedQty);
+                    
+                    // 2. UPDATE PRODUCT BATCH MASTER QUANTITY (CRITICAL FIX)
+                    $productBatch->increaseQuantity(
+                        $countedQty, 
+                        "Stock return from inventory count #{$inventoryCount->id} - Driver: {$inventoryCount->driver->name}"
+                    );
+                    
+                    // 3. Create inventory transaction for stock return
                     $transaction = new \App\Models\InventoryTransaction();
                     $transaction->product_id = $batchData['product_id'];
                     $transaction->batch_id = $batchData['batch_id'];
-                    $transaction->warehouse_id = $batchData['warehouse_id'];
+                    $transaction->warehouse_id = $warehouseId;
                     $transaction->quantity = $countedQty; // Positive quantity for stock in
                     $transaction->type = \App\Models\InventoryTransaction::TYPE_STOCK_IN;
                     $transaction->date = now();
                     $transaction->user = Auth::user() ? Auth::user()->name : 'System';
-                    $transaction->remark = 'Stock return from Stock Out -[' . $inventoryCount->driver->name. '] - Batch: [' . $batchData['batch_code'].']';
+                    $transaction->remark = 'Stock return from Stock Out -[' . $inventoryCount->driver->name . '] - Batch: [' . $batchData['batch_code'] . ']';
                     $transaction->save();
-                    
                 }
                 
                 // Update count status
@@ -824,13 +841,22 @@ class InventoryCountController extends Controller
                     'approved_at' => now(),
                 ]);
                 
-                //remove driver inventory balance
+                // Remove driver inventory balance (lorry stock)
                 $inventoryBalance = InventoryBalance::where('lorry_id', $inventoryCount->lorry_id)->first();
                 if ($inventoryBalance) {
                     $inventoryBalance->delete();
                 }                
 
                 \DB::commit();
+                
+                // Log success
+                \Log::info('Inventory count approved', [
+                    'count_id' => $inventoryCount->id,
+                    'lorry_id' => $inventoryCount->lorry_id,
+                    'driver' => $inventoryCount->driver->name,
+                    'batches_processed' => count($processedBatches)
+                ]);
+
             } catch (\Exception $e) {
                 \DB::rollBack();
                 throw $e;
@@ -846,8 +872,12 @@ class InventoryCountController extends Controller
 
             Flash::success('Inventory count approved successfully. Stock has been returned to selected warehouses.');
             return redirect()->back();
+            
         } catch (\Exception $e) {
-            \Log::error('Failed to approve count: ' . $e->getMessage());
+            \Log::error('Failed to approve count: ' . $e->getMessage(), [
+                'count_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
             
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([

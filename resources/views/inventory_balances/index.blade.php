@@ -244,6 +244,65 @@
         .text-white {
             color: #fff !important;
         }
+        
+        /* Enhanced quantity input styling */
+        .stockin-item-qty {
+            transition: all 0.3s ease;
+        }
+        
+        .stockin-item-qty.is-invalid {
+            border-color: #dc3545;
+            background-color: #fff8f8;
+        }
+        
+        .stockin-item-qty.is-warning {
+            border-color: #ffc107;
+            background-color: #fffbf0;
+        }
+        
+        .stockin-item-qty.valid-feedback {
+            border-color: #28a745;
+            background-color: #f0fff4;
+        }
+        
+        .stockin-qty-error {
+            font-size: 11px;
+            margin-top: 4px;
+            display: block;
+        }
+        
+        .quantity-status-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            margin-left: 5px;
+        }
+        
+        .exceed-warning {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        /* Add this to your style section */
+        #stockinItemsTable td {
+            vertical-align: middle;
+        }
+
+        #stockinItemsTable .stockin-item-qty {
+            display: block !important;
+            visibility: visible !important;
+            min-width: 100px;
+        }
+
+        /* Debug style - add a border to see if the cell exists */
+        #stockinItemsTable td:nth-child(4) {
+            /* This will help you see if the 4th column (Quantity) is visible */
+            background-color: #f9f9f9;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
     </style>
 
     <script>
@@ -253,6 +312,14 @@
         let stockinCodeReader = null;
         let stockinScanning = false;
         let stockinStream = null;
+
+        // Define updateHiddenQuantities FIRST before it's used
+        function updateHiddenQuantities() {
+            // Update existing hidden inputs without recreating them
+            $.each(stockinItems, function(index, item) {
+                $('#stockinItemsContainer input[name="items[' + index + '][quantity]"]').val(item.quantity);
+            });
+        }
 
         $('#warehouse_id_stockin').select2({
             width: '100%',
@@ -302,26 +369,87 @@
             }
         });
 
+        // Enhanced quantity input handler with better validation
         $(document).on('input', '.stockin-item-qty', function() {
             const index = parseInt($(this).data('index'), 10);
             const item = stockinItems[index];
-            let quantity = parseInt($(this).val(), 10);
-
+            let rawValue = $(this).val();
+            let quantity = parseInt(rawValue, 10);
+            
             if (!item) {
                 return;
             }
-
-            if (!quantity || quantity < 1) {
-                quantity = 1;
+            
+            const maxQty = item.available_quantity;
+            const errorSpan = $('#stockin-qty-error-' + index);
+            
+            // Remove any existing warning classes
+            $(this).removeClass('is-invalid is-warning valid-feedback');
+            
+            // Clear any non-numeric characters
+            if (rawValue !== '' && isNaN(quantity)) {
+                $(this).val('').addClass('is-invalid');
+                errorSpan.text('Please enter a valid number').show();
+                item.quantity = 0;
+                validateStockInForm();
+                updateDistributionSummary();
+                updateHiddenQuantities();
+                return;
             }
-
-            if (quantity > item.available_quantity) {
-                quantity = item.available_quantity;
+            
+            // Check if empty
+            if (rawValue === '') {
+                errorSpan.hide();
+                item.quantity = 0;
+                $(this).removeClass('is-invalid is-warning');
+                validateStockInForm();
+                updateDistributionSummary();
+                updateHiddenQuantities();
+                return;
             }
-
-            item.quantity = quantity;
-            $(this).val(quantity);
-            renderStockInItems();
+            
+            // Check if less than 1
+            if (quantity < 1) {
+                $(this).addClass('is-invalid');
+                errorSpan.text('Quantity must be at least 1').show();
+                item.quantity = 0;
+                validateStockInForm();
+                updateDistributionSummary();
+                updateHiddenQuantities();
+                return;
+            }
+            
+            // Check if exceeds available quantity
+            if (quantity > maxQty) {
+                $(this).addClass('is-invalid');
+                const excessAmount = quantity - maxQty;
+                errorSpan.html(`⚠️ Warning: Quantity (${quantity}) exceeds available stock (${maxQty} units) by ${excessAmount} units. Please reduce to ${maxQty} or less.`).show();
+                item.quantity = quantity;
+                $(this).val(quantity);
+                
+                // Add shake animation for visual feedback
+                $(this).addClass('exceed-warning');
+                setTimeout(() => {
+                    $(this).removeClass('exceed-warning');
+                }, 500);
+            } else if (quantity === maxQty) {
+                $(this).addClass('is-warning');
+                errorSpan.html(`✓ Maximum available quantity (${maxQty} units)`).show();
+                item.quantity = quantity;
+            } else if (quantity > maxQty * 0.8) {
+                $(this).addClass('is-warning');
+                const remaining = maxQty - quantity;
+                errorSpan.html(`⚠️ Only ${remaining} units remaining in stock`).show();
+                item.quantity = quantity;
+            } else {
+                $(this).addClass('valid-feedback');
+                errorSpan.hide();
+                item.quantity = quantity;
+            }
+            
+            validateStockInForm();
+            updateDistributionSummary();
+            updateHiddenQuantities(); // Update hidden inputs
         });
 
         $(document).on('click', '.remove-stockin-item', function() {
@@ -524,18 +652,42 @@
                 tbody.append('<tr id="stockinEmptyRow"><td colspan="5" class="text-center text-muted">{{ __("No scanned items yet") }}</td></tr>');
             } else {
                 $.each(stockinItems, function(index, item) {
-                    tbody.append(
-                        '<tr>' +
-                            '<td>' + escapeHtml(item.batch_code) + '<br><small class="text-muted">Exp: ' + escapeHtml(item.expiry_date) + '</small></td>' +
-                            '<td>' + escapeHtml(item.product_name) + '</td>' +
-                            '<td class="text-center">' + item.available_quantity + '</td>' +
-                            '<td><input type="number" min="1" max="' + item.available_quantity + '" value="' + item.quantity + '" class="form-control stockin-item-qty" data-index="' + index + '"></td>' +
-                            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-stockin-item" data-index="' + index + '"><i class="fa fa-trash"></i></button></td>' +
-                        '</tr>'
-                    );
+                    let quantityStatus = '';
+                    let quantityClass = '';
+                    
+                    if (item.quantity > item.available_quantity) {
+                        quantityStatus = '<span class="badge badge-danger quantity-status-badge">Exceeds stock!</span>';
+                        quantityClass = 'is-invalid';
+                    } else if (item.quantity === item.available_quantity && item.quantity > 0) {
+                        quantityStatus = '<span class="badge badge-warning quantity-status-badge">Full quantity</span>';
+                        quantityClass = 'is-warning';
+                    } else if (item.quantity > 0) {
+                        const percentage = Math.round((item.quantity / item.available_quantity) * 100);
+                        quantityStatus = '<span class="badge badge-info quantity-status-badge">' + percentage + '% used</span>';
+                        quantityClass = 'valid-feedback';
+                    }
+                    
+                    // Build the row HTML
+                    var row = '<tr>';
+                    row += '<td>' + escapeHtml(item.batch_code) + '<br><small class="text-muted">Exp: ' + escapeHtml(item.expiry_date) + '</small></td>';
+                    row += '<td>' + escapeHtml(item.product_name) + ' ' + quantityStatus + '</td>';
+                    row += '<td class="text-center">' + item.available_quantity + '</td>';
+                    row += '<td>';
+                    row += '<input type="text" value="' + item.quantity + '" ';
+                    row += 'class="form-control stockin-item-qty ' + quantityClass + '" ';
+                    row += 'data-index="' + index + '" ';
+                    row += 'data-max="' + item.available_quantity + '" ';
+                    row += 'style="width: 100%;">';
+                    row += '<small class="text-danger stockin-qty-error" id="stockin-qty-error-' + index + '" style="display: none; font-size: 11px;"></small>';
+                    row += '</td>';
+                    row += '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-stockin-item" data-index="' + index + '"><i class="fa fa-trash"></i></button></td>';
+                    row += '</tr>';
+                    
+                    tbody.append(row);
 
+                    // Add hidden inputs for form submission
                     hiddenContainer.append('<input type="hidden" name="items[' + index + '][product_batch_id]" value="' + item.batch_id + '">');
-                    hiddenContainer.append('<input type="hidden" name="items[' + index + '][quantity]" value="' + item.quantity + '">');
+                    hiddenContainer.append('<input type="hidden" name="items[' + index + '][quantity]" value="' + item.quantity + '" class="qty-hidden-' + index + '">');
                 });
             }
 
@@ -547,16 +699,27 @@
             const warehouseName = $('#warehouse_id_stockin').find('option:selected').text();
             const lorryName = $('#lorry_id_stockin').find('option:selected').text();
             let totalUnits = 0;
+            let hasIssues = false;
 
             $.each(stockinItems, function(_, item) {
                 totalUnits += parseInt(item.quantity, 10) || 0;
+                if (item.quantity > item.available_quantity) {
+                    hasIssues = true;
+                }
             });
 
             if (stockinItems.length > 0 && $('#warehouse_id_stockin').val() && $('#lorry_id_stockin').val()) {
-                $('#summaryText').html(
-                    stockinItems.length + ' batch(es), ' +
-                    totalUnits + ' unit(s) from <strong>' + escapeHtml(warehouseName) + '</strong> to <strong>' + escapeHtml(lorryName) + '</strong>'
-                );
+                let summaryHtml = stockinItems.length + ' batch(es), ' +
+                    totalUnits + ' unit(s) from <strong>' + escapeHtml(warehouseName) + '</strong> to <strong>' + escapeHtml(lorryName) + '</strong>';
+                
+                if (hasIssues) {
+                    summaryHtml += '<br><span class="text-danger">⚠️ Some quantities exceed available stock!</span>';
+                    $('#distributionSummary').removeClass('alert-info').addClass('alert-danger');
+                } else {
+                    $('#distributionSummary').removeClass('alert-danger').addClass('alert-info');
+                }
+                
+                $('#summaryText').html(summaryHtml);
                 $('#distributionSummary').show();
             } else {
                 $('#distributionSummary').hide();
@@ -566,13 +729,75 @@
         function validateStockInForm() {
             const warehouseSelected = $('#warehouse_id_stockin').val() !== '';
             const lorrySelected = $('#lorry_id_stockin').val() !== '';
-            const hasItems = stockinItems.length > 0;
-            const quantitiesValid = stockinItems.every(function(item) {
-                return item.quantity > 0 && item.quantity <= item.available_quantity;
+            
+            let hasQuantityIssues = false;
+            let hasValidQuantities = false;
+            
+            $.each(stockinItems, function(index, item) {
+                if (item.quantity > 0) {
+                    hasValidQuantities = true;
+                    if (item.quantity > item.available_quantity) {
+                        hasQuantityIssues = true;
+                    }
+                }
             });
-
-            $('#stockinSubmitBtn').prop('disabled', !(warehouseSelected && lorrySelected && hasItems && quantitiesValid));
+            
+            const canSubmit = warehouseSelected && lorrySelected && hasValidQuantities && !hasQuantityIssues;
+            
+            $('#stockinSubmitBtn').prop('disabled', !canSubmit);
+            
+            if (hasValidQuantities && hasQuantityIssues) {
+                $('#stockinSubmitBtn')
+                    .attr('title', 'Some quantities exceed available stock. Please adjust them before submitting.')
+                    .addClass('btn-danger')
+                    .removeClass('btn-success');
+            } else {
+                $('#stockinSubmitBtn')
+                    .removeAttr('title')
+                    .addClass('btn-success')
+                    .removeClass('btn-danger');
+            }
         }
+
+        // Form submission validation - ADD THIS TO SEE WHAT'S BEING SUBMITTED
+        $('#stockinForm').on('submit', function(e) {
+            // Log all form data before submission for debugging
+            console.log('Form data before submit:');
+            $.each(stockinItems, function(index, item) {
+                console.log(`Item ${index}: batch_id=${item.batch_id}, quantity=${item.quantity}`);
+            });
+            
+            let hasExceededItems = false;
+            let errorMessage = '';
+            
+            $.each(stockinItems, function(index, item) {
+                if (item.quantity > item.available_quantity) {
+                    hasExceededItems = true;
+                    errorMessage += `\n• ${item.batch_code}: ${item.quantity} > ${item.available_quantity} (exceeds by ${item.quantity - item.available_quantity})`;
+                }
+            });
+            
+            if (hasExceededItems) {
+                e.preventDefault();
+                showStockInError(`Cannot submit. The following batches exceed available stock:${errorMessage}`);
+                return false;
+            }
+            
+            let totalQuantity = 0;
+            $.each(stockinItems, function(index, item) {
+                totalQuantity += item.quantity;
+            });
+            
+            if (totalQuantity > 100) {
+                if (!confirm(`You are moving ${totalQuantity} units total across ${stockinItems.length} batches.\n\nAre you sure you want to proceed?`)) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+            
+            const submitBtn = $('#stockinSubmitBtn');
+            submitBtn.html('<i class="fa fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
+        });
 
         function escapeHtml(value) {
             return $('<div>').text(value || '').html();
@@ -928,7 +1153,7 @@
             hideStockInMessages();
             setStockInHelp('{{ __("Select warehouse and lorry first. Barcode scanner can input code followed by Enter.") }}', 'muted');
             $('#distributionSummary').hide();
-            $('#stockinSubmitBtn').prop('disabled', true);
+            $('#stockinSubmitBtn').prop('disabled', true).removeClass('btn-danger').addClass('btn-success');
         });
 
         $('#stockout').on('hidden.bs.modal', function() {

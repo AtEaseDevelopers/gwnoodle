@@ -83,7 +83,7 @@ class InventoryBalanceController extends AppBaseController
                 ->withErrors($validator)
                 ->withInput();
         }
-
+        
         $lorry = Lorry::find($request->lorry_id);
         $warehouseId = $request->warehouse_id;
         $items = collect($request->input('items', []))
@@ -137,13 +137,20 @@ class InventoryBalanceController extends AppBaseController
                 $productBatch = $productBatches->get($item['product_batch_id']);
                 $warehouseInventory = $warehouseInventoryMap->get($item['product_batch_id']);
 
+                // 1. Deduct from warehouse inventory
                 $warehouseInventory->decreaseQuantity($item['quantity']);
+
+                // 2. Deduct from product batch master quantity (CRITICAL FIX)
+                $productBatch->decreaseQuantity($item['quantity'], "Stock in to lorry {$lorry->lorryno} from warehouse ID: {$warehouseId}");
+                
+                // 3. Update lorry inventory balance
                 $inventoryBalance->updateBatchQuantity(
                     $productBatch->id,
                     $item['quantity'],
                     'add'
                 );
 
+                // 4. Create transaction records
                 InventoryTransaction::create([
                     'type' => InventoryTransaction::TYPE_STOCK_IN,
                     'lorry_id' => $lorry->id,
@@ -244,16 +251,27 @@ class InventoryBalanceController extends AppBaseController
         DB::beginTransaction();
         
         try {
-            // Remove from lorry inventory
+            // 1. Get the product batch first
+            $batch = ProductBatch::find($request->batch_id);
+            
+            if (!$batch) {
+                throw new \Exception('Product batch not found');
+            }
+            
+            // 2. Add back to product batch master quantity (CRITICAL FIX)
+            $batch->increaseQuantity(
+                $request->quantity, 
+                "Returned from lorry to warehouse ID: {$request->to_warehouse_id}"
+            );
+            
+            // 3. Remove from lorry inventory
             $inventoryBalance->updateBatchQuantity(
                 $request->batch_id,
                 $request->quantity,
                 'subtract'
             );
 
-            $batch = ProductBatch::find($request->batch_id);
-
-            // Add to warehouse inventory
+            // 4. Add to warehouse inventory
             $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
                 [
                     'warehouse_id' => $request->to_warehouse_id,

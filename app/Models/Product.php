@@ -91,7 +91,6 @@ class Product extends Model
     {
         return $this->batches()
             ->where('status', 1) // Active batches only
-            ->where('expiry_date', '>', now()) // Not expired
             ->where('quantity', '>', 0) // Has stock
             ->sum('quantity');
     }

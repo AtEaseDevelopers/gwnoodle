@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Traits\LogsActivity;
+use Illuminate\Support\Facades\Auth;
 
 class ProductBatch extends Model
 {
@@ -315,7 +316,7 @@ class ProductBatch extends Model
             'quantity' => $amount,
             'date' => now(),
             'remark' => $remark,
-            'user_id' => $userId ?? auth()->id()
+            'user' => Auth::user()->name ?? 'System',
         ]);
     }
 
