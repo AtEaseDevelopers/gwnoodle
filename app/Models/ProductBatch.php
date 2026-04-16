@@ -342,7 +342,7 @@ class ProductBatch extends Model
             'quantity' => -$amount,
             'date' => now(),
             'remark' => $remark,
-            'user_id' => $userId ?? auth()->id()
+            'user' => Auth::user()->name ?? 'System',
         ]);
     }
 }

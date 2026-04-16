@@ -13,6 +13,7 @@
                         <div class="card-header">
                             <i class="fa fa-align-justify"></i>
                             {{ __('Warehouses') }}
+                            <button class="border-0 bg-transparent pull-right text-danger" data-toggle="modal" data-target="#stockadjustment"><i class="fa fa-cart-arrow-down fa-lg"></i></button>
                             <button class="border-0 bg-transparent pull-right text-info" data-toggle="modal" data-target="#transferStock"><i class="fa fa-exchange fa-lg"></i></button>
                             <a href="{{ route('warehouses.create') }}" class="pull-right text-success pr-2"><i class="fa fa-plus-square fa-lg"></i></a>
                         </div>
@@ -126,7 +127,7 @@
     </div>
 
     <div class="modal fade" id="transferScannerModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
@@ -185,6 +186,80 @@
             </div>
         </div>
     </div>
+    <!-- Stock Adjustment Modal -->
+    <div id="stockadjustment" class="modal fade">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h4 class="modal-title h6">{{ __('Stock Adjustment') }}</h4>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">×</button>
+                </div>
+                <div class="modal-body">
+                    {!! Form::open(['route' => 'warehouses.stock-adjustment', 'id' => 'adjustmentForm']) !!}
+                    
+                    <!-- Warehouse Selection -->
+                    <div class="form-group">
+                        <label for="adjustment_warehouse_id" class="col-form-label">{{ __('Select Warehouse') }} <span class="text-danger">*</span>:</label>
+                        <select name="warehouse_id" id="adjustment_warehouse_id" class="form-control select2" required>
+                            <option value="">{{ __('Select Warehouse') }}</option>
+                            @foreach($warehouses as $warehouse)
+                                <option value="{{ $warehouse->id }}">{{ $warehouse->name }} ({{ $warehouse->location }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Product Selection -->
+                    <div class="form-group">
+                        <label for="adjustment_product_id" class="col-form-label">{{ __('Select Product') }} <span class="text-danger">*</span>:</label>
+                        <select name="product_id" id="adjustment_product_id" class="form-control select2" required disabled>
+                            <option value="">{{ __('First select warehouse') }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Batch Selection -->
+                    <div class="form-group">
+                        <label for="adjustment_batch_id" class="col-form-label">{{ __('Select Batch') }} <span class="text-danger">*</span>:</label>
+                        <select name="batch_id" id="adjustment_batch_id" class="form-control select2" required disabled>
+                            <option value="">{{ __('First select product') }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Current Stock Display -->
+                    <div class="alert alert-info" id="currentStockInfo" style="display: none;">
+                        <strong>{{ __('Current Stock:') }}</strong> 
+                        <span id="currentStockValue">0</span> {{ __('units') }}
+                    </div>
+
+                    <!-- New Quantity Input -->
+                    <div class="form-group">
+                        <label for="adjustment_new_quantity" class="col-form-label">{{ __('New Quantity') }} <span class="text-danger">*</span>:</label>
+                        <input type="number" min="0" class="form-control" id="adjustment_new_quantity" name="new_quantity" placeholder="Enter new quantity" disabled required>
+                        <small class="text-muted">{{ __('Enter the new quantity after adjustment. The system will calculate the difference automatically.') }}</small>
+                    </div>
+
+                    <!-- Adjustment Difference Display -->
+                    <div class="alert alert-warning" id="adjustmentDifferenceInfo" style="display: none;">
+                        <strong>{{ __('Adjustment Summary:') }}</strong>
+                        <div id="adjustmentDifferenceText"></div>
+                    </div>
+
+                    <!-- Remarks -->
+                    <div class="form-group">
+                        <label for="adjustment_remarks" class="col-form-label">{{ __('Remarks') }} <span class="text-danger">*</span>:</label>
+                        <textarea class="form-control" name="remarks" id="adjustment_remarks" rows="3" placeholder="Reason for stock adjustment..." required></textarea>
+                        <small class="text-muted">{{ __('Please provide a reason for this stock adjustment') }}</small>
+                    </div>
+                    
+                    <div class="form-group text-right mt-3">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button type="submit" name="button" class="btn btn-danger" id="adjustmentSubmitBtn" disabled>{{ __('Apply Adjustment') }}</button>
+                    </div>
+                    {!! Form::close() !!}
+                </div>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
@@ -192,6 +267,29 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
     
     <style>
+
+        /* Force input fields to be visible */
+        .transfer-item-qty {
+            display: block !important;
+            visibility: visible !important;
+            width: 100% !important;
+            min-width: 100px;
+        }
+
+        #transferItemsTableBody input {
+            display: block !important;
+            visibility: visible !important;
+        }
+
+        #transferItemsTableBody td {
+            vertical-align: middle;
+        }
+
+        /* Ensure the table cell containing the input is visible */
+        #transferItemsTableBody td:nth-child(4) {
+            min-width: 150px;
+        }
+
         .select2-container {
             width: 100% !important;
         }
@@ -200,6 +298,113 @@
         }
         .text-white {
             color: #fff !important;
+        }
+        /* Add to your style section */
+        #adjustmentDifferenceInfo {
+            transition: all 0.3s ease;
+        }
+
+        #currentStockInfo {
+            background-color: #e7f3ff;
+            border-color: #b8daff;
+        }
+
+        .stock-adjustment-badge {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+
+        .badge-increase {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .badge-decrease {
+            background-color: #dc3545;
+            color: white;
+        }
+        /* Transfer quantity input styling */
+        .transfer-item-qty {
+            transition: all 0.3s ease;
+        }
+
+        .transfer-item-qty.is-invalid {
+            border-color: #dc3545;
+            background-color: #fff8f8;
+        }
+
+        .transfer-item-qty.is-warning {
+            border-color: #ffc107;
+            background-color: #fffbf0;
+        }
+
+        .transfer-item-qty.valid-feedback {
+            border-color: #28a745;
+            background-color: #f0fff4;
+        }
+
+        .transfer-qty-error {
+            font-size: 11px;
+            margin-top: 4px;
+            display: block;
+        }
+
+        .quantity-status-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            margin-left: 5px;
+        }
+
+        .exceed-warning {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        /* Improved modal scrolling */
+        .modal-dialog-scrollable {
+            max-height: calc(100vh - 20px);
+        }
+        
+        .modal-dialog-scrollable .modal-body {
+            max-height: calc(100vh - 180px);
+            overflow-y: auto;
+            padding-bottom: 1rem;
+        }
+        
+        /* For very small screens */
+        @media (max-height: 600px) {
+            .modal-dialog-scrollable .modal-body {
+                max-height: calc(100vh - 160px);
+            }
+        }
+        
+        /* For landscape mode on mobile */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .modal-dialog-scrollable .modal-body {
+                max-height: calc(100vh - 140px);
+                }
+                
+                .modal-body .form-group {
+                    margin-bottom: 0.5rem;
+                }
+            }
+            
+            /* Ensure Select2 dropdown doesn't overflow */
+            .select2-dropdown {
+                z-index: 1061 !important;
+            }
+            
+            /* Make modal footer stick to bottom */
+            .modal-footer {
+                flex-shrink: 0;
+                background-color: #f8f9fa;
+                border-top: 1px solid #dee2e6;
+            }
+            
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
         }
     </style>
 
@@ -211,12 +416,45 @@
             let transferCodeReader = null;
             let transferIsScanning = false;
             let transferActiveStream = null;
+            let currentBatchStock = 0;
+            let currentBatchId = null;
 
+            // ========== HELPER FUNCTIONS (Same as stockin modal) ==========
+            
+            function escapeHtml(value) {
+                return $('<div>').text(value || '').html();
+            }
+
+            function updateTransferHiddenQuantities() {
+                $.each(transferItems, function(index, item) {
+                    $('#transferItemsContainer input[name="items[' + index + '][quantity]"]').val(item.quantity);
+                });
+            }
+
+            // Initialize select2
             $('.select2').select2({
                 width: '100%',
                 dropdownParent: $('#transferStock')
             });
 
+            // Initialize select2 for adjustment modal
+            $('#adjustment_warehouse_id').select2({
+                width: '100%',
+                dropdownParent: $('#stockadjustment')
+            });
+
+            $('#adjustment_product_id').select2({
+                width: '100%',
+                dropdownParent: $('#stockadjustment')
+            });
+
+            $('#adjustment_batch_id').select2({
+                width: '100%',
+                dropdownParent: $('#stockadjustment')
+            });
+
+            // ========== STOCK TRANSFER MODAL FUNCTIONS (Mirroring stockin modal pattern) ==========
+            
             $('#from_warehouse_id').on('change', function() {
                 var warehouseId = $(this).val();
                 var toWarehouseId = $('#to_warehouse_id').val();
@@ -227,20 +465,34 @@
                     return;
                 }
                 
+                // Clear existing items (same as stockin modal)
                 transferItems = [];
                 transferWarehouseBatches = {};
                 renderTransferItems();
 
                 if (warehouseId) {
+                    $('#transferBatchInfo').text('Loading warehouse batches...');
                     $.ajax({
                         url: '{{ route("warehouses.get-warehouse-batches", "") }}/' + warehouseId,
                         type: 'GET',
+                        dataType: 'json',
                         success: function(response) {
-                            if (response.inventory && response.inventory.length > 0) {
-                                $.each(response.inventory, function(index, item) {
-                                    transferWarehouseBatches[(item.batch_code || '').toUpperCase()] = item;
+                            var inventory = response.inventory || response || [];
+                            
+                            if (inventory.length > 0) {
+                                $.each(inventory, function(index, item) {
+                                    var batchCode = (item.batch_code || '').trim().toUpperCase();
+                                    if (batchCode) {
+                                        transferWarehouseBatches[batchCode] = {
+                                            batch_id: item.batch_id || item.id,
+                                            batch_code: item.batch_code,
+                                            product_name: item.product_name,
+                                            quantity: item.quantity,
+                                            expiry_date: item.expiry_date
+                                        };
+                                    }
                                 });
-                                $('#transferBatchInfo').text('Warehouse loaded. Scan product batches to transfer.');
+                                $('#transferBatchInfo').text('Warehouse loaded. Scan product batches to transfer. (' + Object.keys(transferWarehouseBatches).length + ' batches available)');
                             } else {
                                 $('#transferBatchInfo').text('No batches available in this warehouse');
                             }
@@ -334,26 +586,87 @@
                 scanTransferUploadedImage();
             });
 
+            // ========== QUANTITY INPUT HANDLER (Same as stockin modal) ==========
             $(document).on('input', '.transfer-item-qty', function() {
                 const index = parseInt($(this).data('index'), 10);
                 const item = transferItems[index];
-                let qty = parseInt($(this).val(), 10);
-
+                let rawValue = $(this).val();
+                let quantity = parseInt(rawValue, 10);
+                
                 if (!item) {
                     return;
                 }
-
-                if (!qty || qty < 1) {
-                    qty = 1;
+                
+                const maxQty = item.available_quantity;
+                const errorSpan = $('#transfer-qty-error-' + index);
+                
+                // Remove any existing warning classes
+                $(this).removeClass('is-invalid is-warning valid-feedback');
+                
+                // Clear any non-numeric characters
+                if (rawValue !== '' && isNaN(quantity)) {
+                    $(this).val('').addClass('is-invalid');
+                    errorSpan.text('Please enter a valid number').show();
+                    item.quantity = 0;
+                    validateTransferForm();
+                    updateTransferDetails();
+                    updateTransferHiddenQuantities();
+                    return;
                 }
-
-                if (qty > item.available_quantity) {
-                    qty = item.available_quantity;
+                
+                // Check if empty
+                if (rawValue === '') {
+                    errorSpan.hide();
+                    item.quantity = 0;
+                    $(this).removeClass('is-invalid is-warning');
+                    validateTransferForm();
+                    updateTransferDetails();
+                    updateTransferHiddenQuantities();
+                    return;
                 }
-
-                item.quantity = qty;
-                $(this).val(qty);
-                renderTransferItems();
+                
+                // Check if less than 1
+                if (quantity < 1) {
+                    $(this).addClass('is-invalid');
+                    errorSpan.text('Quantity must be at least 1').show();
+                    item.quantity = 0;
+                    validateTransferForm();
+                    updateTransferDetails();
+                    updateTransferHiddenQuantities();
+                    return;
+                }
+                
+                // Check if exceeds available quantity
+                if (quantity > maxQty) {
+                    $(this).addClass('is-invalid');
+                    const excessAmount = quantity - maxQty;
+                    errorSpan.html(`⚠️ Warning: Quantity (${quantity}) exceeds available stock (${maxQty} units) by ${excessAmount} units. Please reduce to ${maxQty} or less.`).show();
+                    item.quantity = quantity;
+                    $(this).val(quantity);
+                    
+                    // Add shake animation for visual feedback
+                    $(this).addClass('exceed-warning');
+                    setTimeout(() => {
+                        $(this).removeClass('exceed-warning');
+                    }, 500);
+                } else if (quantity === maxQty) {
+                    $(this).addClass('is-warning');
+                    errorSpan.html(`✓ Maximum available quantity (${maxQty} units)`).show();
+                    item.quantity = quantity;
+                } else if (quantity > maxQty * 0.8) {
+                    $(this).addClass('is-warning');
+                    const remaining = maxQty - quantity;
+                    errorSpan.html(`⚠️ Only ${remaining} units remaining in stock`).show();
+                    item.quantity = quantity;
+                } else {
+                    $(this).addClass('valid-feedback');
+                    errorSpan.hide();
+                    item.quantity = quantity;
+                }
+                
+                validateTransferForm();
+                updateTransferDetails();
+                updateTransferHiddenQuantities();
             });
 
             $(document).on('click', '.remove-transfer-item', function() {
@@ -366,15 +679,27 @@
                 var fromWarehouse = $('#from_warehouse_id').find('option:selected').text();
                 var toWarehouse = $('#to_warehouse_id').find('option:selected').text();
                 var totalUnits = 0;
+                var hasIssues = false;
                 
                 transferItems.forEach(function(item) {
                     totalUnits += parseInt(item.quantity, 10) || 0;
+                    if (item.quantity > item.available_quantity) {
+                        hasIssues = true;
+                    }
                 });
 
                 if ($('#from_warehouse_id').val() && $('#to_warehouse_id').val() && transferItems.length > 0) {
                     var summary = 'Transferring <strong>' + totalUnits + '</strong> units across <strong>' +
-                                 transferItems.length + '</strong> batch(es) from <strong>' +
-                                 fromWarehouse + '</strong> to <strong>' + toWarehouse + '</strong>';
+                                transferItems.length + '</strong> batch(es) from <strong>' +
+                                fromWarehouse + '</strong> to <strong>' + toWarehouse + '</strong>';
+                    
+                    if (hasIssues) {
+                        summary += '<br><span class="text-danger">⚠️ Some quantities exceed available stock!</span>';
+                        $('#transferDetails').removeClass('alert-info').addClass('alert-danger');
+                    } else {
+                        $('#transferDetails').removeClass('alert-danger').addClass('alert-info');
+                    }
+                    
                     $('#transferDetailsText').html(summary);
                     $('#transferDetails').show();
                 } else {
@@ -382,16 +707,37 @@
                 }
             }
 
-            // Validate transfer form
             function validateTransferForm() {
                 var fromSelected = $('#from_warehouse_id').val() !== '';
                 var toSelected = $('#to_warehouse_id').val() !== '';
-                var itemsValid = transferItems.length > 0 && transferItems.every(function(item) {
-                    return item.quantity > 0 && item.quantity <= item.available_quantity;
+                var hasValidQuantities = false;
+                var hasQuantityIssues = false;
+                
+                $.each(transferItems, function(index, item) {
+                    if (item.quantity > 0) {
+                        hasValidQuantities = true;
+                        if (item.quantity > item.available_quantity) {
+                            hasQuantityIssues = true;
+                        }
+                    }
                 });
-                var isValid = fromSelected && toSelected && itemsValid;
+                
+                var isValid = fromSelected && toSelected && hasValidQuantities && !hasQuantityIssues;
                 
                 $('#transferSubmitBtn').prop('disabled', !isValid);
+                
+                // Update button styling
+                if (hasValidQuantities && hasQuantityIssues) {
+                    $('#transferSubmitBtn')
+                        .attr('title', 'Some quantities exceed available stock. Please adjust them before submitting.')
+                        .addClass('btn-danger')
+                        .removeClass('btn-info');
+                } else {
+                    $('#transferSubmitBtn')
+                        .removeAttr('title')
+                        .addClass('btn-info')
+                        .removeClass('btn-danger');
+                }
             }
 
             function toggleTransferScanner() {
@@ -442,28 +788,61 @@
                 renderTransferItems();
             }
 
+            // ========== RENDER TRANSFER ITEMS (Same pattern as stockin modal) ==========
             function renderTransferItems() {
                 var tbody = $('#transferItemsTableBody');
                 var hiddenContainer = $('#transferItemsContainer');
                 tbody.empty();
                 hiddenContainer.empty();
 
+                console.log('Rendering transfer items, count:', transferItems.length);
+
                 if (transferItems.length === 0) {
-                    tbody.append('<tr id="transferEmptyRow"><td colspan="5" class="text-center text-muted">{{ __("No scanned batches yet") }}</td></tr>');
+                    tbody.append('<tr id="transferEmptyRow"><td colspan="5" class="text-center text-muted">No scanned batches yet</td></tr>');
                 } else {
-                    transferItems.forEach(function(item, index) {
-                        tbody.append(
-                            '<tr>' +
-                                '<td>' + escapeHtml(item.batch_code) + '<br><small class="text-muted">Available: ' + item.available_quantity + '</small></td>' +
-                                '<td>' + escapeHtml(item.product_name) + '</td>' +
-                                '<td>' + escapeHtml(item.expiry_date) + '</td>' +
-                                '<td><input type="number" min="1" max="' + item.available_quantity + '" value="' + item.quantity + '" class="form-control transfer-item-qty" data-index="' + index + '"></td>' +
-                                '<td><button type="button" class="btn btn-danger btn-sm remove-transfer-item" data-index="' + index + '"><i class="fa fa-trash"></i></button></td>' +
-                            '</tr>'
-                        );
+                    for (var i = 0; i < transferItems.length; i++) {
+                        var item = transferItems[i];
+                        var index = i;
+                        
+                        var quantityStatus = '';
+                        var quantityClass = '';
+                        var inputValue = item.quantity;
+                        var maxQty = item.available_quantity;
+                        
+                        if (item.quantity > item.available_quantity) {
+                            quantityStatus = '<span class="badge badge-danger" style="font-size: 10px; margin-left: 5px;">Exceeds stock!</span>';
+                            quantityClass = 'is-invalid';
+                        } else if (item.quantity === item.available_quantity && item.quantity > 0) {
+                            quantityStatus = '<span class="badge badge-warning" style="font-size: 10px; margin-left: 5px;">Full quantity</span>';
+                            quantityClass = 'is-warning';
+                        } else if (item.quantity > 0) {
+                            var percentage = Math.round((item.quantity / item.available_quantity) * 100);
+                            quantityStatus = '<span class="badge badge-info" style="font-size: 10px; margin-left: 5px;">' + percentage + '% used</span>';
+                            quantityClass = 'valid-feedback';
+                        }
+                        
+                        // Create row HTML - SIMPLE AND CLEAR
+                        var row = '<tr>';
+                        row += '<td>' + escapeHtml(item.batch_code) + '<br><small class="text-muted">Available: ' + item.available_quantity + '</small></td>';
+                        row += '<td>' + escapeHtml(item.product_name) + ' ' + quantityStatus + '</td>';
+                        row += '<td>' + escapeHtml(item.expiry_date) + '</td>';
+                        row += '<td>';
+                        row += '<input type="text" value="' + inputValue + '" ';
+                        row += 'class="form-control transfer-item-qty ' + quantityClass + '" ';
+                        row += 'data-index="' + index + '" ';
+                        row += 'data-max="' + maxQty + '" ';
+                        row += 'style="width: 100%; display: block !important; visibility: visible !important;">';
+                        row += '<small class="text-danger transfer-qty-error" id="transfer-qty-error-' + index + '" style="display: none; font-size: 11px;"></small>';
+                        row += '</td>';
+                        row += '<td><button type="button" class="btn btn-danger btn-sm remove-transfer-item" data-index="' + index + '"><i class="fa fa-trash"></i></button></td>';
+                        row += '</tr>';
+                        
+                        tbody.append(row);
+                        
+                        // Add hidden inputs
                         hiddenContainer.append('<input type="hidden" name="items[' + index + '][batch_id]" value="' + item.batch_id + '">');
                         hiddenContainer.append('<input type="hidden" name="items[' + index + '][quantity]" value="' + item.quantity + '">');
-                    });
+                    }
                 }
 
                 validateTransferForm();
@@ -479,7 +858,7 @@
                 renderTransferItems();
                 toggleTransferScanner();
                 $(this).find('#transferDetails').hide();
-                $('#transferSubmitBtn').prop('disabled', true);
+                $('#transferSubmitBtn').prop('disabled', true).removeClass('btn-danger').addClass('btn-info');
             });
 
             $('#transferForm').on('submit', function(e) {
@@ -497,6 +876,23 @@
                     alert('Please scan at least one batch to transfer');
                     return false;
                 }
+                
+                // Check for exceeded quantities
+                var hasExceededItems = false;
+                var errorMessage = '';
+                
+                $.each(transferItems, function(index, item) {
+                    if (item.quantity > item.available_quantity) {
+                        hasExceededItems = true;
+                        errorMessage += `\n• ${item.batch_code}: ${item.quantity} > ${item.available_quantity} (exceeds by ${item.quantity - item.available_quantity})`;
+                    }
+                });
+                
+                if (hasExceededItems) {
+                    e.preventDefault();
+                    alert(`Cannot submit. The following batches exceed available stock:${errorMessage}`);
+                    return false;
+                }
 
                 var totalUnits = transferItems.reduce(function(sum, item) {
                     return sum + (parseInt(item.quantity, 10) || 0);
@@ -506,8 +902,218 @@
                     e.preventDefault();
                     return false;
                 }
+                
+                // Show loading state
+                var submitBtn = $('#transferSubmitBtn');
+                submitBtn.html('<i class="fa fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
             });
 
+            // ========== STOCK ADJUSTMENT MODAL FUNCTIONS ==========
+            
+            $('#adjustment_warehouse_id').on('change', function() {
+                var warehouseId = $(this).val();
+                var productSelect = $('#adjustment_product_id');
+                var batchSelect = $('#adjustment_batch_id');
+                
+                productSelect.val('').trigger('change');
+                batchSelect.val('').trigger('change');
+                batchSelect.prop('disabled', true);
+                $('#adjustment_new_quantity').prop('disabled', true).val('');
+                $('#currentStockInfo').hide();
+                $('#adjustmentDifferenceInfo').hide();
+                
+                if (warehouseId) {
+                    $.ajax({
+                        url: '{{ route("warehouses.get-warehouse-products", "") }}/' + warehouseId,
+                        type: 'GET',
+                        success: function(response) {
+                            productSelect.empty().append('<option value="">{{ __("Select Product") }}</option>');
+                            
+                            if (response.products && response.products.length > 0) {
+                                $.each(response.products, function(index, product) {
+                                    productSelect.append('<option value="' + product.product_id + '">' + product.product_name + ' (Total: ' + product.total_quantity + ' units)</option>');
+                                });
+                                productSelect.prop('disabled', false);
+                            } else {
+                                productSelect.append('<option value="">{{ __("No products found in this warehouse") }}</option>');
+                                productSelect.prop('disabled', true);
+                            }
+                        },
+                        error: function(xhr) {
+                            console.error('Error loading products:', xhr);
+                            productSelect.empty().append('<option value="">{{ __("Error loading products") }}</option>');
+                            productSelect.prop('disabled', true);
+                        }
+                    });
+                } else {
+                    productSelect.empty().append('<option value="">{{ __("Select Warehouse First") }}</option>');
+                    productSelect.prop('disabled', true);
+                }
+                
+                validateAdjustmentForm();
+            });
+
+            $('#adjustment_product_id').on('change', function() {
+                var warehouseId = $('#adjustment_warehouse_id').val();
+                var productId = $(this).val();
+                var batchSelect = $('#adjustment_batch_id');
+                
+                batchSelect.val('').trigger('change');
+                $('#adjustment_new_quantity').prop('disabled', true).val('');
+                $('#currentStockInfo').hide();
+                $('#adjustmentDifferenceInfo').hide();
+                
+                if (warehouseId && productId) {
+                    var url = '/warehouses/' + warehouseId + '/products/' + productId + '/batches';
+                    
+                    $.ajax({
+                        url: url,
+                        type: 'GET',
+                        success: function(response) {
+                            batchSelect.empty().append('<option value="">{{ __("Select Batch") }}</option>');
+                            
+                            if (response.success && response.batches && response.batches.length > 0) {
+                                $.each(response.batches, function(index, batch) {
+                                    batchSelect.append('<option value="' + batch.batch_id + '" data-quantity="' + batch.quantity + '" data-expiry="' + batch.expiry_date + '">' + 
+                                        batch.batch_code + ' (Stock: ' + batch.quantity + ' units | Exp: ' + batch.expiry_date + ')' +
+                                        '</option>');
+                                });
+                                batchSelect.prop('disabled', false);
+                            } else {
+                                batchSelect.append('<option value="">{{ __("No batches found for this product in warehouse") }}</option>');
+                                batchSelect.prop('disabled', true);
+                            }
+                        },
+                        error: function(xhr) {
+                            console.error('Error loading batches:', xhr);
+                            batchSelect.empty().append('<option value="">{{ __("Error loading batches") }}</option>');
+                            batchSelect.prop('disabled', true);
+                        }
+                    });
+                } else {
+                    batchSelect.empty().append('<option value="">{{ __("Select Product First") }}</option>');
+                    batchSelect.prop('disabled', true);
+                }
+                
+                validateAdjustmentForm();
+            });
+
+            $('#adjustment_batch_id').on('change', function() {
+                var selected = $(this).find('option:selected');
+                var quantity = selected.data('quantity') || 0;
+                var batchId = $(this).val();
+                
+                currentBatchStock = quantity;
+                currentBatchId = batchId;
+                
+                if (batchId) {
+                    $('#currentStockValue').text(quantity);
+                    $('#currentStockInfo').show();
+                    $('#adjustment_new_quantity').prop('disabled', false);
+                    $('#adjustment_new_quantity').val(quantity);
+                    $('#adjustmentDifferenceInfo').hide();
+                } else {
+                    $('#currentStockInfo').hide();
+                    $('#adjustment_new_quantity').prop('disabled', true);
+                    $('#adjustment_new_quantity').val('');
+                    $('#adjustmentDifferenceInfo').hide();
+                }
+                
+                validateAdjustmentForm();
+            });
+
+            $('#adjustment_new_quantity').on('input', function() {
+                var newQuantity = parseInt($(this).val(), 10) || 0;
+                var currentQuantity = currentBatchStock;
+                var difference = newQuantity - currentQuantity;
+                
+                if (newQuantity >= 0) {
+                    if (difference > 0) {
+                        $('#adjustmentDifferenceText').html(
+                            '<span class="text-success">▲ Stock INCREASE by ' + difference + ' units</span><br>' +
+                            '<small>Current: ' + currentQuantity + ' units → New: ' + newQuantity + ' units</small>'
+                        );
+                        $('#adjustmentDifferenceInfo').removeClass('alert-warning').addClass('alert-success').show();
+                    } else if (difference < 0) {
+                        $('#adjustmentDifferenceText').html(
+                            '<span class="text-danger">▼ Stock DECREASE by ' + Math.abs(difference) + ' units</span><br>' +
+                            '<small>Current: ' + currentQuantity + ' units → New: ' + newQuantity + ' units</small>'
+                        );
+                        $('#adjustmentDifferenceInfo').removeClass('alert-success').addClass('alert-warning').show();
+                    } else {
+                        $('#adjustmentDifferenceInfo').hide();
+                    }
+                } else {
+                    $('#adjustmentDifferenceInfo').hide();
+                }
+                
+                validateAdjustmentForm();
+            });
+
+            function validateAdjustmentForm() {
+                var warehouseSelected = $('#adjustment_warehouse_id').val() !== '';
+                var productSelected = $('#adjustment_product_id').val() !== '';
+                var batchSelected = $('#adjustment_batch_id').val() !== '';
+                var newQuantity = $('#adjustment_new_quantity').val();
+                var remarks = $('#adjustment_remarks').val().trim();
+                
+                var isValid = warehouseSelected && productSelected && batchSelected && 
+                            newQuantity !== '' && parseInt(newQuantity, 10) >= 0 && 
+                            remarks !== '';
+                
+                $('#adjustmentSubmitBtn').prop('disabled', !isValid);
+            }
+
+            $('#adjustment_remarks').on('input', function() {
+                validateAdjustmentForm();
+            });
+
+            $('#stockadjustment').on('hidden.bs.modal', function() {
+                $(this).find('select').val('').trigger('change');
+                $(this).find('input[type="number"]').val('');
+                $(this).find('textarea').val('');
+                $('#currentStockInfo').hide();
+                $('#adjustmentDifferenceInfo').hide();
+                $('#adjustmentSubmitBtn').prop('disabled', true);
+                currentBatchStock = 0;
+                currentBatchId = null;
+            });
+
+            $('#adjustmentForm').on('submit', function(e) {
+                var newQuantity = parseInt($('#adjustment_new_quantity').val(), 10);
+                var currentQuantity = currentBatchStock;
+                var difference = newQuantity - currentQuantity;
+                
+                var confirmMessage = '';
+                if (difference > 0) {
+                    confirmMessage = 'You are INCREASING stock by ' + difference + ' units.\n' +
+                                    'Current: ' + currentQuantity + ' units\n' +
+                                    'New: ' + newQuantity + ' units\n\n' +
+                                    'Reason: ' + $('#adjustment_remarks').val() + '\n\n' +
+                                    'Are you sure you want to proceed?';
+                } else if (difference < 0) {
+                    confirmMessage = 'You are DECREASING stock by ' + Math.abs(difference) + ' units.\n' +
+                                    'Current: ' + currentQuantity + ' units\n' +
+                                    'New: ' + newQuantity + ' units\n\n' +
+                                    'Reason: ' + $('#adjustment_remarks').val() + '\n\n' +
+                                    'Are you sure you want to proceed?';
+                } else {
+                    alert('No changes detected. Please adjust the quantity to a different value.');
+                    e.preventDefault();
+                    return false;
+                }
+                
+                if (!confirm(confirmMessage)) {
+                    e.preventDefault();
+                    return false;
+                }
+                
+                var submitBtn = $('#adjustmentSubmitBtn');
+                submitBtn.html('<i class="fa fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
+            });
+
+            // ========== CAMERA SCANNER FUNCTIONS ==========
+            
             function initTransferCameraAndScanner() {
                 stopTransferCamera();
                 stopTransferScanner();
@@ -693,10 +1299,6 @@
                     .addClass('alert-' + type)
                     .html(message)
                     .show();
-            }
-
-            function escapeHtml(value) {
-                return $('<div>').text(value || '').html();
             }
 
             $(document).keyup(function(e) {

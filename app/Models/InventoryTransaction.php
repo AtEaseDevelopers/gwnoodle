@@ -16,6 +16,7 @@ class InventoryTransaction extends Model
     const TYPE_STOCK_OUT = 2;
     const TYPE_RETURN = 3; 
     const TYPE_TRANSFER = 4; 
+    const TYPE_STOCK_ADJUSTMENT = 5; 
 
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';

@@ -334,28 +334,12 @@ class WarehouseController extends Controller
     /**
      * Get product batches from a specific warehouse (AJAX)
      */
-    public function getWarehouseProductBatches(Request $request)
+    public function getWarehouseProductBatches($warehouse_id, $product_id)
     {
-        $validator = Validator::make($request->all(), [
-            'warehouse_id' => 'required|exists:warehouses,id',
-            'product_id' => 'required|exists:products,id'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid parameters',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
-            $warehouseId = $request->warehouse_id;
-            $productId = $request->product_id;
-            
             $inventory = WarehouseInventoryBalance::with(['batch'])
-                ->where('warehouse_id', $warehouseId)
-                ->where('product_id', $productId)
+                ->where('warehouse_id', $warehouse_id)
+                ->where('product_id', $product_id)
                 ->where('quantity', '>', 0)
                 ->get()
                 ->map(function($item) {
@@ -381,6 +365,123 @@ class WarehouseController extends Controller
                 'message' => 'Error loading batches: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get products in a warehouse (AJAX)
+     */
+    public function getWarehouseProducts($warehouseId)
+    {
+        $products = WarehouseInventoryBalance::with('product')
+            ->where('warehouse_id', $warehouseId)
+            ->where('quantity', '>', 0)
+            ->get()
+            ->groupBy('product_id')
+            ->map(function($items, $productId) {
+                $firstItem = $items->first();
+                return [
+                    'product_id' => $productId,
+                    'product_name' => $firstItem->product ? $firstItem->product->name : 'Unknown',
+                    'total_quantity' => $items->sum('quantity'),
+                    'batch_count' => $items->count()
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'products' => $products
+        ]);
+    }
+
+
+    /**
+     * Process stock adjustment
+     */
+    public function stockAdjustment(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'product_id' => 'required|exists:products,id',
+            'batch_id' => 'required|exists:product_batches,id',
+            'new_quantity' => 'required|integer|min:0',
+            'remarks' => 'required|string|min:3|max:500'
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $warehouseId = $request->warehouse_id;
+            $batchId = $request->batch_id;
+            $newQuantity = $request->new_quantity;
+            $remarks = $request->remarks;
+            
+            // Get current inventory
+            $inventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+                ->where('batch_id', $batchId)
+                ->first();
+            
+            if (!$inventory) {
+                throw new \Exception('Inventory record not found for this batch in the selected warehouse');
+            }
+            
+            $currentQuantity = $inventory->quantity;
+            $difference = $newQuantity - $currentQuantity;
+            
+            // If no change, return with message
+            if ($difference == 0) {
+                Flash::warning('No adjustment needed. The quantity is already ' . $currentQuantity);
+                return redirect()->route('warehouses.index');
+            }
+            
+            // Update inventory quantity
+            if ($difference > 0) {
+                $inventory->increaseQuantity($difference);
+            } else {
+                $inventory->decreaseQuantity(abs($difference));
+            }
+            
+            // Update product batch master quantity
+            $productBatch = ProductBatch::find($batchId);
+            if ($productBatch) {
+                if ($difference > 0) {
+                    $productBatch->increaseQuantity($difference, "Stock adjustment in warehouse: {$remarks}");
+                } else {
+                    $productBatch->decreaseQuantity(abs($difference), "Stock adjustment in warehouse: {$remarks}");
+                }
+            }
+            
+            // Create inventory transaction
+            $adjustmentType = $difference > 0 ? 'INCREASE' : 'DECREASE';
+            
+            InventoryTransaction::create([
+                'warehouse_id' => $warehouseId,
+                'product_id' => $request->product_id,
+                'batch_id' => $batchId,
+                'quantity' => $difference,
+                'type' => InventoryTransaction::TYPE_STOCK_ADJUSTMENT,
+                'remark' => "Stock Adjustment ({$adjustmentType}): {$remarks} | Old: {$currentQuantity} → New: {$newQuantity} | Difference: " . abs($difference) . " units",
+                'date' => now(),
+                'user' => Auth::user()->name ?? 'System',
+            ]);
+            
+            DB::commit();
+            
+            $adjustmentText = $difference > 0 ? 'increased by' : 'decreased by';
+            Flash::success("Stock successfully {$adjustmentText} " . abs($difference) . " units. New quantity: {$newQuantity} units.");
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error processing stock adjustment: ' . $e->getMessage());
+        }
+        
+        return redirect()->route('warehouses.index');
     }
 
     /**

@@ -107,14 +107,14 @@
 
     <!-- Add Invoice Item Modal -->
     <div id="addInvoiceItemModal" class="modal fade">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-info text-white">
                     <h4 class="modal-title h6">Add Invoice Item</h4>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">×</button>
                 </div>
-                <div class="modal-body">
-                    {!! Form::open(['route' => ['invoices.adddetail', Crypt::encrypt($id)], 'id' => 'addInvoiceItemForm']) !!}
+                {!! Form::open(['route' => ['invoices.adddetail', Crypt::encrypt($id)], 'id' => 'addInvoiceItemForm']) !!}
+                    <div class="modal-body">
                         @csrf
                         
                         <!-- Invoice Id Field -->
@@ -179,13 +179,12 @@
                             {!! Form::label('remark', __('invoice_details.remark')) !!}
                             {!! Form::text('remark', null, ['class' => 'form-control', 'maxlength' => 255, 'id' => 'modal_remark']) !!}
                         </div>
-                        
-                        <div class="form-group text-right mt-3">
-                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                            <button type="submit" name="button" class="btn btn-info" id="modalSubmitBtn" disabled>Add Item</button>
-                        </div>
-                    {!! Form::close() !!}
-                </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" name="button" class="btn btn-info" id="modalSubmitBtn" disabled>Add Item</button>
+                    </div>
+                {!! Form::close() !!}
             </div>
         </div>
     </div>
@@ -259,18 +258,59 @@
     <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
     
     <style>
-        .select2-container {
-            width: 100% !important;
+    .select2-container {
+        width: 100% !important;
+    }
+    .bg-info {
+        background-color: #17a2b8 !important;
+    }
+    .text-white {
+        color: #fff !important;
+    }
+    .asterisk {
+        color: red;
+        margin-left: 3px;
+    }
+    
+    /* Improved modal scrolling */
+    .modal-dialog-scrollable {
+        max-height: calc(100vh - 20px);
+    }
+    
+    .modal-dialog-scrollable .modal-body {
+        max-height: calc(100vh - 180px);
+        overflow-y: auto;
+        padding-bottom: 1rem;
+    }
+    
+    /* For very small screens */
+    @media (max-height: 600px) {
+        .modal-dialog-scrollable .modal-body {
+            max-height: calc(100vh - 160px);
         }
-        .bg-info {
-            background-color: #17a2b8 !important;
+    }
+    
+    /* For landscape mode on mobile */
+    @media (max-height: 500px) and (orientation: landscape) {
+        .modal-dialog-scrollable .modal-body {
+            max-height: calc(100vh - 140px);
+            }
+            
+            .modal-body .form-group {
+                margin-bottom: 0.5rem;
+            }
         }
-        .text-white {
-            color: #fff !important;
+        
+        /* Ensure Select2 dropdown doesn't overflow */
+        .select2-dropdown {
+            z-index: 1061 !important;
         }
-        .asterisk {
-            color: red;
-            margin-left: 3px;
+        
+        /* Make modal footer stick to bottom */
+        .modal-footer {
+            flex-shrink: 0;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
         }
     </style>
 

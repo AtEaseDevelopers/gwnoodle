@@ -27,7 +27,7 @@
     </div>
 
     <div id="stockin" class="modal fade">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
                     <h4 class="modal-title h6">{{ __('Stock In') }} - Move from Warehouse to Lorry</h4>
@@ -297,7 +297,47 @@
             /* This will help you see if the 4th column (Quantity) is visible */
             background-color: #f9f9f9;
         }
-
+        /* Improved modal scrolling */
+        .modal-dialog-scrollable {
+            max-height: calc(100vh - 20px);
+        }
+        
+        .modal-dialog-scrollable .modal-body {
+            max-height: calc(100vh - 180px);
+            overflow-y: auto;
+            padding-bottom: 1rem;
+        }
+        
+        /* For very small screens */
+        @media (max-height: 600px) {
+            .modal-dialog-scrollable .modal-body {
+                max-height: calc(100vh - 160px);
+            }
+        }
+        
+        /* For landscape mode on mobile */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .modal-dialog-scrollable .modal-body {
+                max-height: calc(100vh - 140px);
+                }
+                
+                .modal-body .form-group {
+                    margin-bottom: 0.5rem;
+                }
+            }
+            
+            /* Ensure Select2 dropdown doesn't overflow */
+            .select2-dropdown {
+                z-index: 1061 !important;
+            }
+            
+            /* Make modal footer stick to bottom */
+            .modal-footer {
+                flex-shrink: 0;
+                background-color: #f8f9fa;
+                border-top: 1px solid #dee2e6;
+            }
+            
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
             25% { transform: translateX(-5px); }

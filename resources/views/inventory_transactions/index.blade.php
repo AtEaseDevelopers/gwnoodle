@@ -104,6 +104,9 @@
                     case 4:
                         typeBadge = '<span class="badge badge-secondary">Stock Transfer</span>';
                         break;
+                    case 5:
+                        typeBadge = '<span class="badge badge-light">Stock Adjustment</span>';
+                        break;
                     default:
                         typeBadge = '<span class="badge badge-secondary">Unknown</span>';
                 }

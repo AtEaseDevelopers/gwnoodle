@@ -32,6 +32,8 @@ class InventoryTransactionDataTable extends DataTable
                         return '<span class="badge badge-warning">Stock Return</span>';
                     case 4:
                         return '<span class="badge badge-secondary">Stock Transfer</span>';
+                    case 5:
+                        return '<span class="badge badge-light">Stock Adjustment</span>';
                     default:
                         return '<span class="badge badge-secondary">Unknown</span>';
                 }
@@ -84,9 +86,7 @@ class InventoryTransactionDataTable extends DataTable
 
         if (request()->routeIs('warehouseTransactions.index')) {
             $query->whereNull('inventory_transactions.lorry_id');
-        } else {
-            $query->whereNotNull('inventory_transactions.lorry_id');
-        }
+        } 
 
         return $query;
     }
@@ -195,7 +195,7 @@ class InventoryTransactionDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable && columns[index].title != "Action"){
                             if(columns[index].title == \'Type\'){
-                                var input = \'<select class="border-0 form-control-sm" style="width: 100%;"><option value=""></option><option value="1">Stock In</option><option value="2">Stock Out</option><option value="3">Stock Return</option><option value="4">Stock Transfer</option></select>\';
+                                var input = \'<select class="border-0 form-control-sm" style="width: 100%;"><option value=""></option><option value="1">Stock In</option><option value="2">Stock Out</option><option value="3">Stock Return</option><option value="4">Stock Transfer</option><option value="5">Stock Adjustment</option></select>\';
                             }else if(columns[index].title == \'Date\'){
                                 var input = \'<input type="text" class="form-control-sm" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search">\';
                             }else{
