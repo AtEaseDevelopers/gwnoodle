@@ -39,11 +39,95 @@ class LoginController extends Controller
         $this->middleware('guest')->except('logout');
     }
     
-  
+    /**
+     * Get the login username to be used by the controller.
+     * This overrides the default 'email' field to use 'username'.
+     *
+     * @return string
+     */
+    public function username()
+    {
+        return 'username';
+    }
+    
+    /**
+     * Validate the user login request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return void
+     */
+    protected function validateLogin(Request $request)
+    {
+        $request->validate([
+            'username' => 'required|string',
+            'password' => 'required|string',
+        ]);
+    }
+    
+    /**
+     * Attempt to log the user into the application.
+     * Override to add status check.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return bool
+     */
+    protected function attemptLogin(Request $request)
+    {
+        $credentials = $this->credentials($request);
+        
+        // Attempt login with credentials
+        if ($this->guard()->attempt($credentials, $request->filled('remember'))) {
+            $user = $this->guard()->user();
+            
+            // Check if user status is active
+            if (isset($user->status) && $user->status !== 'active') {
+                $this->guard()->logout();
+                return false;
+            }
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Get the failed login response instance.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Symfony\Component\HttpFoundation\Response
+     */
+    protected function sendFailedLoginResponse(Request $request)
+    {
+        $user = \App\Models\User::where('username', $request->username)->first();
+        
+        if ($user && isset($user->status) && $user->status !== 'active') {
+            return redirect()->back()
+                ->withInput($request->only('username', 'remember'))
+                ->withErrors([
+                    'username' => 'Your account is ' . $user->status . '. Please contact administrator.',
+                ]);
+        }
+        
+        return redirect()->back()
+            ->withInput($request->only('username', 'remember'))
+            ->withErrors([
+                'username' => 'These credentials do not match our records.',
+            ]);
+    }
 
     public function authenticated(Request $request)
     {
         $user = $request->user(); // Get the authenticated user
+
+        // Check if user has any roles
+        if (!$user->roles()->exists()) {
+            $this->guard()->logout();
+            $request->session()->invalidate();
+            return redirect()->route('login')->withErrors([
+                'username' => 'No role assigned to this account. Please contact administrator.',
+            ]);
+        }
 
         // Fetch user's role and permissions
         $role = $user->roles()->first(); // Assuming a "roles" relationship exists
@@ -59,4 +143,4 @@ class LoginController extends Controller
         // Default redirection to home route
         return redirect(RouteServiceProvider::HOME);
     }
-}           
+}
