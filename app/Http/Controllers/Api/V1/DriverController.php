@@ -5156,9 +5156,8 @@ class DriverController extends Controller
  			$trip = Trip::where('driver_id', $driver->id)
                     ->where('uuid',$driver->trip_id)
                     ->where('type', 1)
-                    ->orderBy('date', 'desc')
                     ->first();
-            $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$trip->id)->first();
+            $inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$trip->id)->where('status', '!=', InventoryCount::STATUS_REJECTED)->first();
                         
             if($inventoryCount){
                 if($inventoryCount->status == InventoryCount::STATUS_APPROVED ){
