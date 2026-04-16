@@ -447,11 +447,11 @@
                     <span>{{ trans('side_menu.customer_group') }}</span>
                 </a>
             </li>
-            <li class="nav-item {{ Request::is('commission_group*') ? 'active' : '' }}">
+            <!-- <li class="nav-item {{ Request::is('commission_group*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('commission_group*') ? 'active' : '' }}" href="{{ route('commission_group.index') }}">
                     <span>{{ trans('side_menu.commission_group') }}</span>
                 </a>
-            </li>
+            </li> -->
             <!-- <li class="nav-item {{ Request::is('language*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('language*') ? 'active' : '' }}" href="{{ route('language.index') }}">
                     <span>{{ trans('side_menu.system_language_setting') }}</span>
