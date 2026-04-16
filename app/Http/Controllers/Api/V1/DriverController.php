@@ -4992,6 +4992,7 @@ class DriverController extends Controller
 
         // Check if there's already a pending inventory count for this driver
         $existingCount = InventoryCount::where('driver_id', $driver->id)
+            ->where('status', '!=',InventoryCount::STATUS_REJECTED)
             ->where('trip_id', $latestTrip->id)
             ->first();
 
