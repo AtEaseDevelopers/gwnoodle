@@ -4980,7 +4980,6 @@ class DriverController extends Controller
         $latestTrip = Trip::where('driver_id', $driver->id)
             ->where('uuid',$driver->trip_id)
             ->where('type', 1)
-            ->orderBy('date', 'desc')
             ->first();
 
         if (!$latestTrip) {
@@ -4994,7 +4993,7 @@ class DriverController extends Controller
         // Check if there's already a pending inventory count for this driver
         $inventoryCount = InventoryCount::where('driver_id', $driver->id)
             ->where('trip_id',$latestTrip->id)
-            ->where('status','!=', InventoryCount::STATUS_APPROVED)
+            ->where('status','!=', InventoryCount::STATUS_REJECTED)
             ->first();
 
         if($inventoryCount){
