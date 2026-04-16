@@ -5018,86 +5018,90 @@ class DriverController extends Controller
             // Get inventory balance for this lorry
             $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
 
-            if (!$inventoryBalance || empty($inventoryBalance->batches)) {
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 'No inventory found for your lorry.',
-                    'data' => null
-                ], 200);
-            }
+            if($inventoryBalance){
+                // Get all batch IDs from the inventory
+                $batchIds = array_keys($inventoryBalance->batches);
 
-            // Get all batch IDs from the inventory
-            $batchIds = array_keys($inventoryBalance->batches);
+                // Fetch batch details with product information
+                $batches = ProductBatch::with('product')
+                    ->whereIn('id', $batchIds)
+                    ->where('quantity', '>', 0) // Only batches with stock
+                    ->where('status', ProductBatch::STATUS_ACTIVE) // Only active batches
+                    ->get();
 
-            // Fetch batch details with product information
-            $batches = ProductBatch::with('product')
-                ->whereIn('id', $batchIds)
-                ->where('quantity', '>', 0) // Only batches with stock
-                ->where('status', ProductBatch::STATUS_ACTIVE) // Only active batches
-                ->get();
-
-            // Prepare formatted items for inventory count
-            $formattedItems = [];
-            
-            // Group by product
-            $productGroups = [];
-            
-            foreach ($batches as $batch) {
-                $productId = $batch->product_id;
-                $availableQty = $inventoryBalance->batches[$batch->id] ?? 0;
+                // Prepare formatted items for inventory count
+                $formattedItems = [];
                 
-                // Skip if no quantity available
-                if ($availableQty <= 0) {
-                    continue;
-                }
+                // Group by product
+                $productGroups = [];
                 
-                // Initialize product group if not exists
-                if (!isset($productGroups[$productId])) {
-                    $productGroups[$productId] = [
-                        'product_id' => $productId,
-                        'product_name' => $batch->product->name,
-                        'current_quantity' => 0,
-                        'batches' => [],
+                foreach ($batches as $batch) {
+                    $productId = $batch->product_id;
+                    $availableQty = $inventoryBalance->batches[$batch->id] ?? 0;
+                    
+                    // Skip if no quantity available
+                    if ($availableQty <= 0) {
+                        continue;
+                    }
+                    
+                    // Initialize product group if not exists
+                    if (!isset($productGroups[$productId])) {
+                        $productGroups[$productId] = [
+                            'product_id' => $productId,
+                            'product_name' => $batch->product->name,
+                            'current_quantity' => 0,
+                            'batches' => [],
+                            'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
+                            'counted_quantity' => null, // Driver will update this later
+
+                        ];
+                    }
+                    
+                    // Add batch details with counted_quantity initially set to null
+                    $productGroups[$productId]['batches'][] = [
+                        'batch_id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'current_quantity' => $availableQty,
+                        'counted_quantity' => $availableQty, 
                         'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
-                        'counted_quantity' => null, // Driver will update this later
-
                     ];
+                    
+                    // Add to total product quantity
+                    $productGroups[$productId]['current_quantity'] += $availableQty;
                 }
+
+                // Convert product groups to array
+                $formattedItems = array_values($productGroups);
+
+                // If no items found, return error
+                if (empty($formattedItems)) {
+                    return response()->json([
+                        'result' => false,
+                        'message' => __LINE__ . $this->message_separator . 'No active inventory items found in your lorry.',
+                        'data' => null
+                    ], 200);
+                }
+
+                // Create inventory count record
+                $inventoryCount = InventoryCount::create([
+                    'driver_id' => $driver->id,
+                    'trip_id' => $latestTrip->id,
+                    'items' => $formattedItems,
+                    'lorry_id'=>$lorryId,
+                    'status' => InventoryCount::STATUS_PENDING,
+                    'remarks' => 'Auto-generated stock count request from driver app', // Optional default remark
+                ]);
                 
-                // Add batch details with counted_quantity initially set to null
-                $productGroups[$productId]['batches'][] = [
-                    'batch_id' => $batch->id,
-                    'batch_code' => $batch->batch_code,
-                    'current_quantity' => $availableQty,
-                    'counted_quantity' => $availableQty, 
-                    'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
-                ];
-                
-                // Add to total product quantity
-                $productGroups[$productId]['current_quantity'] += $availableQty;
+            }else{
+                $inventoryCount = InventoryCount::create([
+                    'driver_id' => $driver->id,
+                    'trip_id' => $latestTrip->id,
+                    'items' => null,
+                    'lorry_id'=>$lorryId,
+                    'status' => InventoryCount::STATUS_PENDING,
+                    'remarks' => 'Auto-generated stock count request from driver app', // Optional default remark
+                ]);
             }
-
-            // Convert product groups to array
-            $formattedItems = array_values($productGroups);
-
-            // If no items found, return error
-            if (empty($formattedItems)) {
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 'No active inventory items found in your lorry.',
-                    'data' => null
-                ], 200);
-            }
-
-            // Create inventory count record
-            $inventoryCount = InventoryCount::create([
-                'driver_id' => $driver->id,
-                'trip_id' => $latestTrip->id,
-                'items' => $formattedItems,
-                'lorry_id'=>$lorryId,
-                'status' => InventoryCount::STATUS_PENDING,
-                'remarks' => 'Auto-generated stock count request from driver app', // Optional default remark
-            ]);
 
             return response()->json([
                 'result' => true,
