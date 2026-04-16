@@ -294,10 +294,10 @@ class InventoryCountController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'driver_id' => 'required|exists:drivers,id',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.counted_quantity' => 'required|numeric|min:0',
-            'items.*.warehouse_id' => 'required|exists:warehouses,id', // Add warehouse validation
+            'items' => 'nullable|array', // Changed from required to nullable
+            'items.*.product_id' => 'required_with:items|exists:products,id',
+            'items.*.counted_quantity' => 'required_with:items|numeric|min:0',
+            'items.*.warehouse_id' => 'required_with:items|exists:warehouses,id',
             'remarks' => 'nullable|string|max:500',
         ]);
         
@@ -326,14 +326,15 @@ class InventoryCountController extends Controller
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Driver does not have an active trip.'
+                    'message' => 'Driver have not start trip yet.'
                 ], 422);
             }
             Flash::error('Driver does not have an active trip.');
             return redirect(route('inventoryCounts.index'));
         }
+        
         if ($latestTrip) {
-            $inventoryCountRecord = InventoryCount::where('trip_id',$latestTrip->id)->first();
+            $inventoryCountRecord = InventoryCount::where('trip_id', $latestTrip->id)->first();
             if($inventoryCountRecord && $inventoryCountRecord->status == InventoryCount::STATUS_APPROVED){
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
@@ -345,6 +346,7 @@ class InventoryCountController extends Controller
                 return redirect(route('inventoryCounts.index'));
             }
         }
+        
         // Check for existing pending count for this driver and trip
         $existingCount = InventoryCount::where('driver_id', $request->driver_id)
             ->where('trip_id', $latestTrip->id)
@@ -365,78 +367,87 @@ class InventoryCountController extends Controller
         try {
             $formattedItems = [];
             
-            // Get inventory balance for current quantities
-            $inventoryBalance = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)->first();
-            
-            foreach ($request->items as $item) {
-                $productId = $item['product_id'];
-                $countedQuantity = $item['counted_quantity'];
-                $warehouseId = $item['warehouse_id']; // Get warehouse ID
-                $currentQuantity = 0;
-                $batchDetails = [];
+            // Only process items if they are provided
+            if ($request->has('items') && !empty($request->items)) {
+                // Get inventory balance for current quantities
+                $inventoryBalance = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)->first();
                 
-                // If inventory balance exists, get batch details for this product
-                if ($inventoryBalance && !empty($inventoryBalance->batches)) {
-                    $batchIds = array_keys($inventoryBalance->batches);
-                    $productBatches = ProductBatch::where('product_id', $productId)
-                        ->whereIn('id', $batchIds)
-                        ->get();
+                foreach ($request->items as $item) {
+                    $productId = $item['product_id'];
+                    $countedQuantity = $item['counted_quantity'];
+                    $warehouseId = $item['warehouse_id'];
+                    $currentQuantity = 0;
+                    $batchDetails = [];
                     
-                    foreach ($productBatches as $batch) {
-                        $batchQty = $inventoryBalance->batches[$batch->id] ?? 0;
-                        if ($batchQty > 0) {
-                            $batchDetails[] = [
-                                'batch_id' => $batch->id,
-                                'batch_code' => $batch->batch_code,
-                                'current_quantity' => $batchQty,
-                                'counted_quantity' => $countedQuantity,
-                                'warehouse_id' => $warehouseId // Add warehouse ID to each batch
-                            ];
-                            $currentQuantity += $batchQty;
+                    // If inventory balance exists, get batch details for this product
+                    if ($inventoryBalance && !empty($inventoryBalance->batches)) {
+                        $batchIds = array_keys($inventoryBalance->batches);
+                        $productBatches = ProductBatch::where('product_id', $productId)
+                            ->whereIn('id', $batchIds)
+                            ->get();
+                        
+                        foreach ($productBatches as $batch) {
+                            $batchQty = $inventoryBalance->batches[$batch->id] ?? 0;
+                            if ($batchQty > 0) {
+                                $batchDetails[] = [
+                                    'batch_id' => $batch->id,
+                                    'batch_code' => $batch->batch_code,
+                                    'current_quantity' => $batchQty,
+                                    'counted_quantity' => $countedQuantity,
+                                    'warehouse_id' => $warehouseId
+                                ];
+                                $currentQuantity += $batchQty;
+                            }
                         }
                     }
-                }
-                
-                // If no batch details found, create a placeholder
-                if (empty($batchDetails)) {
-                    $batchDetails[] = [
-                        'batch_id' => null,
-                        'batch_code' => 'N/A',
-                        'current_quantity' => 0,
+                    
+                    // If no batch details found, create a placeholder
+                    if (empty($batchDetails)) {
+                        $batchDetails[] = [
+                            'batch_id' => null,
+                            'batch_code' => 'N/A',
+                            'current_quantity' => 0,
+                            'counted_quantity' => $countedQuantity,
+                            'warehouse_id' => $warehouseId
+                        ];
+                    }
+                    
+                    $formattedItems[] = [
+                        'product_id' => $productId,
+                        'product_name' => Product::find($productId)->name ?? 'Unknown',
+                        'current_quantity' => $currentQuantity,
                         'counted_quantity' => $countedQuantity,
-                        'warehouse_id' => $warehouseId // Add warehouse ID
+                        'warehouse_id' => $warehouseId,
+                        'batches' => $batchDetails
                     ];
                 }
-                
-                $formattedItems[] = [
-                    'product_id' => $productId,
-                    'product_name' => Product::find($productId)->name ?? 'Unknown',
-                    'current_quantity' => $currentQuantity,
-                    'counted_quantity' => $countedQuantity, // Keep for backward compatibility
-                    'warehouse_id' => $warehouseId, // Add warehouse ID at product level
-                    'batches' => $batchDetails
-                ];
             }
             
             $inventoryCount = InventoryCount::create([
                 'driver_id' => $request->driver_id,
                 'trip_id' => $latestTrip->id,
-                'items' => $formattedItems,
+                'items' => !empty($formattedItems) ? $formattedItems : null, // Allow null items
                 'lorry_id'=> $latestTrip->lorry_id,
                 'status' => InventoryCount::STATUS_PENDING,
                 'remarks' => $request->remarks,
             ]);
 
+            $itemCount = count($formattedItems);
+            $message = $itemCount > 0 
+                ? "Inventory count created successfully with {$itemCount} items."
+                : "Inventory count created successfully. No inventory items to count.";
+
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Inventory count created successfully with ' . count($request->items) . ' items.',
+                    'message' => $message,
                     'data' => $inventoryCount
                 ]);
             }
             
-            Flash::success('Inventory count created successfully with ' . count($request->items) . ' items.');
+            Flash::success($message);
             return redirect(route('inventoryCounts.index'));
+            
         } catch (\Exception $e) {
             \Log::error('Failed to create count: ' . $e->getMessage());
             \Log::error($e->getTraceAsString());

@@ -4991,47 +4991,44 @@ class DriverController extends Controller
         }
 
         // Check if there's already a pending inventory count for this driver
-        $inventoryCount = InventoryCount::where('driver_id', $driver->id)
-            ->where('trip_id',$latestTrip->id)
-            ->where('status','!=', InventoryCount::STATUS_REJECTED)
+        $existingCount = InventoryCount::where('driver_id', $driver->id)
+            ->where('trip_id', $latestTrip->id)
             ->first();
 
-        if($inventoryCount){
-            if($inventoryCount->status = InventoryCount::STATUS_APPROVED ){
+        if($existingCount){
+            if($existingCount->status == InventoryCount::STATUS_APPROVED){
                 return response()->json([
                     'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 'You have done for Stock out, can proceed to End Trip.',
+                    'message' => __LINE__ . $this->message_separator . 'You have completed Stock Out, can proceed to End Trip.',
                     'data' => null
                 ], 200);
-            }elseif($inventoryCount->status = InventoryCount::STATUS_PENDING ){
+            } elseif($existingCount->status == InventoryCount::STATUS_PENDING){
                 return response()->json([
                     'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 'You have request for Stock Count, please Contact your Stock Manager to approved.',
+                    'message' => __LINE__ . $this->message_separator . 'You have requested Stock Count, please contact your Stock Manager for approval.',
                     'data' => null
                 ], 200);
             }
         }
 
         $lorryId = $latestTrip->lorry_id;
+        $formattedItems = [];
 
         try {
             // Get inventory balance for this lorry
             $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
 
-            if(!$inventoryBalance){
+            // Check if inventory balance exists and has batches
+            if ($inventoryBalance && !empty($inventoryBalance->batches)) {
                 // Get all batch IDs from the inventory
                 $batchIds = array_keys($inventoryBalance->batches);
 
                 // Fetch batch details with product information
                 $batches = ProductBatch::with('product')
                     ->whereIn('id', $batchIds)
-                    ->where('quantity', '>', 0) // Only batches with stock
-                    ->where('status', ProductBatch::STATUS_ACTIVE) // Only active batches
+                    ->where('status', ProductBatch::STATUS_ACTIVE)
                     ->get();
 
-                // Prepare formatted items for inventory count
-                $formattedItems = [];
-                
                 // Group by product
                 $productGroups = [];
                 
@@ -5039,7 +5036,7 @@ class DriverController extends Controller
                     $productId = $batch->product_id;
                     $availableQty = $inventoryBalance->batches[$batch->id] ?? 0;
                     
-                    // Skip if no quantity available
+                    // Skip if no quantity available (but still include if quantity is 0? No, skip)
                     if ($availableQty <= 0) {
                         continue;
                     }
@@ -5049,21 +5046,23 @@ class DriverController extends Controller
                         $productGroups[$productId] = [
                             'product_id' => $productId,
                             'product_name' => $batch->product->name,
+                            'product_code' => $batch->product->code,
+                            'unit_code' => $batch->product->unit_code,
                             'current_quantity' => 0,
                             'batches' => [],
-                            'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
-                            'counted_quantity' => null, // Driver will update this later
-
                         ];
                     }
                     
-                    // Add batch details with counted_quantity initially set to null
+                    // Add batch details
                     $productGroups[$productId]['batches'][] = [
                         'batch_id' => $batch->id,
                         'batch_code' => $batch->batch_code,
                         'current_quantity' => $availableQty,
-                        'counted_quantity' => $availableQty, 
-                        'warehouse_id' => null, // Add warehouse_id for each batch (will be set by admin)
+                        'counted_quantity' => $availableQty, // Default to current quantity
+                        'warehouse_id' => null, // Will be set by admin
+                        'expiry_date' => $batch->expiry_date,
+                        'formatted_expiry_date' => $batch->formatted_expiry_date,
+                        'is_expiring_soon' => $batch->isExpiringSoon(),
                     ];
                     
                     // Add to total product quantity
@@ -5072,36 +5071,45 @@ class DriverController extends Controller
 
                 // Convert product groups to array
                 $formattedItems = array_values($productGroups);
-
-                // If no items found, return error
-                if (empty($formattedItems)) {
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__ . $this->message_separator . 'No active inventory items found in your lorry.',
-                        'data' => null
-                    ], 200);
-                }
-
-                // Create inventory count record
-                $inventoryCount = InventoryCount::create([
-                    'driver_id' => $driver->id,
-                    'trip_id' => $latestTrip->id,
-                    'items' => $formattedItems,
-                    'lorry_id'=>$lorryId,
-                    'status' => InventoryCount::STATUS_PENDING,
-                    'remarks' => 'Auto-generated stock count request from driver app', // Optional default remark
-                ]);
-                
-            }else{
-                $inventoryCount = InventoryCount::create([
-                    'driver_id' => $driver->id,
-                    'trip_id' => $latestTrip->id,
-                    'items' => null,
-                    'lorry_id'=>$lorryId,
-                    'status' => InventoryCount::STATUS_PENDING,
-                    'remarks' => 'Auto-generated stock count request from driver app', // Optional default remark
-                ]);
             }
+
+            // If no inventory items found (empty inventory)
+            if (empty($formattedItems)) {
+                // Create an empty stock count record with null items
+                // This allows the driver to submit a stock count even with no inventory
+                $inventoryCount = InventoryCount::create([
+                    'driver_id' => $driver->id,
+                    'trip_id' => $latestTrip->id,
+                    'items' => null, // No items to count
+                    'lorry_id' => $lorryId,
+                    'status' => InventoryCount::STATUS_PENDING,
+                    'remarks' => 'Stock count request - No inventory found in lorry',
+                ]);
+
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__ . $this->message_separator . 'Stock count request created successfully. No inventory found in your lorry.',
+                    'data' => [
+                        'count_id' => $inventoryCount->id,
+                        'status' => $inventoryCount->status,
+                        'total_products' => 0,
+                        'total_batches' => 0,
+                        'items' => [], // Empty items array
+                        'has_inventory' => false,
+                        'message' => 'Your lorry currently has no inventory. You can still submit this stock count.'
+                    ]
+                ], 200);
+            }
+
+            // Create inventory count record with items
+            $inventoryCount = InventoryCount::create([
+                'driver_id' => $driver->id,
+                'trip_id' => $latestTrip->id,
+                'items' => $formattedItems,
+                'lorry_id' => $lorryId,
+                'status' => InventoryCount::STATUS_PENDING,
+                'remarks' => 'Auto-generated stock count request from driver app',
+            ]);
 
             return response()->json([
                 'result' => true,
@@ -5113,7 +5121,8 @@ class DriverController extends Controller
                     'total_batches' => collect($formattedItems)->sum(function($item) {
                         return count($item['batches']);
                     }),
-                    'items' => $formattedItems // Include the items so driver can see what needs to be counted
+                    'has_inventory' => true,
+                    'items' => $formattedItems
                 ]
             ], 200);
 
@@ -5795,11 +5804,11 @@ class DriverController extends Controller
                 ], 404);
             }
             
-            // Get all unique product IDs from all inventory counts
+            // Get all unique product IDs from all inventory counts (only if items exist)
             $allProductIds = [];
             foreach ($inventoryCounts as $count) {
                 $items = $count->items;
-                if (is_array($items)) {
+                if (!empty($items) && is_array($items)) {
                     foreach ($items as $item) {
                         if (isset($item['product_id'])) {
                             $allProductIds[] = $item['product_id'];
@@ -5808,11 +5817,14 @@ class DriverController extends Controller
                 }
             }
             
-            // Fetch all products in one query
-            $allProductIds = array_unique($allProductIds);
-            $products = Product::whereIn('id', $allProductIds)
-                ->get()
-                ->keyBy('id');
+            // Fetch all products in one query (only if there are product IDs)
+            $products = collect();
+            if (!empty($allProductIds)) {
+                $allProductIds = array_unique($allProductIds);
+                $products = Product::whereIn('id', $allProductIds)
+                    ->get()
+                    ->keyBy('id');
+            }
             
             // Fetch all drivers in one query (for multiple records)
             $driverIds = $inventoryCounts->pluck('driver_id')->filter()->unique()->toArray();
@@ -5820,24 +5832,84 @@ class DriverController extends Controller
                 ->get()
                 ->keyBy('id');
             
+            // Fetch all warehouses for reference
+            $warehouseIds = [];
+            foreach ($inventoryCounts as $count) {
+                $items = $count->items;
+                if (!empty($items) && is_array($items)) {
+                    foreach ($items as $item) {
+                        if (isset($item['batches']) && is_array($item['batches'])) {
+                            foreach ($item['batches'] as $batch) {
+                                if (isset($batch['warehouse_id'])) {
+                                    $warehouseIds[] = $batch['warehouse_id'];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            $warehouseIds = array_unique($warehouseIds);
+            $warehouses = Warehouse::whereIn('id', $warehouseIds)
+                ->get()
+                ->keyBy('id');
+            
             // Format the response
-            $formattedCounts = $inventoryCounts->map(function ($count) use ($products, $drivers) {
+            $formattedCounts = $inventoryCounts->map(function ($count) use ($products, $drivers, $warehouses) {
                 $items = $count->items;
                 $formattedItems = [];
                 
-                if (is_array($items)) {
-                    $formattedItems = array_map(function ($item) use ($products) {
+                // Check if items exist and is an array
+                if (!empty($items) && is_array($items)) {
+                    $formattedItems = array_map(function ($item) use ($products, $warehouses) {
                         $productId = $item['product_id'];
                         $product = $products[$productId] ?? null;
-                        $firstBatch = $item['batches'][0] ?? [];
-
+                        
+                        // Handle batches
+                        $formattedBatches = [];
+                        if (isset($item['batches']) && is_array($item['batches'])) {
+                            foreach ($item['batches'] as $batch) {
+                                $warehouseId = $batch['warehouse_id'] ?? null;
+                                $warehouse = $warehouseId ? ($warehouses[$warehouseId] ?? null) : null;
+                                
+                                $formattedBatches[] = [
+                                    'batch_id' => $batch['batch_id'] ?? null,
+                                    'batch_code' => $batch['batch_code'] ?? null,
+                                    'current_quantity' => $batch['current_quantity'] ?? 0,
+                                    'counted_quantity' => $batch['counted_quantity'] ?? null,
+                                    'warehouse_id' => $warehouseId,
+                                    'warehouse_name' => $warehouse ? $warehouse->name : null,
+                                    'expiry_date' => $batch['expiry_date'] ?? null,
+                                    'formatted_expiry_date' => $batch['formatted_expiry_date'] ?? null,
+                                    'is_expiring_soon' => $batch['is_expiring_soon'] ?? false
+                                ];
+                            }
+                        }
+                        
+                        // If no batches, create a default structure
+                        if (empty($formattedBatches)) {
+                            $formattedBatches[] = [
+                                'batch_id' => null,
+                                'batch_code' => 'N/A',
+                                'current_quantity' => $item['current_quantity'] ?? 0,
+                                'counted_quantity' => $item['counted_quantity'] ?? null,
+                                'warehouse_id' => $item['warehouse_id'] ?? null,
+                                'warehouse_name' => null,
+                                'expiry_date' => null,
+                                'formatted_expiry_date' => null,
+                                'is_expiring_soon' => false
+                            ];
+                        }
+                        
                         return [
                             'product_id' => $item['product_id'],
-                            'product_name' => $product ? $product->name : null,
-                            'batch_id' => $firstBatch['batch_id'] ?? null,
-                            'batch_code' => $firstBatch['batch_code'] ?? null,
-                            'counted_quantity' => $item['counted_quantity'] ?? 0,
-                            'current_quantity' => $item['current_quantity'] ?? 0
+                            'product_name' => $product ? $product->name : ($item['product_name'] ?? 'Unknown Product'),
+                            'product_code' => $product ? $product->code : null,
+                            'unit_code' => $product ? $product->unit_code : null,
+                            'current_quantity' => $item['current_quantity'] ?? 0,
+                            'counted_quantity' => $item['counted_quantity'] ?? null,
+                            'batches' => $formattedBatches,
+                            'has_batches' => count($formattedBatches) > 0
                         ];
                     }, $items);
                 }
@@ -5848,26 +5920,70 @@ class DriverController extends Controller
                     $driver = $drivers[$count->driver_id] ?? null;
                 }
                 
+                // Get approver and rejector names
+                $approverName = null;
+                if ($count->approved_by) {
+                    $approver = \App\Models\User::find($count->approved_by);
+                    $approverName = $approver ? $approver->name : null;
+                }
+                
+                $rejectorName = null;
+                if ($count->rejected_by) {
+                    $rejector = \App\Models\User::find($count->rejected_by);
+                    $rejectorName = $rejector ? $rejector->name : null;
+                }
+                
                 return [
                     'id' => $count->id,
                     'driver_id' => $count->driver_id,
                     'driver_name' => $driver ? $driver->name : null,
+                    'lorry_id' => $count->lorry_id,
+                    'lorry_number' => $count->lorry ? $count->lorry->lorryno : null,
+                    'trip_id' => $count->trip_id,
                     'items' => $formattedItems,
+                    'has_items' => !empty($formattedItems),
+                    'total_products' => count($formattedItems),
                     'status' => $count->status,
                     'remarks' => $count->remarks,
                     'rejection_reason' => $count->rejection_reason,
-                    'approved_by' => $count->approved_by,
-                    'trip_id' => $count->trip_id,
-                    'rejected_by' => $count->rejected_by,
-                    'approved_at' => $count->approved_at,
-                    'rejected_at' => $count->rejected_at,
-                    'created_at' => $count->created_at,
-                    'updated_at' => $count->updated_at
+                    'approved_by' => $approverName,
+                    'approved_by_id' => $count->approved_by,
+                    'rejected_by' => $rejectorName,
+                    'rejected_by_id' => $count->rejected_by,
+                    'approved_at' => $count->approved_at ? $count->approved_at->toDateTimeString() : null,
+                    'rejected_at' => $count->rejected_at ? $count->rejected_at->toDateTimeString() : null,
+                    'created_at' => $count->created_at ? $count->created_at->toDateTimeString() : null,
+                    'updated_at' => $count->updated_at ? $count->updated_at->toDateTimeString() : null
                 ];
             });
 
             // Return single object if ID was provided, otherwise return array
             $responseData = ($id !== null) ? $formattedCounts->first() : $formattedCounts;
+            
+            // Add summary information for single record
+            if ($id !== null && $responseData) {
+                $totalCurrentQty = 0;
+                $totalCountedQty = 0;
+                
+                if (!empty($responseData['items'])) {
+                    foreach ($responseData['items'] as $item) {
+                        if (isset($item['batches'])) {
+                            foreach ($item['batches'] as $batch) {
+                                $totalCurrentQty += $batch['current_quantity'] ?? 0;
+                                $totalCountedQty += $batch['counted_quantity'] ?? 0;
+                            }
+                        }
+                    }
+                }
+                
+                $responseData['summary'] = [
+                    'total_current_quantity' => $totalCurrentQty,
+                    'total_counted_quantity' => $totalCountedQty,
+                    'total_difference' => $totalCountedQty - $totalCurrentQty,
+                    'has_inventory' => $totalCurrentQty > 0,
+                    'is_empty_inventory' => $totalCurrentQty === 0 && empty($responseData['items'])
+                ];
+            }
             
             $message = ($id !== null) 
                 ? 'Stock count record retrieved successfully' 
@@ -5881,6 +5997,9 @@ class DriverController extends Controller
             ], 200);
             
         } catch (Exception $e) {
+            \Log::error('Error in getStockCount: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
             return response()->json([
                 'result' => false,
                 'message' => __LINE__ . $this->message_separator . $e->getMessage(),
@@ -5888,7 +6007,7 @@ class DriverController extends Controller
             ], 500);
         }
     }
-
+    
     public function approveStockCount(Request $request)
     {
         // Validate session
@@ -5901,15 +6020,16 @@ class DriverController extends Controller
             ], 401);
         }
 
+        // Make items optional for approval (can be empty)
         $validator = Validator::make($request->all(), [
             'id' => 'required|exists:inventory_counts,id',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|exists:products,id',
-            'items.*.batches' => 'required|array',
-            'items.*.batches.*.batch_id' => 'required|exists:product_batches,id',
-            'items.*.batches.*.counted_quantity' => 'required|numeric|min:0',
-            'items.*.batches.*.current_quantity' => 'required|numeric|min:0',
-            'items.*.batches.*.warehouse_id' => 'required|exists:warehouses,id',
+            'items' => 'nullable|array', // Changed from required to nullable
+            'items.*.product_id' => 'required_with:items|integer|exists:products,id',
+            'items.*.batches' => 'required_with:items|array',
+            'items.*.batches.*.batch_id' => 'required_with:items|exists:product_batches,id',
+            'items.*.batches.*.counted_quantity' => 'required_with:items|numeric|min:0',
+            'items.*.batches.*.current_quantity' => 'required_with:items|numeric|min:0',
+            'items.*.batches.*.warehouse_id' => 'required_with:items|exists:warehouses,id',
             'remarks' => 'nullable|string|max:500'
         ]);
 
@@ -5943,46 +6063,90 @@ class DriverController extends Controller
         }
 
         try {
-            // Check for missing counted quantities and warehouse selections
+            // Check if there are items to process
+            $hasItems = isset($data['items']) && is_array($data['items']) && count($data['items']) > 0;
+            
+            // If no items provided, check if the existing record has items
+            $existingItems = $inventoryCount->items;
+            $hasExistingItems = !empty($existingItems) && is_array($existingItems) && count($existingItems) > 0;
+            
             $missingCountedItems = [];
             $missingWarehouseItems = [];
             $processedBatches = [];
             
-            foreach ($data['items'] as $item) {
-                if (isset($item['batches']) && is_array($item['batches'])) {
-                    foreach ($item['batches'] as $batch) {
-                        $productName = $item['product_name'] ?? 'Unknown Product';
-                        $batchCode = $batch['batch_code'] ?? 'Unknown Batch';
-                        $countedQty = $batch['counted_quantity'] ?? null;
-                        $warehouseId = $batch['warehouse_id'] ?? null;
-                        
-                        // Check if counted_quantity is empty/null/not set
-                        if (empty($countedQty) && $countedQty !== '0' && $countedQty !== 0) {
-                            $missingCountedItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+            // Only process items if they exist
+            if ($hasItems) {
+                foreach ($data['items'] as $item) {
+                    if (isset($item['batches']) && is_array($item['batches'])) {
+                        foreach ($item['batches'] as $batch) {
+                            $productName = $item['product_name'] ?? 'Unknown Product';
+                            $batchCode = $batch['batch_code'] ?? 'Unknown Batch';
+                            $countedQty = $batch['counted_quantity'] ?? null;
+                            $warehouseId = $batch['warehouse_id'] ?? null;
+                            
+                            // Check if counted_quantity is empty/null/not set
+                            if (empty($countedQty) && $countedQty !== '0' && $countedQty !== 0) {
+                                $missingCountedItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                            }
+                            
+                            // Check if warehouse is selected
+                            if (empty($warehouseId)) {
+                                $missingWarehouseItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                            }
+                            
+                            // Store for processing
+                            if (!empty($countedQty) && !empty($warehouseId)) {
+                                $processedBatches[] = [
+                                    'batch_id' => $batch['batch_id'],
+                                    'product_id' => $item['product_id'],
+                                    'product_name' => $productName,
+                                    'batch_code' => $batchCode,
+                                    'counted_quantity' => $countedQty,
+                                    'warehouse_id' => $warehouseId,
+                                    'current_quantity' => $batch['current_quantity'] ?? 0
+                                ];
+                            }
                         }
-                        
-                        // Check if warehouse is selected
-                        if (empty($warehouseId)) {
-                            $missingWarehouseItems[] = $productName . ' (Batch: ' . $batchCode . ')';
-                        }
-                        
-                        // Store for processing
-                        if (!empty($countedQty) && !empty($warehouseId)) {
-                            $processedBatches[] = [
-                                'batch_id' => $batch['batch_id'],
-                                'product_id' => $item['product_id'],
-                                'product_name' => $productName,
-                                'batch_code' => $batchCode,
-                                'counted_quantity' => $countedQty,
-                                'warehouse_id' => $warehouseId,
-                                'current_quantity' => $batch['current_quantity'] ?? 0
-                            ];
+                    }
+                }
+            } elseif ($hasExistingItems) {
+                // If no items in request but existing record has items, process existing items
+                foreach ($existingItems as $item) {
+                    if (isset($item['batches']) && is_array($item['batches'])) {
+                        foreach ($item['batches'] as $batch) {
+                            $productName = $item['product_name'] ?? 'Unknown Product';
+                            $batchCode = $batch['batch_code'] ?? 'Unknown Batch';
+                            $countedQty = $batch['counted_quantity'] ?? null;
+                            $warehouseId = $batch['warehouse_id'] ?? null;
+                            
+                            // Check if counted_quantity is empty/null/not set
+                            if (empty($countedQty) && $countedQty !== '0' && $countedQty !== 0) {
+                                $missingCountedItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                            }
+                            
+                            // Check if warehouse is selected
+                            if (empty($warehouseId)) {
+                                $missingWarehouseItems[] = $productName . ' (Batch: ' . $batchCode . ')';
+                            }
+                            
+                            // Store for processing
+                            if (!empty($countedQty) && !empty($warehouseId)) {
+                                $processedBatches[] = [
+                                    'batch_id' => $batch['batch_id'],
+                                    'product_id' => $item['product_id'],
+                                    'product_name' => $productName,
+                                    'batch_code' => $batchCode,
+                                    'counted_quantity' => $countedQty,
+                                    'warehouse_id' => $warehouseId,
+                                    'current_quantity' => $batch['current_quantity'] ?? 0
+                                ];
+                            }
                         }
                     }
                 }
             }
             
-            // If there are items missing counted_quantity, return error
+            // If there are items missing counted_quantity, return error (only if there were items to process)
             if (!empty($missingCountedItems)) {
                 $errorMessage = 'Cannot approve. Please fill in counted quantity for: ' . implode(', ', array_slice($missingCountedItems, 0, 5));
                 if (count($missingCountedItems) > 5) {
@@ -5996,7 +6160,7 @@ class DriverController extends Controller
                 ], 200);
             }
             
-            // If there are items missing warehouse, return error
+            // If there are items missing warehouse, return error (only if there were items to process)
             if (!empty($missingWarehouseItems)) {
                 $errorMessage = 'Cannot approve. Please select return warehouse for: ' . implode(', ', array_slice($missingWarehouseItems, 0, 5));
                 if (count($missingWarehouseItems) > 5) {
@@ -6014,57 +6178,65 @@ class DriverController extends Controller
             \DB::beginTransaction();
             
             try {
-                // Process each batch to return stock to warehouse
-                foreach ($processedBatches as $batchData) {
-                    // Find the product batch
-                    $productBatch = ProductBatch::find($batchData['batch_id']);
-                    
-                    if (!$productBatch) {
-                        throw new \Exception('Product batch not found: ' . $batchData['batch_code']);
-                    }
-                    
-                    // Update batch quantity (add back to batch)
-                    $productBatch->quantity += $batchData['counted_quantity'];
-                    $productBatch->save();
-                    
-                    // Create inventory transaction for stock return to warehouse
-                    InventoryTransaction::create([
-                        'product_id' => $batchData['product_id'],
-                        'batch_id' => $batchData['batch_id'],
-                        'warehouse_id' => $batchData['warehouse_id'],
-                        'quantity' => $batchData['counted_quantity'],
-                        'type' => InventoryTransaction::TYPE_STOCK_IN,
-                        'date' => now(),
-                        'user' => $user->name,
-                        'remark' => 'Stock return from Stock Out -[' . $inventoryCount->driver->name . '] - Batch: [' . $batchData['batch_code'] . ']',
-                    ]);
-                    
-                    // Update warehouse inventory balance
-                    $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $batchData['warehouse_id'])
-                        ->where('batch_id', $batchData['batch_id'])
-                        ->first();
-                    
-                    if ($warehouseInventory) {
-                        $warehouseInventory->increaseQuantity($batchData['counted_quantity']);
-                    } else {
-                        // Create new warehouse inventory balance if not exists
-                        WarehouseInventoryBalance::create([
-                            'warehouse_id' => $batchData['warehouse_id'],
-                            'batch_id' => $batchData['batch_id'],
+                // Process each batch to return stock to warehouse (only if there are batches)
+                if (!empty($processedBatches)) {
+                    foreach ($processedBatches as $batchData) {
+                        // Find the product batch
+                        $productBatch = ProductBatch::find($batchData['batch_id']);
+                        
+                        if (!$productBatch) {
+                            throw new \Exception('Product batch not found: ' . $batchData['batch_code']);
+                        }
+                        
+                        // Update batch quantity (add back to batch)
+                        $productBatch->quantity += $batchData['counted_quantity'];
+                        $productBatch->save();
+                        
+                        // Create inventory transaction for stock return to warehouse
+                        InventoryTransaction::create([
                             'product_id' => $batchData['product_id'],
-                            'quantity' => $batchData['counted_quantity']
+                            'batch_id' => $batchData['batch_id'],
+                            'warehouse_id' => $batchData['warehouse_id'],
+                            'quantity' => $batchData['counted_quantity'],
+                            'type' => InventoryTransaction::TYPE_STOCK_IN,
+                            'date' => now(),
+                            'user' => $user->name,
+                            'remark' => 'Stock return from Stock Out -[' . $inventoryCount->driver->name . '] - Batch: [' . $batchData['batch_code'] . ']',
                         ]);
+                        
+                        // Update warehouse inventory balance
+                        $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $batchData['warehouse_id'])
+                            ->where('batch_id', $batchData['batch_id'])
+                            ->first();
+                        
+                        if ($warehouseInventory) {
+                            $warehouseInventory->increaseQuantity($batchData['counted_quantity']);
+                        } else {
+                            // Create new warehouse inventory balance if not exists
+                            WarehouseInventoryBalance::create([
+                                'warehouse_id' => $batchData['warehouse_id'],
+                                'batch_id' => $batchData['batch_id'],
+                                'product_id' => $batchData['product_id'],
+                                'quantity' => $batchData['counted_quantity']
+                            ]);
+                        }
                     }
                 }
                 
                 // Update inventory count status
-                $inventoryCount->update([
+                $updateData = [
                     'status' => InventoryCount::STATUS_APPROVED,
                     'approved_by' => $user->id,
                     'approved_at' => now(),
-                    'items' => $data['items'], // Update items with submitted data
                     'remarks' => $data['remarks'] ?? $inventoryCount->remarks
-                ]);
+                ];
+                
+                // Only update items if provided in request
+                if ($hasItems) {
+                    $updateData['items'] = $data['items'];
+                }
+                
+                $inventoryCount->update($updateData);
                 
                 // Remove driver's inventory balance (lorry inventory)
                 $inventoryBalance = InventoryBalance::where('lorry_id', $inventoryCount->lorry_id)->first();
@@ -6077,9 +6249,13 @@ class DriverController extends Controller
                 // Load relationships for response
                 $inventoryCount->load(['driver', 'lorry', 'approver']);
                 
+                $message = !empty($processedBatches) 
+                    ? 'Stock Count approved successfully. ' . count($processedBatches) . ' batches processed.'
+                    : 'Stock Count approved successfully. No inventory to return.';
+                
                 return response()->json([
                     'result' => true,
-                    'message' => '' . __LINE__ . $this->message_separator . 'Stock Count approved successfully',
+                    'message' => '' . __LINE__ . $this->message_separator . $message,
                     'data' => [
                         'id' => $inventoryCount->id,
                         'driver_id' => $inventoryCount->driver_id,
@@ -6091,7 +6267,8 @@ class DriverController extends Controller
                         'approved_at' => $inventoryCount->approved_at,
                         'remarks' => $inventoryCount->remarks,
                         'processed_batches' => count($processedBatches),
-                        'total_quantity_returned' => array_sum(array_column($processedBatches, 'counted_quantity'))
+                        'total_quantity_returned' => array_sum(array_column($processedBatches, 'counted_quantity')),
+                        'has_inventory' => !empty($processedBatches)
                     ]
                 ], 200);
                 

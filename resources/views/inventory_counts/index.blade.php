@@ -950,6 +950,27 @@
                             var itemIndex = 0;
                             $('#editCountLorryName').text(data.lorry_data || 'N/A');
                             $('#editCountItemsBody').empty();
+
+                            if (!data.items || data.items.length === 0) {
+                                var emptyRow = `
+                                    <tr>
+                                        <td colspan="7" class="text-center text-info">
+                                            <div class="p-4">
+                                                <i class="fa fa-info-circle fa-2x mb-2 d-block"></i>
+                                                <strong>No Inventory Found</strong><br>
+                                                This driver has no stock in their lorry.<br>
+                                                You can approve this stock count to mark it as completed.
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+                                $('#editCountItemsBody').append(emptyRow);
+                                
+                                // Disable the save button or add a note
+                                $('#editCountForm button[type="submit"]').prop('disabled', true);
+                                $('#editCountItemsError').html('<div class="alert alert-warning">No items to count. Please approve this request instead.</div>');
+                                return;
+                            }
                             
                             data.items.forEach(function(item) {
                                 if (item.batches && Array.isArray(item.batches) && item.batches.length > 0) {
@@ -1163,20 +1184,28 @@
                         // Store inventory data
                         driverInventory = response.inventory || [];
                         
-                        console.log('Driver inventory loaded:', driverInventory); // Debug log
+                        console.log('Driver inventory loaded:', driverInventory);
                         
                         if (driverInventory.length === 0) {
                             showNotification('info', 'This driver has no inventory to count');
-                            // Clear the table and show message
+                            // Clear the table and show message with option to submit empty
                             $('#itemsBody').empty();
                             var emptyRow = `
                                 <tr>
-                                    <td colspan="4" class="text-center text-warning">
-                                        <i class="fa fa-exclamation-triangle"></i> No inventory available for this driver
+                                    <td colspan="6" class="text-center text-info">
+                                        <div class="p-3">
+                                            <i class="fa fa-info-circle fa-2x mb-2 d-block"></i>
+                                            <strong>No Inventory Found</strong><br>
+                                            This driver has no stock in their lorry.<br>
+                                            <small>You can still submit an empty stock count request by clicking "Submit Count Request".</small>
+                                        </div>
                                     </td>
                                 </tr>
                             `;
                             $('#itemsBody').append(emptyRow);
+                            
+                            // Show a special submit button or just let the validation handle it
+                            $('#itemsError').html('<div class="alert alert-info mt-2">No inventory to count. You can submit an empty stock count request.</div>');
                         } else {
                             // Initialize the table with products from driver's inventory
                             initializeItemsFromInventory();
@@ -1187,7 +1216,7 @@
                         $('#itemsBody').empty();
                         var errorRow = `
                             <tr>
-                                <td colspan="4" class="text-center text-danger">
+                                <td colspan="6" class="text-center text-danger">
                                     <i class="fa fa-exclamation-circle"></i> Failed to load inventory
                                 </td>
                             </tr>
@@ -1203,7 +1232,7 @@
                     $('#itemsBody').empty();
                     var errorRow = `
                         <tr>
-                            <td colspan="4" class="text-center text-danger">
+                            <td colspan="6" class="text-center text-danger">
                                 <i class="fa fa-exclamation-circle"></i> Error loading inventory
                             </td>
                         </tr>
@@ -1218,10 +1247,24 @@
             $('#itemsBody').empty();
             itemCounter = 0;
             
-            // Add a row for each product in driver's inventory
-            driverInventory.forEach(function(product) {
-                addItemRow(product);
-            });
+            if (driverInventory.length === 0) {
+                // Show message for empty inventory
+                var emptyRow = `
+                    <tr>
+                        <td colspan="6" class="text-center text-warning">
+                            <i class="fa fa-exclamation-triangle"></i> 
+                            <strong>No Inventory Found</strong><br>
+                            <small>This driver has no stock in their lorry. You can still submit an empty stock count request.</small>
+                        </td>
+                    </tr>
+                `;
+                $('#itemsBody').append(emptyRow);
+            } else {
+                // Add a row for each product in driver's inventory
+                driverInventory.forEach(function(product) {
+                    addItemRow(product);
+                });
+            }
         }
 
         // ============================================
@@ -1533,7 +1576,57 @@
                 return false;
             }
             
-            // Validate items
+            // Check if driver has inventory
+            var hasInventory = driverInventory && driverInventory.length > 0;
+            
+            // If driver has no inventory, allow submission with empty items
+            if (!hasInventory) {
+                // Confirm with user that they want to create an empty stock count
+                if (confirm('This driver has no inventory in their lorry.\n\nDo you want to create an empty stock count request?\n\nThis will allow the admin to approve and mark the stock out as completed.')) {
+                    // Prepare form data with empty items
+                    var emptyPostData = {
+                        driver_id: driverId,
+                        items: [], // Empty items array
+                        remarks: $('#remarks').val(),
+                        _token: '{{ csrf_token() }}'
+                    };
+                    
+                    console.log('Sending empty inventory data:', emptyPostData);
+                    
+                    // Submit via AJAX
+                    ShowLoad();
+                    $.ajax({
+                        url: $(this).attr('action'),
+                        type: 'POST',
+                        data: emptyPostData,
+                        dataType: 'json',
+                        success: function(response) {
+                            HideLoad();
+                            if (response.success) {
+                                $('#createRequest').modal('hide');
+                                showNotification('success', response.message || 'Empty stock count request created successfully.');
+                                if (table && typeof table.ajax !== 'undefined') {
+                                    table.ajax.reload(null, false);
+                                }
+                            } else {
+                                showNotification('error', response.message || 'An error occurred');
+                            }
+                        },
+                        error: function(xhr) {
+                            HideLoad();
+                            var errorMsg = 'An error occurred';
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                errorMsg = xhr.responseJSON.message;
+                            }
+                            showNotification('error', errorMsg);
+                            console.error('Error:', xhr.responseJSON);
+                        }
+                    });
+                }
+                return false;
+            }
+            
+            // Continue with normal validation for drivers with inventory
             var hasErrors = false;
             var items = [];
             var productIds = new Set();
@@ -1607,7 +1700,7 @@
                 var itemData = {
                     product_id: parseInt(productId),
                     counted_quantity: parseFloat(countedQty),
-                    warehouse_id: parseInt(warehouseId) // Add warehouse_id to each product
+                    warehouse_id: parseInt(warehouseId)
                 };
                 
                 // Include batch information if available
@@ -1715,6 +1808,16 @@
         // Handle edit count form submission
         $('#editCountForm').submit(function(e) {
             e.preventDefault();
+
+            var hasRows = $('#editCountItemsBody tr').length > 0;
+            var firstRowText = $('#editCountItemsBody tr:first td:first').text();
+            
+            // Check if it's the empty inventory message
+            if (hasRows && firstRowText && firstRowText.includes('No Inventory Found')) {
+                // No items to count, just approve directly or show message
+                $('#editCountItemsError').html('<div class="alert alert-info">No inventory to count. Please use the Approve button instead.</div>');
+                return false;
+            }
             
             // Reset error
             $('#editCountItemsError').text('');
@@ -1887,9 +1990,13 @@
             // Show/hide action buttons based on status and permissions
             var actionButtonsHtml = '';
             if (status === 'pending') {
+                // Check if there are items or not
+                var hasItems = data.items && data.items.length > 0;
+                var approveButtonText = hasItems ? 'Approve' : 'Approve (Empty Stock)';
+                
                 actionButtonsHtml = `
                     <button type="button" class="btn btn-success mr-2" id="approveFromViewBtn">
-                        <i class="fa fa-check"></i> Approve
+                        <i class="fa fa-check"></i> ${approveButtonText}
                     </button>
                     <button type="button" class="btn btn-danger" id="rejectFromViewBtn">
                         <i class="fa fa-times"></i> Reject
@@ -1909,6 +2016,35 @@
             var rowCounter = 1;
             var productsWithVariance = 0;
             var batchesCounted = 0;
+            if (!data.items || data.items.length === 0) {
+                var emptyHtml = '<div class="alert alert-info text-center">';
+                emptyHtml += '<i class="fa fa-info-circle fa-2x mb-2 d-block"></i>';
+                emptyHtml += '<strong>No Inventory Found</strong><br>';
+                emptyHtml += 'This driver has no stock in their lorry. You can still approve this stock count to mark it as completed.';
+                emptyHtml += '</div>';
+                
+                $('#viewItemsTable').html(emptyHtml);
+                $('#viewSummarySection').hide();
+                
+                // Update action buttons for empty inventory
+                var actionButtonsHtml = '';
+                if (data.status === 'pending') {
+                    actionButtonsHtml = `
+                        <button type="button" class="btn btn-success mr-2" id="approveFromViewBtn">
+                            <i class="fa fa-check"></i> Approve (Empty Stock)
+                        </button>
+                        <button type="button" class="btn btn-danger" id="rejectFromViewBtn">
+                            <i class="fa fa-times"></i> Reject
+                        </button>
+                    `;
+                }
+                $('#viewActionButtons').html(actionButtonsHtml);
+                return;
+            }
+            
+            // Original code continues here...
+            var itemsHtml = '<div class="table-responsive"><table class="table table-sm table-bordered">';
+            itemsHtml += '<thead><tr><th>#</th><th>Product</th><th>Batch Code</th><th>Expiry Date</th><th>Current Qty</th><th>Counted Qty</th><th>Return Warehouse</th><th>Difference</th></tr></thead><tbody>';
             
             if (data.items && Array.isArray(data.items)) {
                 data.items.forEach(function(item) {
@@ -2232,10 +2368,11 @@
                 success: function(response) {
                     HideLoad();
                     if (response.success) {
-                        showNotification('success', response.message);
+                        var message = response.message || 'Stock count approved successfully.';
+                        showNotification('success', message);
                         
                         // Close all modals
-                        $('#viewRequest, #rejectReasonModal').modal('hide');
+                        $('#viewRequest, #rejectReasonModal, #editCountModal').modal('hide');
                         
                         // Refresh the DataTable
                         if (table && typeof table.ajax !== 'undefined') {
