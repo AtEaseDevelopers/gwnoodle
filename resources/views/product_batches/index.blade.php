@@ -297,22 +297,55 @@
                 scanUploadedImage();
             });
 
-            $(document).on('input', '.stockin-item-qty', function() {
+           $(document).on('input', '.stockin-item-qty', function() {
                 const index = parseInt($(this).data('index'), 10);
                 const item = stockInItems[index];
-                let qty = parseInt($(this).val(), 10);
-
+                let rawValue = $(this).val();
+                let quantity = parseInt(rawValue, 10);
+                
                 if (!item) {
                     return;
                 }
-
-                if (!qty || qty < 1) {
-                    qty = 1;
+                
+                const errorSpan = $('#stockin-qty-error-' + index);
+                
+                // Remove any existing warning classes
+                $(this).removeClass('is-invalid is-warning valid-feedback');
+                
+                // Clear any non-numeric characters
+                if (rawValue !== '' && isNaN(quantity)) {
+                    $(this).val('').addClass('is-invalid');
+                    errorSpan.text('Please enter a valid number').show();
+                    item.quantity = 0;
+                    updateTotalsOnly(); // Only update totals, not full re-render
+                    return;
                 }
-
-                item.quantity = qty;
-                $(this).val(qty);
-                renderStockInItems();
+                
+                // Check if empty
+                if (rawValue === '') {
+                    errorSpan.hide();
+                    item.quantity = 0;
+                    $(this).removeClass('is-invalid is-warning');
+                    updateTotalsOnly();
+                    return;
+                }
+                
+                // Check if less than 1
+                if (quantity < 1) {
+                    $(this).addClass('is-invalid');
+                    errorSpan.text('Quantity must be at least 1').show();
+                    item.quantity = 0;
+                    updateTotalsOnly();
+                    return;
+                }
+                
+                // Valid quantity
+                $(this).addClass('valid-feedback');
+                errorSpan.hide();
+                item.quantity = quantity;
+                
+                // Update totals only (no full re-render)
+                updateTotalsOnly();
             });
 
             $(document).on('click', '.remove-stockin-item', function() {
@@ -381,6 +414,17 @@
                 $('#confirm-stockin-btn').html('<i class="fa fa-check"></i> Process Stock In').prop('disabled', true);
             });
         });
+
+        function updateTotalsOnly() {
+            let totalUnits = 0;
+            stockInItems.forEach(function(item) {
+                totalUnits += parseInt(item.quantity, 10) || 0;
+            });
+            
+            $('#stockin-total-batches').text(stockInItems.length);
+            $('#stockin-total-units').text(totalUnits);
+            $('#confirm-stockin-btn').prop('disabled', stockInItems.length === 0);
+        }
 
         function initCameraAndScanner() {
             stopCamera();
@@ -651,6 +695,11 @@
 
             if (existingItem) {
                 existingItem.quantity += 1;
+                // Update the existing input value directly
+                let $row = $('#stockin-items-table-body').find('tr[data-index="' + stockInItems.indexOf(existingItem) + '"]');
+                if ($row.length) {
+                    $row.find('.stockin-item-qty').val(existingItem.quantity);
+                }
             } else {
                 stockInItems.push({
                     id: batchData.id,
@@ -663,7 +712,7 @@
                 });
             }
 
-            renderStockInItems();
+            renderStockInItems(); // This will now only create missing rows
             showStockInMessage('success', 'Added batch <strong>' + escapeHtml(batchData.batch_code) + '</strong> to stock in list.');
             $('#stockin-batch-scan-input').trigger('focus');
         }
@@ -672,25 +721,68 @@
             const tbody = $('#stockin-items-table-body');
             let totalUnits = 0;
 
-            tbody.empty();
-
+            // If no items, just show empty message
             if (stockInItems.length === 0) {
+                tbody.empty();
                 tbody.append('<tr id="stockin-empty-row"><td colspan="5" class="text-center text-muted">No scanned batches yet</td></tr>');
-            } else {
-                stockInItems.forEach(function(item, index) {
-                    totalUnits += parseInt(item.quantity, 10) || 0;
-
-                    tbody.append(
-                        '<tr>' +
-                            '<td><strong>' + escapeHtml(item.batch_code) + '</strong><br><small class="text-muted">' + escapeHtml(item.product_code || '') + '</small></td>' +
-                            '<td>' + escapeHtml(item.product_name || '') + '</td>' +
-                            '<td>' + escapeHtml(item.expiry_date || '') + '</td>' +
-                            '<td><input type="number" min="1" class="form-control stockin-item-qty" data-index="' + index + '" value="' + item.quantity + '"></td>' +
-                            '<td><button type="button" class="btn btn-danger btn-sm remove-stockin-item" data-index="' + index + '"><i class="fa fa-trash"></i></button></td>' +
-                        '</tr>'
-                    );
-                });
+                $('#stockin-total-batches').text(0);
+                $('#stockin-total-units').text(0);
+                $('#confirm-stockin-btn').prop('disabled', true);
+                return;
             }
+
+            // Update existing rows instead of rebuilding
+            stockInItems.forEach(function(item, index) {
+                totalUnits += parseInt(item.quantity, 10) || 0;
+                
+                // Check if row exists
+                let $row = tbody.find('tr[data-index="' + index + '"]');
+                
+                if ($row.length === 0) {
+                    // Create new row if it doesn't exist
+                    let quantityClass = item.quantity > 0 ? 'valid-feedback' : '';
+                    
+                    let row = `
+                        <tr data-index="${index}">
+                            <td><strong>${escapeHtml(item.batch_code)}</strong><br><small class="text-muted">${escapeHtml(item.product_code || '')}</small></td>
+                            <td>${escapeHtml(item.product_name || '')}</td>
+                            <td>${escapeHtml(item.expiry_date || '')}</td>
+                            <td>
+                                <input type="text" value="${item.quantity}" 
+                                    class="form-control stockin-item-qty ${quantityClass}" 
+                                    data-index="${index}" 
+                                    style="width: 100%;">
+                                <small class="text-danger stockin-qty-error" id="stockin-qty-error-${index}" style="display: none; font-size: 11px;"></small>
+                            </td>
+                            <td><button type="button" class="btn btn-danger btn-sm remove-stockin-item" data-index="${index}"><i class="fa fa-trash"></i></button></td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                } else {
+                    // Update existing row's quantity value
+                    let $qtyInput = $row.find('.stockin-item-qty');
+                    if ($qtyInput.val() != item.quantity) {
+                        $qtyInput.val(item.quantity);
+                    }
+                    
+                    // Update quantity class
+                    let quantityClass = item.quantity > 0 ? 'valid-feedback' : '';
+                    $qtyInput.removeClass('valid-feedback is-invalid is-warning').addClass(quantityClass);
+                    
+                    // Update batch code and product info in case they changed
+                    $row.find('td:first').html('<strong>' + escapeHtml(item.batch_code) + '</strong><br><small class="text-muted">' + escapeHtml(item.product_code || '') + '</small>');
+                    $row.find('td:eq(1)').text(escapeHtml(item.product_name || ''));
+                    $row.find('td:eq(2)').text(escapeHtml(item.expiry_date || ''));
+                }
+            });
+            
+            // Remove rows that no longer exist
+            tbody.find('tr[data-index]').each(function() {
+                let index = parseInt($(this).data('index'));
+                if (!stockInItems[index]) {
+                    $(this).remove();
+                }
+            });
 
             $('#stockin-total-batches').text(stockInItems.length);
             $('#stockin-total-units').text(totalUnits);
@@ -723,4 +815,27 @@
         
 
     </script>
+    <style>
+        /* Force quantity inputs to be visible */
+        .stockin-item-qty {
+            display: block !important;
+            visibility: visible !important;
+            width: 100% !important;
+            min-width: 100px;
+        }
+
+        #stockin-items-table-body input {
+            display: block !important;
+            visibility: visible !important;
+        }
+
+        #stockin-items-table-body td {
+            vertical-align: middle;
+        }
+
+        #stockin-items-table-body td:nth-child(4) {
+            min-width: 150px;
+        }
+
+    </style>
 @endpush
