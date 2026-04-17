@@ -483,7 +483,7 @@
     <button class="navbar-toggler sidebar-toggler d-lg-none mr-auto" type="button" data-toggle="sidebar-show">
         <span class="navbar-toggler-icon"></span>
     </button>
-    <a class="navbar-brand" href="{{config('app.url')}}">
+    <a class="navbar-brand" href="{{ route('invoices.index') }}">
         <img class="navbar-brand-full" src="{{config('app.url')}}/logo.png" height="30"
              alt="Multiline Logo">
         <img class="navbar-brand-minimized" src="{{config('app.url')}}/logo.png" width="30"
