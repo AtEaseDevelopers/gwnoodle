@@ -590,19 +590,11 @@ class DriverController extends Controller
 
             $currentLorryId = $trip->lorry_id;
             $newLorryId = $request->lorry_id;
-            
-            $inventorybalance = InventoryBalance::where('lorry_id', $currentLorryId)->first();
-            
+                        
             //update trip lorry
             $trip->lorry_id = $newLorryId;
             $trip->save();
 
-            if($inventorybalance){
-                //update inventory balance lorry
-                $inventorybalance->lorry_id = $newLorryId;
-                $inventorybalance->save();
-            }
-            
             //update lorry status
             $currentLorry = Lorry::where('id', $currentLorryId)->first();
             $currentLorry->status = 1;
