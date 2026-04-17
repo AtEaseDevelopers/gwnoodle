@@ -1324,7 +1324,7 @@ class DriverController extends Controller
                 ], 401);
             }
 
-            $product = ProductBatch::where('batch_code', $productCode)->first();
+            $product = ProductBatch::with('product')->where('batch_code', $productCode)->first();
             if($product){
                 return response()->json([
                     'result' => true,
