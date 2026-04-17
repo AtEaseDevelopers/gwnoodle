@@ -1,80 +1,78 @@
 <!-- Invoiceno Field -->
 <div class="form-group">
-    {!! Form::label('invoiceno', __('invoices.invoice_no')) !!}:<span class="asterisk"> *</span>
+    {!! Form::label('invoiceno', __('invoices.invoice_no')) !!}:
     <p>{{ $invoice->invoiceno }}</p>
 </div>
 
 <!-- Date Field -->
 <div class="form-group">
-    {!! Form::label('date', __('invoices.date')) !!}:<span class="asterisk"> *</span>
+    {!! Form::label('date', __('invoices.date')) !!}:
     <p>{{ $invoice->date }}</p>
 </div>
 
 <!-- Customer Id Field -->
 <div class="form-group">
-    {!! Form::label('customer_id', __('invoices.customer')) !!}:<span class="asterisk"> *</span>
+    {!! Form::label('customer_id', __('invoices.customer')) !!}:
     <p>{{ $invoice->customer->company ?? '' }}</p>
 </div>
 
 <!-- Driver Id Field -->
 <div class="form-group">
-    {!! Form::label('driver_id', __('invoices.driver')) !!}:<span class="asterisk"> *</span>
+    {!! Form::label('driver_id', __('invoices.driver')) !!}:
     <p>{{ $invoice->driver->name ?? '' }}</p>
 </div>
 
-<!-- Kelindan Id Field -->
-<!-- <div class="form-group">
-    {!! Form::label('kelindan_id', __('invoices.kelindan')) !!}:<span class="asterisk"> *</span>
-    <p>{{ $invoice->kelindan->name ?? '' }}</p>
-</div> -->
-
-<!-- Agent Id Field -->
-<!-- <div class="form-group">
-    {!! Form::label('agent_id', __('invoices.agent')) !!}:<span class="asterisk"> *</span>
-    <p>{{ $invoice->agent->name ?? '' }}</p>
-</div> -->
-
-<!-- Supervisor Id Field -->
-<!-- <div class="form-group">
-    {!! Form::label('supervisor_id', __('invoices.supervisor')) !!}:<span class="asterisk"> *</span>
-    <p>{{ $invoice->supervisor->name ?? '' }}</p>
-</div> -->
-
 <!-- Paymentterm Field -->
 <div class="form-group">
-    {!! Form::label('paymentterm', __('invoices.payment_term')) !!}:<span class="asterisk"> *</span>
+    {!! Form::label('paymentterm', __('invoices.payment_term')) !!}:
     @if($invoice->paymentterm == 1)
-         <p>Cash</p>
+        <p>Cash</p>
     @elseif($invoice->paymentterm == 2)
         <p>Credit</p>
     @elseif($invoice->paymentterm == 3)
-        <p>Online BankIn</p>
+        <p>Online Payment</p>
     @elseif($invoice->paymentterm == 4)
-        <p>E-wallet</p>
+        <p>Touch n Go</p>
     @elseif($invoice->paymentterm == 5)
-        <p>Cheque {{ '-' . $invoice->chequeno}}</p>
+        <p>Cheque @if($invoice->chequeno) - {{ $invoice->chequeno }} @endif</p>
     @else
         <p>Payment Term: Unknown</p>
     @endif
 </div>
 
+<!-- ChequeNo Field (only show if payment term is Cheque) -->
+@if($invoice->paymentterm == 5 && $invoice->chequeno)
+<div class="form-group">
+    {!! Form::label('chequeno', __('invoices.cheque_no')) !!}:
+    <p>{{ $invoice->chequeno }}</p>
+</div>
+@endif
+
 <!-- Status Field -->
 <div class="form-group">
-    {!! Form::label('status', __('invoices.status')) !!}:<span class="asterisk"> *</span>
+    {!! Form::label('status', __('invoices.status')) !!}:
     <p>{{ $invoice->status == 1 ? "Completed" : "New" }}</p>
 </div>
 
 <!-- Remark Field -->
 <div class="form-group">
-    {!! Form::label('remark', __('invoices.remark')) !!}:<span class="asterisk"> *</span>
-    <p>{{ $invoice->remark }}</p>
+    {!! Form::label('remark', __('invoices.remark')) !!}:
+    <p>{{ $invoice->remark ?: '-' }}</p>
+</div>
+
+<!-- Submit Field -->
+<div class="form-group">
+    <a href="{{ route('invoices.index') }}" class="btn btn-secondary">{{ __('invoices.back') }}</a>
+    @if(isset($invoice) && $invoice->status != 1)
+    <a href="{{ route('invoices.edit', $invoice->id) }}" class="btn btn-primary">{{ __('invoices.edit') }}</a>
+    @endif
 </div>
 
 @push('scripts')
     <script>
         $(document).keyup(function(e) {
             if (e.key === "Escape") {
-                $('.card .card-header a')[0].click();
+                $('.form-group a.btn-secondary')[0].click();
             }
         });
         $(document).ready(function () {

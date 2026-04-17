@@ -13,4 +13,6 @@ class StateCode extends Model
         'code',
         'state',
     ];
+
+    
 }

@@ -532,6 +532,9 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('/invoicePayments/massupdatestatus', [App\Http\Controllers\InvoicePaymentController::class, 'massupdatestatus']);
         //Print Invoice
         Route::get('/print/invoices/getInvoiceViewPDF/{id}/{function}', [App\Http\Controllers\InvoiceController::class, 'getInvoiceViewPDF'])->name('invoice.print');
+
+        Route::get('/print/invoices/getInvoiceSimplePDF/{id}/{function}', [App\Http\Controllers\InvoiceController::class, 'getInvoiceSimplePDF'])->name('invoice.printpdf');
+
         //Print Receipt
         Route::get('/print/invoicePayments/getReceiptViewPDF/{id}/{function}', [App\Http\Controllers\InvoicePaymentController::class, 'getReceiptViewPDF'])->name('invoicePayments.print');
 

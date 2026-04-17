@@ -1,6 +1,13 @@
 {!! Form::open(['route' => ['invoices.destroy', encrypt($id)], 'method' => 'delete']) !!}
 <div class='btn-group'>
-    <a href="{{ route('invoice.print', ['id' => encrypt($id), 'function' => 'view'] ) }}" class='btn btn-ghost-primary' target="_blank">
+   <a href="{{ route('invoice.print_pdf', ['id' => encrypt($id), 'function' => 'view']) . '?mode=do' }}" class='btn btn-ghost-success' target="_blank" title="DO Print">
+      <i class="fa fa-print"></i>
+   </a>
+
+   <a href="{{ route('invoice.print_pdf', ['id' => encrypt($id), 'function' => 'view']) . '?mode=invoice' }}" class='btn btn-ghost-warning' target="_blank" title="Invoice Print">
+      <i class="fa fa-print"></i>
+   </a>
+    <a href="{{ route('invoice.print', ['id' => encrypt($id), 'function' => 'view'] ) }}" class='btn btn-ghost-primary' target="_blank" title="Invoice Receipt Print">
        <i class="fa fa-print"></i>
     </a>
     <a href="{{ route('invoices.show', encrypt($id)) }}" class='btn btn-ghost-success'>

@@ -845,6 +845,225 @@ class InvoiceController extends AppBaseController
 
     }
 
+    public static function convert($number)
+    {
+        $number = round($number, 2);
+        $dollars = floor($number);
+        $cents = round(($number - $dollars) * 100);
+        
+        $words = self::convertNumberToWords($dollars);
+        
+        if ($cents > 0) {
+            $words .= ' AND ' . self::convertNumberToWords($cents) . ' CENTS';
+        }
+        
+        return $words;
+    }
+    
+    private static function convertNumberToWords($number)
+    {
+        $words = '';
+        
+        $units = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN', 
+                  'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 
+                  'EIGHTEEN', 'NINETEEN'];
+        $tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+        
+        if ($number == 0) {
+            return 'ZERO';
+        }
+        
+        if ($number < 20) {
+            $words = $units[$number];
+        } elseif ($number < 100) {
+            $words = $tens[floor($number / 10)];
+            if ($number % 10 > 0) {
+                $words .= ' ' . $units[$number % 10];
+            }
+        } elseif ($number < 1000) {
+            $words = $units[floor($number / 100)] . ' HUNDRED';
+            if ($number % 100 > 0) {
+                $words .= ' ' . self::convertNumberToWords($number % 100);
+            }
+        } elseif ($number < 1000000) {
+            $words = self::convertNumberToWords(floor($number / 1000)) . ' THOUSAND';
+            if ($number % 1000 > 0) {
+                $words .= ' ' . self::convertNumberToWords($number % 1000);
+            }
+        } else {
+            $words = self::convertNumberToWords(floor($number / 1000000)) . ' MILLION';
+            if ($number % 1000000 > 0) {
+                $words .= ' ' . self::convertNumberToWords($number % 1000000);
+            }
+        }
+        
+        return $words;
+    }
+
+    function formatMalaysianAddressSimple($address, $maxLines = 4) 
+    {
+        if (empty($address)) {
+            return '';
+        }
+        
+        // First, normalize to single line with commas as separators
+        // Replace newlines with commas
+        $address = preg_replace('/\r\n|\r|\n/', ', ', $address);
+        
+        // Split by commas
+        $parts = explode(',', $address);
+        
+        // Trim each part and remove empty ones
+        $parts = array_map('trim', $parts);
+        $parts = array_filter($parts, function($part) {
+            return $part !== '';
+        });
+        $parts = array_values($parts);
+        
+        if (count($parts) <= $maxLines) {
+            return implode("\n", $parts);
+        }
+        
+        // For address format: street, area, postcode+city, state
+        // We want: line1: street, line2: area, line3: postcode+city, line4: state
+        
+        $streetParts = [];
+        $areaParts = [];
+        $postcodeCity = '';
+        $statePart = '';
+        
+        foreach ($parts as $part) {
+            // Check if this part contains a postcode (5 digits)
+            if (preg_match('/\b\d{5}\b/', $part)) {
+                $postcodeCity = $part;
+            }
+            // Check if this is a state (contains Wilayah, Selangor, etc.)
+            elseif (preg_match('/(Wilayah|Selangor|Johor|Kedah|Kelantan|Melaka|Negeri Sembilan|Pahang|Perak|Perlis|Pulau Pinang|Sabah|Sarawak|Terengganu)/i', $part)) {
+                $statePart = $part;
+            }
+            // Check if this is an area (contains Bandar, Taman, etc.)
+            elseif (preg_match('/(Bandar|Taman|Seksyen|Section|Pusat|Kompleks)/i', $part)) {
+                $areaParts[] = $part;
+            }
+            // Otherwise treat as street address
+            else {
+                $streetParts[] = $part;
+            }
+        }
+        
+        $result = [];
+        
+        // Line 1: Street (combine multiple street parts)
+        if (!empty($streetParts)) {
+            $result[] = implode(', ', $streetParts);
+        }
+        
+        // Line 2: Area (combine multiple area parts)
+        if (!empty($areaParts)) {
+            $result[] = implode(', ', $areaParts);
+        }
+        
+        // Line 3: Postcode + City
+        if (!empty($postcodeCity)) {
+            $result[] = $postcodeCity;
+        }
+        
+        // Line 4: State
+        if (!empty($statePart)) {
+            $result[] = $statePart;
+        }
+        
+        // If we have more than 4 lines, combine as needed
+        while (count($result) > $maxLines) {
+            $last = array_pop($result);
+            $prev = array_pop($result);
+            $result[] = $prev . ', ' . $last;
+        }
+        
+        return implode("\n", $result);
+    }
+
+    public function getInvoiceSimplePDF($id, $function)
+    {
+        $id = Crypt::decrypt($id);
+        $mode = request()->query('mode', 'invoice');
+
+        $invoice = Invoice::where('id', $id)
+            ->with('customer')
+            ->with('driver')
+            ->with('invoicedetail.product')
+            ->with('invoicedetail.batch')
+            ->first();
+
+        if (empty($invoice)) {
+            abort(404);
+        }
+
+        // Calculate totals
+        $totalAmount = 0;
+        $totalQuantity = 0;
+        foreach ($invoice->invoicedetail as $detail) {
+            $totalAmount += $detail->totalprice;
+            $totalQuantity += $detail->quantity;
+        }
+
+        $customer_billing_address = $this->formatMalaysianAddressSimple($invoice->customer->billing_address ?? '', 4);
+        
+        // Get company info
+        $companyInfo = [
+            'name' => 'GW NOODLES SDN BHD',
+            'ssm' => 'TIN: C24694011050',
+            'address1' => '23 JLN SETIA PERNIAGAAN 9,81100 JOHOR BAHRU, MALAYSIA',
+            'phone' => '016-723-7931',
+            'msic_code' => '10799'
+        ];
+
+        // Calculate dynamic page height
+        $minHeight = 400;
+        $eachItemHeight = 25;
+        $height = (count($invoice->invoicedetail) * $eachItemHeight) + $minHeight;
+
+        // Convert amount to words
+        $totalAmountText = $this->convertNumberToWords($totalAmount);
+
+        try {
+            $pdf = Pdf::loadView('invoices.pdf_print', array(
+                'invoice' => $invoice,
+                'companyInfo' => $companyInfo,
+                'totalAmount' => $totalAmount,
+                'totalQuantity' => $totalQuantity,
+                'customer_billing_address' => $customer_billing_address,
+                'totalAmountText' => $totalAmountText,
+                'mode' => $mode
+            ));
+
+            // Set PDF options with Tahoma font support
+            $pdf->setOptions([
+                'isPhpEnabled' => true, 
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'helvetica', // Fallback font
+                'fontCache' => storage_path('fonts/'), // Cache fonts
+            ]);
+
+            // Register Tahoma font if available
+            $fontPath = public_path('fonts/Tahoma.ttf');
+            if (file_exists($fontPath)) {
+                $pdf->getDomPDF()->set_option('fontDir', public_path('fonts'));
+                $pdf->getDomPDF()->set_option('fontCache', storage_path('fonts/'));
+            }
+
+            if ($function == 'download') {
+                return $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
+                    ->download('invoice_' . $invoice->invoiceno . '.pdf');
+            } elseif ($function == 'view') {
+                return $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
+                    ->stream('invoice_' . $invoice->invoiceno . '.pdf');
+            }
+        } catch (Exception $e) {
+            dd($e->getMessage());
+        }
+    }
+
     public function syncXero(Request $req)
     {
         try {

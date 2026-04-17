@@ -96,8 +96,8 @@
                     {!! Form::label('postcode', 'Postcode:') !!}
                     {!! Form::text('postcode', null, ['class' => 'form-control','maxlength' => 20]) !!}
                 </div>
-
-                <!-- State Field -->
+        
+                <!-- State Field -->    
                 <div class="form-group">
                     {!! Form::label('state', 'State:') !!}
                     {!! Form::select('state', $stateOptions ?? [], null, ['class' => 'form-control selectpicker', 'data-live-search' => 'true', 'data-size' => '10', 'data-dropup-auto' => 'false', 'id' => 'state_code', 'placeholder' => 'Select State...']) !!}

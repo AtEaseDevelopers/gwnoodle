@@ -38,7 +38,7 @@ class Customer extends Model
         'category',
         'agent_id',
         'supervisor_id',
-
+        'city',
         //e-invoice fields
         'postcode',
         'area',

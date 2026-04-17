@@ -48,26 +48,6 @@
 </div>
 
 
-<!-- Kelindan Id Field -->
-<!-- <div class="form-group col-sm-6">
-    {!! Form::label('kelindan_id', __('invoices.kelindan')) !!}
-    {!! Form::select('kelindan_id', $kelindanItems, null, ['class' => 'form-control select2-kelindan', 'placeholder' => 'Pick a Kelindan...']) !!}
-</div> -->
-
-
-<!-- Agent Id Field -->
-<!-- <div class="form-group col-sm-6">
-    {!! Form::label('agent_id',  __('invoices.agent'))  !!}
-    {!! Form::select('agent_id', $agentItems, null, ['class' => 'form-control select2-agent', 'placeholder' => 'Pick a Agent...']) !!}
-</div> -->
-
-
-<!-- Supervisor Id Field -->
-<!-- <div class="form-group col-sm-6">
-    {!! Form::label('supervisor_id',  __('invoices.supervisor'))  !!}
-    {!! Form::select('supervisor_id', $supervisorItems, null, ['class' => 'form-control select2-supervisor', 'placeholder' => 'Pick a Supervisor...']) !!}
-</div> -->
-
 
 <!-- Paymentterm Field -->
 <div class="form-group col-sm-6">
