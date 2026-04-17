@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\ApiLog;
+use App\Models\Driver;
 use Facade\FlareClient\Api;
 //use App\Models\Branch;
 use Illuminate\Support\Facades\Log;
@@ -67,6 +68,7 @@ class CustomerController extends Controller
                         //'chinese_name'             => $customer_data['Desc2'] ?? null, 
                         'phone'                    => $customer_data['Phone1'] ?? null,
                         'billing_address'          => $full_address,
+                        'delivery_address'         => $full_address,
                         'status'                   => $status,
                         'tin'                      => $customer_data['FullTIN'] ?? $customer_data['TIN'] ?? null,                       
                         'sst_registration_no'      => $customer_data['SSTRegisterNo'] ?? null,        // MAPPED: 'TaxRegNo' is now 'SSTRegisterNo' (or could use GSTRegisterNo)
@@ -78,9 +80,9 @@ class CustomerController extends Controller
                         'postcode'                 => $customer_data['PostCode'] ?? null,//$postcode,
                         'email'                    => $customer_data['EmailAddress'] ?? null,
                         'group'                    => $customer_data['AreaCode'] ?? null, // MAPPED: 'Area' is now 'AreaCode'
-                        'paymentterm'              => (isset($customer_data['DisplayTerm']) && $customer_data['DisplayTerm'] === 'Cash') ? 1 : 3, 
+                        'paymentterm'              => (isset($customer_data['DisplayTerm']) && $customer_data['DisplayTerm'] === 'Cash') ? 'cash' : 'credit_note', 
                         'state'                    => StateCode::where('code', $customer_data['StateCode'] ?? '')->value('id') ?? null,  // MAPPED: 'State' is now 'StateCode'
-                        'driver_id'                => Agent::where('employeeid', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
+                        'driver_id'                => Driver::where('name', $customer_data['SalesAgent'] ?? null)->value('id') ?? null,
                     ]
                 );
             }
