@@ -151,7 +151,7 @@ Route::namespace('App\Http\Controllers\Api\autocount_plugin')->group(function ()
    
     // product
     Route::post('/products/update', 'ProductController@update');
-    Route::get('/products/ignored', 'ProductController@getIgnoredProducts');
+    //Route::get('/products/ignored', 'ProductController@getIgnoredProducts');
 
 
     // customer
