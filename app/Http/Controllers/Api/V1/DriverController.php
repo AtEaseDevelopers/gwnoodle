@@ -4301,7 +4301,8 @@ class DriverController extends Controller
                 ],
                 'productsold' => $productsSold,
                 'inventory_balance' => $inventoryBalances, // Fixed variable name (was missing 's')
-                'trip' => $tripArray
+                'trip' => $tripArray,
+                'lorry' => $trip ? $trip->lorry->lorryno : null,
             ];
             
             return response()->json([
