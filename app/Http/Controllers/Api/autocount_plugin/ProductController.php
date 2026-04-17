@@ -13,15 +13,15 @@ class ProductController extends Controller
 {
     const BATCH_SIZE = 0; // if 0 means no limit
 
+    // Define allowed prefixes
+    const ALLOWED_PREFIXES = ['N', 'OEM', 'GW', 'BK', 'S', 'TD', 'AD'];
+
     public function update(Request $request)
     {
-        // Depending on how your C# sends it, you might need $request->input('items', [])
-        // If your C# sends a raw array, $request->all() is perfectly fine!
         $data = $request->all(); 
-        $processedResults = []; // Store validation errors
+        $processedResults = [];
 
         try {
-            // Safety check to ensure the payload is actually iterable
             if (!is_array($data)) {
                 throw new \Exception("Invalid payload format. Expected an array of records.");
             }
@@ -30,8 +30,20 @@ class ProductController extends Controller
                 
                 if (self::BATCH_SIZE > 0) {
                     if ($index >= self::BATCH_SIZE) {
-                        break; // Stop processing after reaching the batch size limit
+                        break;
                     }
+                }
+
+                $itemCode = $record['ItemCode'] ?? '';
+
+                // Check if ItemCode matches allowed prefix + has a dash (e.g. OEM123-xxx)
+                if (!$this->isAllowedItemCode($itemCode)) {
+                    $processedResults[] = [
+                        'unit_code' => $itemCode ?: null,
+                        'status'    => 'skipped',
+                        'reason'    => 'ItemCode prefix not matched or missing dash.',
+                    ];
+                    continue; // Skip this record
                 }
 
                 $validationErrors = $this->manualValidation($record);
@@ -39,13 +51,12 @@ class ProductController extends Controller
                 if (!empty($validationErrors)) {
                     $processedResults[] = [
                         'unit_code' => $record['ItemCode'] ?? null,
-                        'status'     => 'validation_error',
-                        'errors'     => $validationErrors,
+                        'status'    => 'validation_error',
+                        'errors'    => $validationErrors,
                     ];
                     continue;
                 }
 
-                // 2. Clean 'updateOrCreate' logic (Replaces the big if/else block)
                 Product::updateOrCreate(
                     ['unit_code' => $record['ItemCode']],
                     [
@@ -57,13 +68,17 @@ class ProductController extends Controller
                         'type'                => 1,
                     ]
                 );
+
+                $processedResults[] = [
+                    'unit_code' => $record['ItemCode'],
+                    'status'    => 'processed',
+                ];
             }
 
-            // Prepare Success Response
             $responseData = [
                 'status'  => 'success',
                 'message' => 'Batch processed successfully.',
-                'results' => $processedResults, // This will contain any skipped records
+                'results' => $processedResults,
             ];
             $statusCode = 200;
 
@@ -78,27 +93,81 @@ class ProductController extends Controller
 
         return response()->json($responseData, $statusCode);
     }
-    
-   protected function manualValidation(array $record)
+
+    /**
+     * Check if ItemCode starts with an allowed prefix AND contains a dash.
+     * e.g. OEM123-2wqeq-112 ✅ | OEM123 ❌ | RANDOM-123 ❌
+     */
+    protected function isAllowedItemCode(string $itemCode): bool
+    {
+        if (empty($itemCode) || !str_contains($itemCode, '-')) {
+            return false;
+        }
+
+        foreach (self::ALLOWED_PREFIXES as $prefix) {
+            if (str_starts_with($itemCode, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function getIgnoredProducts()
+    {
+        $ignored = Product::select('id', 'name', 'unit_code')
+            ->get()
+            ->filter(function ($product) {
+                return !$this->isAllowedItemCode($product->unit_code ?? '');
+            })
+            ->values(); // re-index the array
+        $no_ignored = Product::select('id', 'name', 'unit_code')
+            ->get()
+            ->filter(function ($product) {
+                return $this->isAllowedItemCode($product->unit_code ?? '');
+            })
+            ->values(); // re-index the array
+
+        return response()->json([
+            'status'  => 'success',
+            'total_ignored'   => $ignored->count(),
+            'results_ignored' => $ignored,
+            'total_no_ignored'   => $no_ignored->count(),
+            'results_no_ignored' => $no_ignored,
+        ]);
+    }
+
+    // protected function isAllowedItemCode(string $itemCode): bool
+    // {
+    //     if (empty($itemCode)) {
+    //         return false;
+    //     }
+
+    //     foreach (self::ALLOWED_PREFIXES as $prefix) {
+    //         if (str_starts_with($itemCode, $prefix)) {
+    //             return true;
+    //         }
+    //     }
+
+    //     return false;
+    // }
+
+    protected function manualValidation(array $record)
     {
         $errors = [];
 
-        // Check if ItemCode is missing or truly an empty string
         if (!isset($record['ItemCode']) || trim($record['ItemCode']) === '') {
             $errors['ItemCode'] = 'The ItemCode field is required and must be a string.';
         }
 
-        // Allow Price to be 0, but it must be numeric if provided
         if (!array_key_exists('Price', $record) || ($record['Price'] !== null && !is_numeric($record['Price']))) {
             $errors['Price'] = 'The Price field is required and must be a number.';
         }
 
-        // Allow Cost to be null or 0. Only error if it has a weird string value.
         if (array_key_exists('Cost', $record) && $record['Cost'] !== null && !is_numeric($record['Cost'])) {
             $errors['Cost'] = 'The Cost field must be a number.';
         }
 
-        // Check if UOM is missing or empty
         if (!isset($record['UOM']) || trim($record['UOM']) === '') {
             $errors['UOM'] = 'The UOM field is required and must be a string.';
         }
