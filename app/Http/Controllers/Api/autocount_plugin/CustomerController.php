@@ -43,7 +43,15 @@ class CustomerController extends Controller
                     $customer_data['Address4'] ?? null
                 ]);
 
+                $delivery_address =  array_filter([
+                    $customer_data['DeliverAddr1'] ?? null,
+                    $customer_data['DeliverAddr2'] ?? null,
+                    $customer_data['DeliverAddr3'] ?? null,
+                    $customer_data['DeliverAddr4'] ?? null
+                ]);
+
                 $full_address = implode(', ', $addressParts);
+                $delivery_address = implode(', ', $delivery_address);
                 $status       = (isset($customer_data['IsActive']) && $customer_data['IsActive'] === 'T') ? 1 : 0;
             
                 // MAPPED: 'ZipCode' is now 'PostCode'
@@ -68,7 +76,7 @@ class CustomerController extends Controller
                         //'chinese_name'             => $customer_data['Desc2'] ?? null, 
                         'phone'                    => $customer_data['Phone1'] ?? null,
                         'billing_address'          => $full_address,
-                        'delivery_address'         => $full_address,
+                        'delivery_address'         => $delivery_address,
                         'status'                   => $status,
                         'tin'                      => $customer_data['FullTIN'] ?? $customer_data['TIN'] ?? null,                       
                         'sst_registration_no'      => $customer_data['SSTRegisterNo'] ?? null,        // MAPPED: 'TaxRegNo' is now 'SSTRegisterNo' (or could use GSTRegisterNo)
