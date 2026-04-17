@@ -780,12 +780,15 @@ class ProductBatchController extends AppBaseController
             return response()->json(['error' => 'Batch code is required'], 400);
         }
 
-        $barcodeBase64 = DNS1D::getBarcodePNG($batchCode, 'C128B', 4, 250, [0,0,0], false);
+        $encodeType = ctype_digit($batchCode) ? 'C128C' : 'C128B';
+        
+        $barcodeBase64 = DNS1D::getBarcodePNG($batchCode, $encodeType, 2, 100, [0,0,0], false);
         $barcode = imagecreatefromstring(base64_decode($barcodeBase64));
 
-        $horizontalPadding = 80;
-        $topPadding = 80; // Added top padding
-        $bottomPadding = 110; // Space for text at bottom
+        // 相应减小内边距
+        $horizontalPadding = 30;
+        $topPadding = 20;
+        $bottomPadding = 40;
         
         $width = imagesx($barcode) + ($horizontalPadding * 2);
         $height = imagesy($barcode) + $topPadding + $bottomPadding;
@@ -795,29 +798,16 @@ class ProductBatchController extends AppBaseController
         $black = imagecolorallocate($canvas, 0, 0, 0);
 
         imagefill($canvas, 0, 0, $white);
-        
-        // Place barcode with top padding
         imagecopy($canvas, $barcode, $horizontalPadding, $topPadding, 0, 0, imagesx($barcode), imagesy($barcode));
 
         $fontPath = public_path('fonts/DejaVuSans.ttf');
-        $fontSize = 40;
+        $fontSize = 20; // 相应减小字体
         $textBoundingBox = imagettfbbox($fontSize, 0, $fontPath, $batchCode);
         $textWidth = $textBoundingBox[2] - $textBoundingBox[0];
         $textX = max($horizontalPadding, (int) (($width - $textWidth) / 2));
-        
-        // Position text at bottom with some margin
-        $textY = $height - 30; // 30px from bottom
+        $textY = $height - 15;
 
-        imagettftext(
-            $canvas,
-            $fontSize,
-            0,
-            $textX,
-            $textY,
-            $black,
-            $fontPath,
-            $batchCode
-        );
+        imagettftext($canvas, $fontSize, 0, $textX, $textY, $black, $fontPath, $batchCode);
 
         ob_start();
         imagepng($canvas);
