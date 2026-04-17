@@ -1307,14 +1307,6 @@ class DriverController extends Controller
         try{
             $data = $request->all();
             //check session
-            $driver = Driver::where('session', $request->header('session'))->first();
-            if(empty($driver)){
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__.$this->message_separator.'api.message.invalid_session',
-                    'data' => null
-                ], 401);
-            }
             $productCode = $request->input('product_code');
             if(!$productCode){
                 return response()->json([
