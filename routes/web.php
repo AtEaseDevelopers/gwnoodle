@@ -533,7 +533,7 @@ Route::group(['middleware' => ['auth']], function() {
         //Print Invoice
         Route::get('/print/invoices/getInvoiceViewPDF/{id}/{function}', [App\Http\Controllers\InvoiceController::class, 'getInvoiceViewPDF'])->name('invoice.print');
 
-        Route::get('/print/invoices/getInvoiceSimplePDF/{id}/{function}', [App\Http\Controllers\InvoiceController::class, 'getInvoiceSimplePDF'])->name('invoice.printpdf');
+        Route::get('/print/invoices/getInvoiceSimplePDF/{id}/{function}', [App\Http\Controllers\InvoiceController::class, 'getInvoiceSimplePDF'])->name('invoice.print_pdf');
 
         //Print Receipt
         Route::get('/print/invoicePayments/getReceiptViewPDF/{id}/{function}', [App\Http\Controllers\InvoicePaymentController::class, 'getReceiptViewPDF'])->name('invoicePayments.print');
