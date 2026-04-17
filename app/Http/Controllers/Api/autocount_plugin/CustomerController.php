@@ -83,10 +83,10 @@ class CustomerController extends Controller
                         'registration_no'          => $customer_data['RegisterNo'] ?? null,           // MAPPED: 'BRN' is now 'RegisterNo' 
                         'tourism_tax_registration' => $customer_data['TourismTaxRegisterNo'] ?? null, // MAPPED: 'TourismTaxRegNo' is now 'TourismTaxRegisterNo'                        
                         'msic'                     => $customer_data['MSICCode'] ?? null,             // MAPPED: 'MSIC' is now 'MSICCode'
-                        'city'                     => null,
+                        'city'                     => $customer_data['TaxEntityCity'] ?? null,
                         'country'                  => $customer_data['CountryCode'] ?? null, 
                         'postcode'                 => $customer_data['PostCode'] ?? null,//$postcode,
-                        'email'                    => $customer_data['EmailAddress'] ?? null,
+                        'email'                    => $customer_data['TaxEntityEmail'] ?? null,
                         'group'                    => $customer_data['AreaCode'] ?? null, // MAPPED: 'Area' is now 'AreaCode'
                         'paymentterm'              => (isset($customer_data['DisplayTerm']) && $customer_data['DisplayTerm'] === 'Cash') ? 'cash' : 'credit_note', 
                         'state'                    => StateCode::where('code', $customer_data['StateCode'] ?? '')->value('id') ?? null,  // MAPPED: 'State' is now 'StateCode'
