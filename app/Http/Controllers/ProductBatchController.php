@@ -852,7 +852,6 @@ class ProductBatchController extends AppBaseController
             <body>
                 <div class="barcode-container">
                     <img src="data:image/png;base64,' . base64_encode(file_get_contents($tempImagePath)) . '" class="barcode-image" />
-                    <div class="batch-code">' . $batchCode . '</div>
                 </div>
             </body>
             </html>
