@@ -85,7 +85,7 @@
                                     <div class="form-group">
                                         <label for="expiry_date">Expiry Date <span class="text-danger">*</span></label>
                                         <input type="date" class="form-control" id="expiry_date" 
-                                               name="expiry_date" min="{{ date('Y-m-d') }}" 
+                                               name="expiry_date"
                                                value="{{ old('expiry_date') }}" required>
                                         <small class="text-muted">Select expiry date (will be used for barcode generation)</small>
                                     </div>
