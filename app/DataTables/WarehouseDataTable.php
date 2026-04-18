@@ -46,7 +46,11 @@ class WarehouseDataTable extends DataTable
                 return '<span class="badge badge-secondary">' . $count . ' products</span>';
             })
             ->addColumn('inventory_summary', function($warehouse) {
-                    if ($warehouse->inventoryBalances->isEmpty()) {
+                    $nonZeroBalances = $warehouse->inventoryBalances->filter(function($balance) {
+                        return $balance->quantity > 0;
+                    });
+                    
+                    if ($nonZeroBalances->isEmpty()) {
                         return '<span class="text-muted">No inventory</span>';
                     }
                     
