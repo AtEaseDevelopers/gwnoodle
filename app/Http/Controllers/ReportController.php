@@ -532,8 +532,13 @@ class ReportController extends AppBaseController
         $reportData = $service->generateReport($date, $filters);
         
         // Calculate PDF height based on content
-        $totalInvoiceItems = count($reportData['invoices']);
+        // Count total invoice items across all trips
+        $totalInvoiceItems = 0;
+        foreach ($reportData['trips'] as $trip) {
+            $totalInvoiceItems += count($trip['invoices']);
+        }
         $totalProductItems = count($reportData['products']);
+        
         $minHeight = 500;
         $heightPerRow = 30;
         $calculatedHeight = $minHeight + (($totalInvoiceItems + $totalProductItems) * $heightPerRow);

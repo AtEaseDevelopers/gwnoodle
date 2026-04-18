@@ -19,13 +19,20 @@
                                   <a href="{{ route('reports.index') }}" class="btn btn-light">Back</a>
                              </div>
                              <div class="card-body">
-                                <form method="POST" action="../reports/run" accept-charset="UTF-8">
+                                <form method="POST" action="../reports/run" accept-charset="UTF-8" id="reportForm">
                                     @csrf {{ csrf_field() }}
                                     <input type="hidden" name="_report_id" value="{{ $report->id }}">
                                     @php
                                         $scripts = '';
                                         foreach($reportdetails as $reportdetail){
+                                            // Check if the field should be optional based on title
+                                            $isProductBatch = isset($reportdetail['title']) && $reportdetail['title'] == 'Product Batch';
                                             $required = $reportdetail['name'] === 'p_agent' ? '' : 'required';
+                                            
+                                            // Override required for Product Batch multiselect
+                                            if($isProductBatch && $reportdetail['type'] == 'multiselect') {
+                                                $required = '';
+                                            }
                                             
                                             if($reportdetail['type'] == 'textbox'){
                                                 echo '<div class="form-group col-sm-6">
@@ -75,6 +82,35 @@
                                                             '.$all_option.'
                                                             '.$option.'
                                                         </select>
+                                                        '.(!$required ? '<small class="form-text text-muted">This field is optional. Leave empty to include all batches.</small>' : '').'
+                                                    </div>';
+                                            }else if($reportdetail['type'] == 'singleselect'){
+                                                // Single select dropdown (only one selection allowed, no "ALL" option by default)
+                                                $option = '';
+                                                $includeAllOption = ($reportdetail['STR_UDF1'] == 'Y') ? true : false;
+                                                
+                                                try{
+                                                    foreach ($reportdetail['data'] as $key => $value) {
+                                                        $selected = '';
+                                                        // Check if this option should be preselected
+                                                        if(isset($reportdetail['default_value']) && $reportdetail['default_value'] == $value) {
+                                                            $selected = 'selected';
+                                                        }
+                                                        $option = $option . '<option value="'.$value.'" '.$selected.'>'.$key.'</option>';
+                                                    }
+                                                }
+                                                catch(Exception $e) {
+                                                    echo "<script>console.log('%c ERROR: ".$reportdetail['name']." was missing','color: #FF0000')</script>";
+                                                }
+                                                
+                                                echo '<div class="form-group col-sm-6">
+                                                        <label for="'.$reportdetail['name'].'">'.$reportdetail['title'].':</label>
+                                                        '.($required ? '<span class="asterisk"> *</span>' : '').'
+                                                        <select '.$required.' class="form-control selectpicker" id="'.$reportdetail['name'].'" name="'.$reportdetail['name'].'" tabindex="null" data-live-search="true">
+                                                            '.(!$required ? '<option value="">None</option>' : '').'
+                                                            '.($includeAllOption ? '<option value="%">ALL</option>' : '').'
+                                                            '.$option.'
+                                                        </select>
                                                     </div>';
                                             }
                                         }
@@ -101,7 +137,26 @@
         });
         $(document).ready(function () {
             HideLoad();
+            
+            // Optional: Add client-side validation to remove 'required' attribute for Product Batch
+            $('select[name="product_batch[]"]').each(function() {
+                if ($(this).closest('.form-group').find('label').text().trim() === 'Product Batch') {
+                    $(this).removeAttr('required');
+                }
+            });
         });
+        
+        // Add form submission handling to ensure empty multiselect sends empty value
+        $('#reportForm').on('submit', function() {
+            $('select[name="product_batch[]"]').each(function() {
+                if ($(this).val() === null || $(this).val().length === 0) {
+                    // Create a hidden input to submit empty value
+                    $(this).after('<input type="hidden" name="' + $(this).attr('name') + '" value="">');
+                    $(this).prop('disabled', true);
+                }
+            });
+        });
+        
         $('.form-control.reportdate').datetimepicker({
             format: 'YYYY-MM-DD',
             useCurrent: true,

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Daily Sales Report</title>
+    <title>Daily Sales Report - Grouped by Trip</title>
     <style>
         body {
             font-family: 'DejaVu Sans', 'Helvetica', 'Arial', sans-serif;
@@ -84,6 +84,49 @@
             font-size: 10px;
         }
         
+        /* Trip section styles */
+        .trip-section {
+            margin: 20px 0 30px 0;
+            page-break-inside: avoid;
+        }
+        
+        .trip-header {
+            background-color: #4a5568;
+            color: white;
+            padding: 10px;
+            margin: 15px 0 10px 0;
+            border-radius: 5px;
+        }
+        
+        .trip-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .trip-info {
+            font-size: 9px;
+            color: #e2e8f0;
+        }
+        
+        .trip-summary {
+            margin: 10px 0;
+            padding: 8px;
+            background-color: #edf2f7;
+            border-left: 3px solid #4a5568;
+        }
+        
+        .trip-summary-grid {
+            display: table;
+            width: 100%;
+        }
+        
+        .trip-summary-item {
+            display: table-cell;
+            text-align: center;
+            padding: 5px;
+        }
+        
         /* Driver display styles */
         .driver-value {
             word-wrap: break-word;
@@ -123,7 +166,7 @@
         
         .summary-card {
             display: table-cell;
-            width: 20%;
+            width: 16.66%;
             padding: 5px;
             text-align: center;
             border-right: 1px solid #ddd;
@@ -245,6 +288,10 @@
             font-style: italic;
         }
         
+        .page-break {
+            page-break-before: always;
+        }
+        
         @page {
             margin: 1.2cm;
         }
@@ -265,6 +312,7 @@
                 </div>
                 <div class="title-section">
                     <div class="report-title">DAILY SALES REPORT</div>
+                    <div class="report-title" style="font-size: 10px; color: #666;">GROUPED BY TRIP</div>
                 </div>
             </div>
         </div>
@@ -310,9 +358,13 @@
             </tr>
         </table>
 
-        <!-- Summary Section -->
+        <!-- Overall Summary Section -->
         <div class="summary-section">
             <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="summary-label">Total Trips</div>
+                    <div class="summary-value">{{ number_format($reportData['summary']['total_trips']) }}</div>
+                </div>
                 <div class="summary-card">
                     <div class="summary-label">Total Invoices</div>
                     <div class="summary-value">{{ number_format($reportData['summary']['total_invoices']) }}</div>
@@ -336,7 +388,7 @@
             </div>
         </div>
 
-        <!-- Payment Summary -->
+        <!-- Overall Payment Summary -->
         <div class="payment-summary">
             <div class="payment-grid">
                 <div class="payment-item"><strong>Cash:</strong> RM {{ number_format($reportData['payment_summary']['cash'], 2) }}</div>
@@ -347,8 +399,8 @@
             </div>
         </div>
 
-        <!-- Product Summary Section -->
-        <div class="sub-section-title">PRODUCT SALES SUMMARY</div>
+        <!-- Product Summary Section (Overall) -->
+        <div class="sub-section-title">PRODUCT SALES SUMMARY (ALL TRIPS)</div>
         @if(empty($reportData['products']))
             <div class="empty-message">No products sold on this date</div>
         @else
@@ -383,73 +435,115 @@
             </table>
         @endif
 
-        <!-- Invoice Details Section -->
-        <div class="sub-section-title">INVOICE DETAILS</div>
-        @if(empty($reportData['invoices']))
-            <div class="empty-message">No invoices found for this date</div>
+        <!-- Trip Details Section -->
+        <div class="sub-section-title">TRIP DETAILS</div>
+        @if(empty($reportData['trips']))
+            <div class="empty-message">No trips found for this date</div>
         @else
-            @foreach($reportData['invoices'] as $invoice)
-            <table>
-                <thead>
-                    <tr style="background-color: #e0e0e0;">
-                        <th colspan="5">Invoice: {{ $invoice['invoice_no'] }} | Customer: {{ $invoice['customer_name'] }} ({{ $invoice['customer_code'] }}) | Payment: {{ $invoice['payment_term'] }}</th>
-                    </tr>
-                    <tr>
-                        <th width="5%">#</th>
-                        <th width="40%">Product</th>
-                        <th width="15%">Quantity</th>
-                        <th width="15%">Price (RM)</th>
-                        <th width="15%">Total (RM)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($invoice['items'] as $index => $item)
-                    <tr>
-                        <td class="text-center">{{ $index + 1 }}</td>
-                        <td>{{ $item['product_name'] }} ({{ $item['product_code'] }})</td>
-                        <td class="text-right">{{ number_format($item['quantity']) }}</td>
-                        <td class="text-right">{{ number_format($item['price'], 2) }}</td>
-                        <td class="text-right">{{ number_format($item['total'], 2) }}</td>
-                    </tr>
+            @foreach($reportData['trips'] as $tripIndex => $trip)
+                <div class="trip-section">
+                    <div class="trip-header">
+                        <div class="trip-title">TRIP #{{ $trip['trip_no'] }}</div>
+                        <div class="trip-info">
+                            Total Invoices: {{ $trip['summary']['total_invoices'] }} | 
+                            Total Customers: {{ $trip['summary']['total_customers'] }} | 
+                            Total Quantity: {{ number_format($trip['summary']['total_quantity']) }}
+                        </div>
+                    </div>
+
+                    <!-- Trip Summary -->
+                    <div class="trip-summary">
+                        <div class="trip-summary-grid">
+                            <div class="trip-summary-item">
+                                <strong>Total Sales:</strong><br>
+                                RM {{ number_format($trip['summary']['total_sales'], 2) }}
+                            </div>
+                            <div class="trip-summary-item">
+                                <strong>Total Paid:</strong><br>
+                                RM {{ number_format($trip['summary']['total_paid'], 2) }}
+                            </div>
+                            <div class="trip-summary-item">
+                                <strong>Outstanding:</strong><br>
+                                RM {{ number_format($trip['summary']['total_outstanding'], 2) }}
+                            </div>
+                            <div class="trip-summary-item">
+                                <strong>Payment Methods:</strong><br>
+                                Cash: RM {{ number_format($trip['payment_summary']['cash'], 2) }}<br>
+                                Credit: RM {{ number_format($trip['payment_summary']['credit'], 2) }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoices for this Trip -->
+                    @foreach($trip['invoices'] as $invoice)
+                        <table>
+                            <thead>
+                                <tr style="background-color: #e0e0e0;">
+                                    <th colspan="5">Invoice: {{ $invoice['invoice_no'] }} | Customer: {{ $invoice['customer_name'] }} ({{ $invoice['customer_code'] }}) | Payment: {{ $invoice['payment_term'] }} | Driver: {{ $invoice['driver'] }}</th>
+                                </tr>
+                                <tr>
+                                    <th width="5%">#</th>
+                                    <th width="40%">Product</th>
+                                    <th width="15%">Quantity</th>
+                                    <th width="15%">Price (RM)</th>
+                                    <th width="25%">Total (RM)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($invoice['items'] as $index => $item)
+                                <tr>
+                                    <td class="text-center">{{ $index + 1 }}</td>
+                                    <td>{{ $item['product_name'] }} ({{ $item['product_code'] }})</td>
+                                    <td class="text-right">{{ number_format($item['quantity']) }}</td>
+                                    <td class="text-right">{{ number_format($item['price'], 2) }}</td>
+                                    <td class="text-right">{{ number_format($item['total'], 2) }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot>
+                                <tr style="background-color: #f5f5f5;">
+                                    <td></td>
+                                    <td colspan="3" class="text-right"><strong>Subtotal:</strong></td>
+                                    <td class="text-right"><strong>RM {{ number_format($invoice['total_amount'], 2) }}</strong></td>
+                                </tr>
+                                <tr style="background-color: #f5f5f5;">
+                                    <td></td>
+                                    <td colspan="3" class="text-right"><strong>Paid:</strong></td>
+                                    <td class="text-right"><strong>RM {{ number_format($invoice['paid_amount'], 2) }}</strong></td>
+                                </tr>
+                                @if($invoice['outstanding'] > 0)
+                                <tr style="background-color: #fff3cd;">
+                                    <td></td>
+                                    <td colspan="3" class="text-right"><strong>Outstanding:</strong></td>
+                                    <td class="text-right"><strong>RM {{ number_format($invoice['outstanding'], 2) }}</strong></td>
+                                </tr>
+                                @endif
+                                @if(!empty($invoice['payment_methods']))
+                                <tr>
+                                    <td colspan="5" style="background-color: #e8f5e9;">
+                                        <strong>Payment Methods:</strong>
+                                        @foreach($invoice['payment_methods'] as $method => $amount)
+                                            {{ $method }}: RM {{ number_format($amount, 2) }}@if(!$loop->last), @endif
+                                        @endforeach
+                                    </td>
+                                </tr>
+                                @endif
+                            </tfoot>
+                        </table>
                     @endforeach
-                </tbody>
-                <tfoot>
-                    <tr style="background-color: #f5f5f5;">
-                        <td></td>
-                        <td colspan="3" class="text-right"><strong>Subtotal:</strong></td>
-                        <td class="text-right"><strong>RM {{ number_format($invoice['total_amount'], 2) }}</strong></td>
-                    </tr>
-                    <tr style="background-color: #f5f5f5;">
-                        <td></td>
-                        <td colspan="3" class="text-right"><strong>Paid:</strong></td>
-                        <td class="text-right"><strong>RM {{ number_format($invoice['paid_amount'], 2) }}</strong></td>
-                    </tr>
-                    @if($invoice['outstanding'] > 0)
-                    <tr style="background-color: #fff3cd;">
-                        <td></td>
-                        <td colspan="3" class="text-right"><strong>Outstanding:</strong></td>
-                        <td class="text-right"><strong>RM {{ number_format($invoice['outstanding'], 2) }}</strong></td>
-                    </tr>
-                    @endif
-                    @if(!empty($invoice['payment_methods']))
-                    <tr>
-                        <td colspan="5" style="background-color: #e8f5e9;">
-                            <strong>Payment Methods:</strong>
-                            @foreach($invoice['payment_methods'] as $method => $amount)
-                                {{ $method }}: RM {{ number_format($amount, 2) }}@if(!$loop->last), @endif
-                            @endforeach
-                        </td>
-                    </tr>
-                    @endif
-                </tfoot>
-            </table>
+                </div>
+                
+                <!-- Add page break between trips (optional) -->
+                @if(!$loop->last)
+                    <div class="page-break"></div>
+                @endif
             @endforeach
         @endif
 
     </div>
 
     <div class="footer">
-        GW NOODLES SDN BHD - Daily Sales Report | Page 1
+        GW NOODLES SDN BHD - Daily Sales Report (Grouped by Trip) | Page 1
     </div>
 </body>
 </html>

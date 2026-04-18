@@ -7,13 +7,14 @@ use App\Models\InvoiceDetail;
 use App\Models\InvoicePayment;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\Trip;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class DailySalesReportService
 {
     /**
-     * Generate daily sales report for a specific date
+     * Generate daily sales report for a specific date grouped by trip
      * 
      * @param string $date Date in Y-m-d format
      * @param array $filters Optional filters (customer_id, driver_id, trip_uuid)
@@ -25,15 +26,15 @@ class DailySalesReportService
             'generated_at' => Carbon::now()->format('d/m/Y H:i:s'),
             'report_date' => Carbon::parse($date)->format('d/m/Y'),
             'report_no' => $this->generateReportNumber($date),
-            'items' => [],
-            'invoices' => [],
+            'trips' => [], // Changed from 'invoices' to 'trips'
             'summary' => [
                 'total_invoices' => 0,
                 'total_quantity' => 0,
                 'total_sales' => 0,
                 'total_paid' => 0,
                 'total_outstanding' => 0,
-                'total_customers' => 0
+                'total_customers' => 0,
+                'total_trips' => 0
             ],
             'payment_summary' => [
                 'cash' => 0,
@@ -52,15 +53,12 @@ class DailySalesReportService
         $query = Invoice::with(['customer', 'invoicedetail.product', 'invoicepayment', 'driver'])
             ->whereDate('date', $date)
             ->where('status', Invoice::STATUS_COMPLETED);
-        $invoices = $query->orderBy('invoiceno', 'asc')->get();
 
         // Apply driver filter
         if (isset($filters['driver_id']) && $filters['driver_id']) {
-            // Check if it's an array (multiple drivers) or single value
             if (is_array($filters['driver_id'])) {
                 $query->whereIn('driver_id', $filters['driver_id']);
                 
-                // Get driver names for display
                 $driverNames = \App\Models\Driver::whereIn('id', $filters['driver_id'])
                     ->pluck('name')
                     ->toArray();
@@ -70,7 +68,6 @@ class DailySalesReportService
             } else {
                 $query->where('driver_id', $filters['driver_id']);
                 
-                // Get driver name for display
                 $driver = \App\Models\Driver::find($filters['driver_id']);
                 $driverName = $driver ? $driver->name : 'Unknown Driver';
                 $reportData['filters_applied']['driver'] = $driverName;
@@ -84,7 +81,6 @@ class DailySalesReportService
 
         // Apply trip_uuid filter
         if (isset($filters['trip_uuid']) && $filters['trip_uuid']) {
-            // Check if it's an array (multiple trips) or single value
             if (is_array($filters['trip_uuid'])) {
                 $query->whereIn('trip_uuid', $filters['trip_uuid']);
                 $reportData['filters_applied']['trip'] = implode(', ', $filters['trip_uuid']);
@@ -96,91 +92,143 @@ class DailySalesReportService
             }
         }
 
-        // Get invoices ordered by invoice number
-        $invoices = $query->orderBy('invoiceno', 'asc')->get();
-
-        $reportData['summary']['total_invoices'] = $invoices->count();
+        // Get invoices ordered by trip_uuid and invoice number
+        $invoices = $query->orderBy('trip_uuid')->orderBy('invoiceno', 'asc')->get();
         
-        $invoiceItems = [];
+        // Group invoices by trip_uuid
+        $groupedByTrip = $invoices->groupBy('trip_uuid');
+        $reportData['summary']['total_trips'] = $groupedByTrip->count();
+        $reportData['summary']['total_invoices'] = $invoices->count();
+
         $allProducts = [];
         $productCounter = 1;
+        $tripCounter = 1;
 
-        foreach ($invoices as $invoice) {
-            $invoiceTotal = 0;
-            $invoiceItemsList = [];
-            
-            foreach ($invoice->invoicedetail as $detail) {
-                $product = $detail->product;
-                $totalPrice = $detail->quantity * $detail->price;
-                $invoiceTotal += $totalPrice;
+        foreach ($groupedByTrip as $tripUuid => $tripInvoices) {
+            $tripData = [
+                'trip_no' => $tripCounter++,
+                'trip_uuid' => $tripUuid ?? 'N/A',
+                'trip_display' => $tripUuid ?? 'No Trip Assigned',
+                'invoices' => [],
+                'summary' => [
+                    'total_invoices' => $tripInvoices->count(),
+                    'total_quantity' => 0,
+                    'total_sales' => 0,
+                    'total_paid' => 0,
+                    'total_outstanding' => 0,
+                    'total_customers' => 0
+                ],
+                'payment_summary' => [
+                    'cash' => 0,
+                    'credit' => 0,
+                    'online' => 0,
+                    'tng' => 0,
+                    'cheque' => 0
+                ]
+            ];
+
+            $invoiceItems = [];
+            $tripCustomers = [];
+
+            foreach ($tripInvoices as $invoice) {
+                $invoiceTotal = 0;
+                $invoiceItemsList = [];
                 
-                $invoiceItemsList[] = [
-                    'product_name' => $product ? $product->name : 'N/A',
-                    'product_code' => $product ? $product->unit_code : 'N/A',
-                    'quantity' => $detail->quantity,
-                    'price' => $detail->price,
-                    'total' => $totalPrice,
-                ];
-                
-                // Track for product summary
-                $productKey = $product ? $product->id : 'unknown';
-                if (!isset($allProducts[$productKey])) {
-                    $allProducts[$productKey] = [
-                        'no' => $productCounter++,
+                foreach ($invoice->invoicedetail as $detail) {
+                    $product = $detail->product;
+                    $totalPrice = $detail->quantity * $detail->price;
+                    $invoiceTotal += $totalPrice;
+                    
+                    $invoiceItemsList[] = [
                         'product_name' => $product ? $product->name : 'N/A',
                         'product_code' => $product ? $product->unit_code : 'N/A',
-                        'quantity' => 0,
-                        'total_sales' => 0,
-                        'invoices' => []
+                        'quantity' => $detail->quantity,
+                        'price' => $detail->price,
+                        'total' => $totalPrice,
                     ];
+                    
+                    // Track for product summary (overall)
+                    $productKey = $product ? $product->id : 'unknown';
+                    if (!isset($allProducts[$productKey])) {
+                        $allProducts[$productKey] = [
+                            'no' => $productCounter++,
+                            'product_name' => $product ? $product->name : 'N/A',
+                            'product_code' => $product ? $product->unit_code : 'N/A',
+                            'quantity' => 0,
+                            'total_sales' => 0,
+                            'invoices' => []
+                        ];
+                    }
+                    $allProducts[$productKey]['quantity'] += $detail->quantity;
+                    $allProducts[$productKey]['total_sales'] += $totalPrice;
+                    $allProducts[$productKey]['invoices'][] = $invoice->invoiceno;
+                    
+                    // Track for trip summary
+                    $tripData['summary']['total_quantity'] += $detail->quantity;
                 }
-                $allProducts[$productKey]['quantity'] += $detail->quantity;
-                $allProducts[$productKey]['total_sales'] += $totalPrice;
-                $allProducts[$productKey]['invoices'][] = $invoice->invoiceno;
-            }
-            
-            // Calculate payments for this invoice
-            $paidAmount = 0;
-            $paymentMethods = [];
-            foreach ($invoice->invoicepayment as $payment) {
-                $paidAmount += $payment->amount;
-                $method = $this->getPaymentMethodName($payment->type);
-                $paymentMethods[$method] = ($paymentMethods[$method] ?? 0) + $payment->amount;
                 
-                // Update payment summary
-                $this->updatePaymentSummary($reportData['payment_summary'], $payment->type, $payment->amount);
+                // Calculate payments for this invoice
+                $paidAmount = 0;
+                $paymentMethods = [];
+                foreach ($invoice->invoicepayment as $payment) {
+                    $paidAmount += $payment->amount;
+                    $method = $this->getPaymentMethodName($payment->type);
+                    $paymentMethods[$method] = ($paymentMethods[$method] ?? 0) + $payment->amount;
+                    
+                    // Update payment summary (overall)
+                    $this->updatePaymentSummary($reportData['payment_summary'], $payment->type, $payment->amount);
+                    
+                    // Update trip payment summary
+                    $this->updatePaymentSummary($tripData['payment_summary'], $payment->type, $payment->amount);
+                }
+                
+                $outstanding = $invoiceTotal - $paidAmount;
+                
+                $invoiceData = [
+                    'invoice_no' => $invoice->invoiceno,
+                    'customer_name' => $invoice->customer ? $invoice->customer->name : 'N/A',
+                    'customer_code' => $invoice->customer ? $invoice->customer->code : 'N/A',
+                    'customer_id' => $invoice->customer_id,
+                    'payment_term' => $this->getPaymentTermName($invoice->paymentterm),
+                    'driver' => $invoice->driver ? $invoice->driver->name : 'N/A',
+                    'driver_id' => $invoice->driver_id,
+                    'total_amount' => $invoiceTotal,
+                    'paid_amount' => $paidAmount,
+                    'outstanding' => $outstanding,
+                    'payment_methods' => $paymentMethods,
+                    'items' => $invoiceItemsList,
+                ];
+                
+                $invoiceItems[] = $invoiceData;
+                
+                // Track customers for this trip
+                if ($invoice->customer_id && !in_array($invoice->customer_id, $tripCustomers)) {
+                    $tripCustomers[] = $invoice->customer_id;
+                }
+                
+                // Update trip summary
+                $tripData['summary']['total_sales'] += $invoiceTotal;
+                $tripData['summary']['total_paid'] += $paidAmount;
+                $tripData['summary']['total_outstanding'] += $outstanding;
+                
+                // Update overall summary
+                $reportData['summary']['total_sales'] += $invoiceTotal;
+                $reportData['summary']['total_paid'] += $paidAmount;
+                $reportData['summary']['total_outstanding'] += $outstanding;
             }
             
-            $outstanding = $invoiceTotal - $paidAmount;
+            // Get unique customers count for this trip
+            $tripData['summary']['total_customers'] = count($tripCustomers);
+            $tripData['invoices'] = $invoiceItems;
             
-            $invoiceData = [
-                'invoice_no' => $invoice->invoiceno,
-                'customer_name' => $invoice->customer ? $invoice->customer->name : 'N/A',
-                'customer_code' => $invoice->customer ? $invoice->customer->code : 'N/A',
-                'payment_term' => $this->getPaymentTermName($invoice->paymentterm),
-                'driver' => $invoice->driver ? $invoice->driver->name : 'N/A',
-                'driver_id' => $invoice->driver_id,
-                'trip_uuid' => $invoice->trip_uuid ?? 'N/A',
-                'total_amount' => $invoiceTotal,
-                'paid_amount' => $paidAmount,
-                'outstanding' => $outstanding,
-                'payment_methods' => $paymentMethods,
-                'items' => $invoiceItemsList,
-            ];
-            
-            $invoiceItems[] = $invoiceData;
-            
-            $reportData['summary']['total_sales'] += $invoiceTotal;
-            $reportData['summary']['total_paid'] += $paidAmount;
-            $reportData['summary']['total_outstanding'] += $outstanding;
+            $reportData['trips'][] = $tripData;
         }
         
-        // Get unique customers count
+        // Get unique customers count overall
         $uniqueCustomers = $invoices->pluck('customer_id')->unique()->count();
         $reportData['summary']['total_customers'] = $uniqueCustomers;
         $reportData['summary']['total_quantity'] = collect($allProducts)->sum('quantity');
         
-        $reportData['invoices'] = $invoiceItems;
         $reportData['products'] = array_values($allProducts);
 
         return $reportData;
