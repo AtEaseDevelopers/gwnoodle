@@ -1948,6 +1948,19 @@ class DriverController extends Controller
                 ], 401);
             }
             
+            $inventoryCountRecord = InventoryCount::where('driver_id', $driver->id)
+                ->where('trip_id', $driver->trip_id)
+                ->where('status', InventoryCount::STATUS_APPROVED)
+                ->first();
+
+            if($inventoryCountRecord){
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'Driver have completed inventory count, cannot add new invoice, You may continue in next new trip.',
+                    'data' => null
+                ], 200);
+            }
+            
             // Validate request
             $validator = Validator::make($request->all(), [
                 'invoiceno' => 'nullable|string|max:255',
@@ -5068,8 +5081,13 @@ class DriverController extends Controller
         }
         
         try {
+            // Get records from last 7 days
+            $sevenDaysAgo = Carbon::now()->subDays(7);
+            
             $inventoryReturns = InventoryReturn::where('driver_id', $driver->id)
                 ->where('trip_id', $driver->trip_id)
+                ->where('created_at', '>=', $sevenDaysAgo)
+                ->orderBy('created_at', 'desc') // Optional: order by most recent first
                 ->get()
                 ->map(function ($inventoryReturn) {
                     // Get approver and rejector names
@@ -5113,8 +5131,8 @@ class DriverController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Stock Return Record retrieved successfully.',
-                'data' => $inventoryReturns
+                'message' => 'Stock Return Record retrieved successfully for last 7 days.',
+                'data' => $inventoryReturns,
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
