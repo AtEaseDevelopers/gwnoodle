@@ -2100,17 +2100,13 @@ class DriverController extends Controller
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
             $invoice->trip_uuid = $driver->trip_id;
-            
+            $invoice->status = Invoice::STATUS_COMPLETED;
+
             // Store ignored items as JSON for reference
             if (!empty($itemsToIgnore)) {
                 $invoice->ignored_items = json_encode($itemsToIgnore);
             }
 
-            if($data['paymentterm'] == 1){
-                $invoice->status = Invoice::STATUS_COMPLETED;
-            }else{
-                $invoice->status = Invoice::STATUS_NEW;
-            }
             $invoice->save();
             
             $totalprice = 0;
