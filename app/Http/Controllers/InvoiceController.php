@@ -476,36 +476,185 @@ class InvoiceController extends AppBaseController
         return view('invoices.detail',compact('id', 'warehouseItems'));
     }
 
-    public function adddetail($id , Request $request)
+    public function adddetail($id, Request $request)
     {
         $id = Crypt::decrypt($id);
-
-        $input = $request->all();
-
         $invoice = $this->invoiceRepository->find($id);
 
         if (empty($invoice)) {
             Flash::error('Invoice not found');
-
             return redirect(route('invoices.index'));
         }
 
-        if (!isset($input['warehouse_id']) || empty($input['warehouse_id'])) {
-            Flash::error('Please select a warehouse');
-            return redirect()->back()->withInput();
-        }
-        
-        $input['invoice_id'] = $id;
-        Session::put('invoice_detail_data', $input);
+        $input = $request->all();
 
-        $res = $this->syncDetailToXero($request);
-        if ($res != null) {
-            return $res;
+        // Check if this is a multiple items submission (from new modal)
+        if ($request->has('items') && is_array($request->items) && count($request->items) > 0) {
+            // Handle multiple items submission
+            return $this->addMultipleItems($id, $request, $invoice);
+        } 
+        // Handle single item submission (from other pages - detail page)
+        else {
+            // Validate single item
+            if (!isset($input['warehouse_id']) || empty($input['warehouse_id'])) {
+                Flash::error('Please select a warehouse');
+                return redirect()->back()->withInput();
+            }
+            
+            $input['invoice_id'] = $id;
+            Session::put('invoice_detail_data', $input);
+
+            $res = $this->syncDetailToXero($request);
+            if ($res != null) {
+                return $res;
+            }
+            
+            return redirect(route('invoices.show', encrypt($id)));
+        }
+    }
+
+    /**
+     * Handle adding multiple items to invoice at once
+     */
+    private function addMultipleItems($id, Request $request, $invoice)
+    {
+        $items = $request->input('items', []);
+        
+        if (empty($items)) {
+            Flash::error('No items to add');
+            return redirect()->back();
         }
         
-        return redirect(route('invoices.show',encrypt($id)));
+        DB::beginTransaction();
+        
+        try {
+            $totalAmount = 0;
+            $addedItems = [];
+            
+            foreach ($items as $item) {
+                // Validate each item
+                if (empty($item['product_batch_id']) || empty($item['quantity']) || empty($item['price'])) {
+                    throw new \Exception('Invalid item data. Please check all items.');
+                }
+                
+                $batch = ProductBatch::find($item['product_batch_id']);
+                if (!$batch) {
+                    throw new \Exception('Product batch not found for item: ' . ($item['batch_code'] ?? 'Unknown'));
+                }
+                
+                if ($batch->quantity < $item['quantity']) {
+                    throw new \Exception('Insufficient stock for batch: ' . $batch->batch_code . '. Available: ' . $batch->quantity . ', Requested: ' . $item['quantity']);
+                }
+                
+                // Get warehouse inventory (use default warehouse or first available)
+                $warehouseInventory = WarehouseInventoryBalance::where('batch_id', $item['product_batch_id'])
+                    ->where('quantity', '>=', $item['quantity'])
+                    ->first();
+                    
+                if (!$warehouseInventory) {
+                    throw new \Exception('No warehouse has sufficient stock for batch: ' . $batch->batch_code);
+                }
+                
+                // Create invoice detail
+                $invoiceDetail = new InvoiceDetail();
+                $invoiceDetail->invoice_id = $id;
+                $invoiceDetail->warehouse_id = $warehouseInventory->warehouse_id;
+                $invoiceDetail->product_id = $item['product_id'];
+                $invoiceDetail->product_batch_id = $item['product_batch_id'];
+                $invoiceDetail->quantity = $item['quantity'];
+                $invoiceDetail->price = $item['price'];
+                $invoiceDetail->totalprice = $item['quantity'] * $item['price'];
+                $invoiceDetail->remark = $item['remark'] ?? null;
+                $invoiceDetail->save();
+                
+                // Deduct from warehouse inventory
+                $warehouseInventory->decreaseQuantity($item['quantity']);
+                
+                // Deduct from product batch (global stock)
+                $batch->decreaseQuantity($item['quantity'], 'Invoice #' . $invoice->invoiceno);
+                
+                // Create inventory transaction record
+                $inventoryTransaction = new InventoryTransaction();
+                $inventoryTransaction->type = 2; // Stock Out (Sale)
+                $inventoryTransaction->warehouse_id = $warehouseInventory->warehouse_id;
+                $inventoryTransaction->product_id = $item['product_id'];
+                $inventoryTransaction->batch_id = $item['product_batch_id'];
+                $inventoryTransaction->quantity = -$item['quantity'];
+                $inventoryTransaction->date = now();
+                $inventoryTransaction->user = Auth::user()->name;
+                $inventoryTransaction->remark = 'Invoice- [' . $invoice->invoiceno . '] - Sale of product from warehouse -[' . $warehouseInventory->warehouse->name . ']';
+                $inventoryTransaction->save();
+                
+                $totalAmount += $invoiceDetail->totalprice;
+                $addedItems[] = $batch->batch_code;
+            }
+            
+            // Update invoice payment if cash term
+            if ($invoice->paymentterm == 1) {
+                $existingPayment = InvoicePayment::where('invoice_id', $id)->first();
+                $existingTotal = InvoiceDetail::where('invoice_id', $id)->sum('totalprice');
+                
+                if (!$existingPayment) {
+                    $invoicePayment = new InvoicePayment();
+                    $invoicePayment->invoice_id = $id;
+                    $invoicePayment->type = 1;
+                    $invoicePayment->customer_id = $invoice->customer_id;
+                    $invoicePayment->driver_id = $invoice->driver_id;
+                    $invoicePayment->status = $invoice->status;
+                    $invoicePayment->approve_by = Auth::user()->email;
+                    $invoicePayment->approve_at = now();
+                    $invoicePayment->amount = $existingTotal;
+                    $invoicePayment->save();
+                } else {
+                    $existingPayment->amount = $existingTotal;
+                    $existingPayment->save();
+                }
+            }
+            
+            DB::commit();
+            
+            Flash::success(count($items) . ' item(s) added successfully. Items: ' . implode(', ', $addedItems));
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error adding items: ' . $e->getMessage());
+            return redirect()->back();
+        }
+        
+        return redirect(route('invoices.show', encrypt($id)));
     }
     
+    public function getAvailableBatches($invoice_id)
+    {
+        $invoice = Invoice::findOrFail($invoice_id);
+        
+        // Get product batches that have stock and are active
+        $batches = ProductBatch::where('status', ProductBatch::STATUS_ACTIVE)
+            ->where('quantity', '>', 0)
+            ->with('product')
+            ->get()
+            ->map(function($batch) use ($invoice) {
+                // Get special price if exists
+                $specialPrice = SpecialPrice::where('customer_id', $invoice->customer_id)
+                    ->where('product_id', $batch->product_id)
+                    ->first();
+                
+                $price = $specialPrice ? $specialPrice->price : ($batch->product->price ?? 0);
+                
+                return [
+                    'id' => $batch->id,
+                    'batch_code' => $batch->batch_code,
+                    'product_id' => $batch->product_id,
+                    'product_name' => $batch->product->name ?? 'Unknown',
+                    'quantity' => $batch->quantity,
+                    'price' => $price,
+                    'expiry_date' => $batch->expiry_date
+                ];
+            });
+        
+        return response()->json(['batches' => $batches]);
+    }
+
     private function syncDetailToXero(Request $request) 
     {
         $input = Session::get('invoice_detail_data');
@@ -592,6 +741,7 @@ class InvoiceController extends AppBaseController
 
             // Deduct quantity from warehouse inventory
             $warehouseInventory->decreaseQuantity($input['quantity']);
+            $newProductBatch->decreaseQuantity($input['quantity']);
 
             // Create or update invoice detail
             if ($existingDetail) {

@@ -124,7 +124,6 @@ class InvoiceDetailController extends AppBaseController
             if ($is_store == true) {
                 // CREATE MODE - Add new detail
                 $batch = ProductBatch::find($input['product_batch_id']);
-                
                 // Check warehouse inventory instead of main batch quantity
                 $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $input['warehouse_id'])
                     ->where('batch_id', $input['product_batch_id'])
@@ -140,6 +139,9 @@ class InvoiceDetailController extends AppBaseController
                 
                 // Deduct quantity from warehouse inventory
                 $warehouseInventory->decreaseQuantity($input['quantity']);
+                
+                // Deduct quantity from product batch (global stock)
+                $batch->decreaseQuantity($input['quantity'], 'Invoice - [' . $invoice->invoiceno . '] - New detail added');
                 
                 // Create inventory transaction for stock out from warehouse
                 InventoryTransaction::create([
@@ -167,7 +169,7 @@ class InvoiceDetailController extends AppBaseController
                 $quantityChanged = ($existingDetail->quantity != $input['quantity']);
                 
                 if ($warehouseChanged || $batchChanged || $quantityChanged) {
-                    // CASE 1: Return stock to original warehouse
+                    // CASE 1: Return stock to original warehouse AND original batch
                     if ($existingDetail->warehouse_id && $existingDetail->product_batch_id) {
                         $oldWarehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $existingDetail->warehouse_id)
                             ->where('batch_id', $existingDetail->product_batch_id)
@@ -185,8 +187,14 @@ class InvoiceDetailController extends AppBaseController
                                 'quantity' => $existingDetail->quantity,
                                 'date' => now(),
                                 'user' => Auth::user()->name,
-                                'remark' => 'Reversal - Updating invoice -[' . $invoice->invoiceno.']'
+                                'remark' => 'Reversal - Updating invoice -[' . $invoice->invoiceno . ']'
                             ]);
+                        }
+                        
+                        // Return stock to the original product batch (global stock)
+                        $oldBatch = ProductBatch::find($existingDetail->product_batch_id);
+                        if ($oldBatch) {
+                            $oldBatch->increaseQuantity($existingDetail->quantity, 'Reversal - Updating invoice -[' . $invoice->invoiceno . ']');
                         }
                     }
 
@@ -203,6 +211,12 @@ class InvoiceDetailController extends AppBaseController
                     // Deduct from new warehouse
                     $newWarehouseInventory->decreaseQuantity($input['quantity']);
                     
+                    // Deduct from new product batch (global stock)
+                    $newBatch = ProductBatch::find($input['product_batch_id']);
+                    if ($newBatch) {
+                        $newBatch->decreaseQuantity($input['quantity'], 'Updated invoice -[' . $invoice->invoiceno . ']');
+                    }
+                    
                     // Create inventory transaction for new stock out
                     InventoryTransaction::create([
                         'type' => 2, // Stock Out
@@ -212,8 +226,71 @@ class InvoiceDetailController extends AppBaseController
                         'quantity' => -$input['quantity'],
                         'date' => now(),
                         'user' => Auth::user()->email . ' (' . Auth::user()->name . ')',
-                        'remark' => 'Updated invoice -[' . $invoice->invoiceno.']' 
+                        'remark' => 'Updated invoice -[' . $invoice->invoiceno . ']' 
                     ]);
+                } else {
+                    // Only quantity changed but same warehouse and batch
+                    if ($quantityChanged) {
+                        // Calculate the difference
+                        $quantityDifference = $input['quantity'] - $existingDetail->quantity;
+                        
+                        if ($quantityDifference > 0) {
+                            // Need to deduct more stock
+                            $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $input['warehouse_id'])
+                                ->where('batch_id', $input['product_batch_id'])
+                                ->first();
+                            
+                            if (!$warehouseInventory || $warehouseInventory->quantity < $quantityDifference) {
+                                $available = $warehouseInventory ? $warehouseInventory->quantity : 0;
+                                throw new \Exception('Insufficient quantity in warehouse. Available: ' . $available);
+                            }
+                            
+                            $warehouseInventory->decreaseQuantity($quantityDifference);
+                            
+                            // Deduct from product batch
+                            $batch = ProductBatch::find($input['product_batch_id']);
+                            if ($batch) {
+                                $batch->decreaseQuantity($quantityDifference, 'Updated invoice quantity -[' . $invoice->invoiceno . ']');
+                            }
+                            
+                            InventoryTransaction::create([
+                                'type' => 2,
+                                'warehouse_id' => $input['warehouse_id'],
+                                'product_id' => $input['product_id'],
+                                'batch_id' => $input['product_batch_id'],
+                                'quantity' => -$quantityDifference,
+                                'date' => now(),
+                                'user' => Auth::user()->name,
+                                'remark' => 'Increased quantity for invoice -[' . $invoice->invoiceno . ']'
+                            ]);
+                        } elseif ($quantityDifference < 0) {
+                            // Return excess stock
+                            $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $input['warehouse_id'])
+                                ->where('batch_id', $input['product_batch_id'])
+                                ->first();
+                            
+                            if ($warehouseInventory) {
+                                $warehouseInventory->increaseQuantity(abs($quantityDifference));
+                                
+                                // Return to product batch
+                                $batch = ProductBatch::find($input['product_batch_id']);
+                                if ($batch) {
+                                    $batch->increaseQuantity(abs($quantityDifference), 'Reduced invoice quantity -[' . $invoice->invoiceno . ']');
+                                }
+                                
+                                InventoryTransaction::create([
+                                    'type' => 1,
+                                    'warehouse_id' => $input['warehouse_id'],
+                                    'product_id' => $input['product_id'],
+                                    'batch_id' => $input['product_batch_id'],
+                                    'quantity' => abs($quantityDifference),
+                                    'date' => now(),
+                                    'user' => Auth::user()->name,
+                                    'remark' => 'Decreased quantity for invoice -[' . $invoice->invoiceno . ']'
+                                ]);
+                            }
+                        }
+                    }
                 }
 
                 // Update the invoice detail
@@ -337,8 +414,47 @@ class InvoiceDetailController extends AppBaseController
             return redirect(route('invoiceDetails.index'));
         }
 
-        $this->invoiceDetailRepository->delete($id);
-        Flash::success(__('invoices_details.invoice_detail_deleted_successfully'));
+        DB::beginTransaction();
+        try {
+            // Return stock to warehouse and product batch before deleting
+            if ($invoiceDetail->warehouse_id && $invoiceDetail->product_batch_id && $invoiceDetail->quantity > 0) {
+                // Return to warehouse inventory
+                $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $invoiceDetail->warehouse_id)
+                    ->where('batch_id', $invoiceDetail->product_batch_id)
+                    ->first();
+                
+                if ($warehouseInventory) {
+                    $warehouseInventory->increaseQuantity($invoiceDetail->quantity);
+                }
+                
+                // Return to product batch (global stock)
+                $batch = ProductBatch::find($invoiceDetail->product_batch_id);
+                if ($batch) {
+                    $batch->increaseQuantity($invoiceDetail->quantity, 'Deleted invoice detail - Stock returned');
+                }
+                
+                // Create inventory transaction for return
+                $invoice = Invoice::find($invoiceDetail->invoice_id);
+                InventoryTransaction::create([
+                    'type' => 1, // Stock In
+                    'warehouse_id' => $invoiceDetail->warehouse_id,
+                    'product_id' => $invoiceDetail->product_id,
+                    'batch_id' => $invoiceDetail->product_batch_id,
+                    'quantity' => $invoiceDetail->quantity,
+                    'date' => now(),
+                    'user' => Auth::user()->name,
+                    'remark' => 'Deleted invoice detail from invoice - [' . ($invoice ? $invoice->invoiceno : 'N/A') . ']'
+                ]);
+            }
+            
+            $this->invoiceDetailRepository->delete($id);
+            DB::commit();
+            
+            Flash::success(__('invoices_details.invoice_detail_deleted_successfully'));
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error deleting invoice detail: ' . $e->getMessage());
+        }
 
         return redirect(route('invoiceDetails.index'));
     }
@@ -349,12 +465,36 @@ class InvoiceDetailController extends AppBaseController
         $ids = $data['ids'];
         
         $count = 0;
-    
-        foreach ($ids as $id) {
-            
-            $invoicedetail = $this->invoiceDetailRepository->find($id);
-    
-            $count = $count + invoicedetail::destroy($id);
+        
+        DB::beginTransaction();
+        try {
+            foreach ($ids as $id) {
+                $invoiceDetail = $this->invoiceDetailRepository->find($id);
+                
+                if ($invoiceDetail) {
+                    // Return stock to warehouse and product batch
+                    if ($invoiceDetail->warehouse_id && $invoiceDetail->product_batch_id && $invoiceDetail->quantity > 0) {
+                        $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $invoiceDetail->warehouse_id)
+                            ->where('batch_id', $invoiceDetail->product_batch_id)
+                            ->first();
+                        
+                        if ($warehouseInventory) {
+                            $warehouseInventory->increaseQuantity($invoiceDetail->quantity);
+                        }
+                        
+                        $batch = ProductBatch::find($invoiceDetail->product_batch_id);
+                        if ($batch) {
+                            $batch->increaseQuantity($invoiceDetail->quantity, 'Mass deleted invoice details - Stock returned');
+                        }
+                    }
+                    
+                    $count += InvoiceDetail::destroy($id);
+                }
+            }
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     
         return $count;
@@ -366,7 +506,7 @@ class InvoiceDetailController extends AppBaseController
         $ids = $data['ids'];
         $status = $data['status'];
         
-        $count = invoicedetail::whereIn('id',$ids)->update(['status'=>$status]);
+        $count = InvoiceDetail::whereIn('id',$ids)->update(['status'=>$status]);
     
         return $count;
     }

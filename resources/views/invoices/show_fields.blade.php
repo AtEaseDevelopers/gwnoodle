@@ -60,14 +60,6 @@
     <p>{{ $invoice->remark ?: '-' }}</p>
 </div>
 
-<!-- Submit Field -->
-<div class="form-group">
-    <a href="{{ route('invoices.index') }}" class="btn btn-secondary">{{ __('invoices.back') }}</a>
-    @if(isset($invoice) && $invoice->status != 1)
-    <a href="{{ route('invoices.edit', $invoice->id) }}" class="btn btn-primary">{{ __('invoices.edit') }}</a>
-    @endif
-</div>
-
 @push('scripts')
     <script>
         $(document).keyup(function(e) {

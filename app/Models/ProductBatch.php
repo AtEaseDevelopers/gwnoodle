@@ -310,14 +310,6 @@ class ProductBatch extends Model
         $this->quantity += $amount;
         $this->save();
         
-        // Create transaction record
-        return $this->inventoryTransactions()->create([
-            'type' => 1, // Stock In
-            'quantity' => $amount,
-            'date' => now(),
-            'remark' => $remark,
-            'user' => Auth::user()->name ?? 'System',
-        ]);
     }
 
     /**
@@ -332,17 +324,9 @@ class ProductBatch extends Model
         if ($amount > $this->quantity) {
             throw new \InvalidArgumentException('Insufficient stock');
         }
-        
+
         $this->quantity -= $amount;
         $this->save();
         
-        // Create transaction record
-        return $this->inventoryTransactions()->create([
-            'type' => 2, // Stock Out
-            'quantity' => -$amount,
-            'date' => now(),
-            'remark' => $remark,
-            'user' => Auth::user()->name ?? 'System',
-        ]);
     }
 }
