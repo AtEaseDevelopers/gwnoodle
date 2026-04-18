@@ -1950,7 +1950,7 @@ class DriverController extends Controller
             
             // Validate request
             $validator = Validator::make($request->all(), [
-                'invoiceno' => 'nullable|string|max:255|string|max:255',
+                'invoiceno' => 'nullable|string|max:255',
                 'date' => 'date_format:Y-m-d',
                 'customer_id' => 'required|numeric',
                 'paymentterm' => 'required|numeric|gt:0|lt:6',
@@ -1981,38 +1981,97 @@ class DriverController extends Controller
                 ], 400);
             }
             
-            // Validate product batches and check quantities
-            foreach ($data['invoicedetail'] as $item) {
+            // Get driver's inventory balance for this lorry
+            $inventoryBalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
+            
+            // Categorize items
+            $itemsToProcess = [];     // Items that exist in inventory (will deduct stock)
+            $itemsToIgnore = [];       // Items not in inventory (will not deduct stock)
+            $invalidBatches = [];      // Invalid product batches (product_id mismatch)
+            
+            foreach ($data['invoicedetail'] as $index => $item) {
+                // Check if product batch exists and matches product_id
                 $productBatch = ProductBatch::where('id', $item['product_batch_id'])
                     ->where('product_id', $item['product_id'])
                     ->first();
                 
                 if (empty($productBatch)) {
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__ . $this->message_separator . 'Invalid product batch for product ID: ' . $item['product_id'],
-                        'data' => null
-                    ], 400);
+                    // Invalid batch - product_id doesn't match
+                    $invalidBatches[] = [
+                        'product_id' => $item['product_id'],
+                        'product_batch_id' => $item['product_batch_id'],
+                        'quantity_requested' => $item['quantity'],
+                        'price' => $item['price'],
+                        'error' => 'Invalid product batch or product ID mismatch'
+                    ];
+                    continue;
                 }
                 
-                if ($productBatch->quantity < $item['quantity']) {
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__ . $this->message_separator . 'Insufficient batch quantity for product batch: ' . $productBatch->batch_code . '. Available: ' . $productBatch->quantity . ', Requested: ' . $item['quantity'],
-                        'data' => null
-                    ], 400);
+                // Check if batch exists in driver's inventory
+                $availableQuantity = 0;
+                $hasInventory = false;
+                
+                if ($inventoryBalance) {
+                    $availableQuantity = $inventoryBalance->getBatchQuantity($item['product_batch_id']);
+                    if ($availableQuantity > 0) {
+                        $hasInventory = true;
+                    }
                 }
+                
+                if ($hasInventory) {
+                    // Item exists in inventory - will deduct stock
+                    $itemsToProcess[] = [
+                        'index' => $index,
+                        'item' => $item,
+                        'productBatch' => $productBatch,
+                        'availableQuantity' => $availableQuantity
+                    ];
+                } else {
+                    // Item not in inventory - will be ignored (no stock deduction)
+                    $itemsToIgnore[] = [
+                        'product_id' => $item['product_id'],
+                        'product_batch_id' => $item['product_batch_id'],
+                        'batch_code' => $productBatch->batch_code,
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price'],
+                        'available_quantity' => $availableQuantity,
+                        'reason' => 'Product not found in driver inventory'
+                    ];
+                }
+            }
+            
+            // If there are invalid batches, return error
+            if (!empty($invalidBatches)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'Invalid product batches found',
+                    'data' => [
+                        'invalid_batches' => $invalidBatches
+                    ]
+                ], 400);
+            }
+            
+            // Process invoice even if no items in inventory (allow empty invoice creation)
+            // But at least ensure there are some valid items (either in inventory or not)
+            if (empty($itemsToProcess) && empty($itemsToIgnore)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'No valid invoice items found',
+                    'data' => null
+                ], 400);
             }
             
             // Process invoice
             $runningno = Code::where('code', 'invoicerunningnumber')->first();
-            $runningno->value = intval($runningno->value) + 1;
-            $runningno->save();
+            if ($runningno) {
+                $runningno->value = intval($runningno->value) + 1;
+                $runningno->save();
+            }
             
             DB::beginTransaction();
             
             // Generate invoice number
-            if($data['invoiceno']){
+            if(!empty($data['invoiceno'])){
                 $invoiceno = $data['invoiceno'];
             }else{
                 $invoiceno = Invoice::generateInvoiceNumber($driver->id);
@@ -2028,6 +2087,11 @@ class DriverController extends Controller
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
             $invoice->trip_uuid = $driver->trip_id;
+            
+            // Store ignored items as JSON for reference
+            if (!empty($itemsToIgnore)) {
+                $invoice->ignored_items = json_encode($itemsToIgnore);
+            }
 
             if($data['paymentterm'] == 1){
                 $invoice->status = Invoice::STATUS_COMPLETED;
@@ -2038,9 +2102,10 @@ class DriverController extends Controller
             
             $totalprice = 0;
             
-            // Process invoice details
-            foreach ($data['invoicedetail'] as $item) {
-                $productBatch = ProductBatch::find($item['product_batch_id']);
+            // Process items that exist in inventory (deduct stock)
+            foreach ($itemsToProcess as $validItem) {
+                $item = $validItem['item'];
+                $productBatch = $validItem['productBatch'];
                 
                 // Create invoice detail
                 $invoicedetail = new InvoiceDetail();
@@ -2055,7 +2120,7 @@ class DriverController extends Controller
                 
                 $totalprice += $invoicedetail->totalprice;
                 
-                // Deduct quantity from product batch
+                // Deduct quantity from product batch (global batch table)
                 $oldQuantity = $productBatch->quantity;
                 $productBatch->quantity = $oldQuantity - $item['quantity'];
                 $productBatch->save();
@@ -2072,14 +2137,34 @@ class DriverController extends Controller
                 $inventoryTransaction->remark = 'Invoice #' . $invoice->invoiceno . ' - Sale of product';
                 $inventoryTransaction->save();
                 
-                // Update lorry inventory balance (keeping your existing logic)
-                $inventorybalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
-
-                $inventorybalance->updateBatchQuantity(
-                    $item['product_batch_id'], 
-                    $item['quantity'], 
-                    'subtract'
-                );
+                // Update lorry inventory balance
+                if ($inventoryBalance) {
+                    $inventoryBalance->updateBatchQuantity(
+                        $item['product_batch_id'], 
+                        $item['quantity'], 
+                        'subtract'
+                    );
+                }
+            }
+            
+            // Process items not in inventory (create invoice details but NO stock deduction)
+            foreach ($itemsToIgnore as $ignoredItem) {
+                // Create invoice detail WITHOUT deducting stock
+                $invoicedetail = new InvoiceDetail();
+                $invoicedetail->invoice_id = $invoice->id;
+                $invoicedetail->product_id = $ignoredItem['product_id'];
+                $invoicedetail->product_batch_id = $ignoredItem['product_batch_id'];
+                $invoicedetail->quantity = $ignoredItem['quantity'];
+                $invoicedetail->price = $ignoredItem['price'];
+                $invoicedetail->totalprice = $ignoredItem['quantity'] * $ignoredItem['price'];
+                $invoicedetail->remark = $ignoredItem['remark'] ?? null;
+                $invoicedetail->save();
+                
+                $totalprice += $invoicedetail->totalprice;
+                
+                // NO stock deduction for ignored items
+                // NO inventory transaction created
+                // NO lorry inventory balance update
             }
             
             // Create invoice payment for cash transactions
@@ -2112,7 +2197,7 @@ class DriverController extends Controller
                     'invoicedetail.batch'
                 ])
                 ->first();
-            
+                        
             // Calculate customer credit
             $creditData = $this->calculateCustomerCredit(
                 $iv->customer_id, 
@@ -2121,9 +2206,18 @@ class DriverController extends Controller
             
             $iv->newcredit = round($creditData['credit'] ?? 0, 2);
             
+            // Prepare response message
+            $message = 'Invoice created successfully';
+            if (!empty($itemsToIgnore)) {
+                $message .= ' - ' . count($itemsToIgnore) . ' item(s) added without inventory deduction (not found in stock)';
+            }
+            if (!empty($itemsToProcess)) {
+                $message .= ' - ' . count($itemsToProcess) . ' item(s) deducted from inventory';
+            }
+            
             return response()->json([
                 'result' => true,
-                'message' => __LINE__ . $this->message_separator . 'api.message.invoice_add_successfully',
+                'message' => __LINE__ . $this->message_separator . $message,
                 'data' => $iv
             ], 200);
             
@@ -2164,14 +2258,6 @@ class DriverController extends Controller
                     'data' => null
                 ], 404);
             }
-            
-            // if ($invoice->status == 1) {
-            //     return response()->json([
-            //         'result' => false,
-            //         'message' => __LINE__ . $this->message_separator . 'Invoice cannot be edited.',
-            //         'data' => null
-            //     ], 400);
-            // }
             
             // Validate request
             $validator = Validator::make($request->all(), [
@@ -2214,72 +2300,135 @@ class DriverController extends Controller
             
             // ============================================
             // STEP 1: RESTORE OLD INVENTORY QUANTITIES
+            // (Only for items that were originally in inventory)
             // ============================================
             $oldDetails = InvoiceDetail::where('invoice_id', $invoice->id)->get();
+            $inventoryBalance = null;
+            
+            if ($trip) {
+                $inventoryBalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
+            }
             
             foreach ($oldDetails as $oldDetail) {
-                // Restore quantity to product batch
-                $oldBatch = ProductBatch::find($oldDetail->product_batch_id);
-                if ($oldBatch) {
-                    $oldBatch->quantity = $oldBatch->quantity + $oldDetail->quantity;
-                    $oldBatch->save();
+                // Check if this batch exists in inventory balance
+                $hasInventory = false;
+                if ($inventoryBalance) {
+                    $availableQuantity = $inventoryBalance->getBatchQuantity($oldDetail->product_batch_id);
+                    if ($availableQuantity > 0 || $inventoryBalance->batches && array_key_exists($oldDetail->product_batch_id, ($inventoryBalance->batches ?? []))) {
+                        $hasInventory = true;
+                    }
                 }
                 
-                // Restore inventory balance
-                if ($trip) {
-                    $inventorybalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
-                    if ($inventorybalance) {
-                        $inventorybalance->updateBatchQuantity(
+                if ($hasInventory) {
+                    // Only restore if it was originally deducted from inventory
+                    // Restore quantity to product batch (global batch table)
+                    $oldBatch = ProductBatch::find($oldDetail->product_batch_id);
+                    if ($oldBatch) {
+                        $oldBatch->quantity = $oldBatch->quantity + $oldDetail->quantity;
+                        $oldBatch->save();
+                    }
+                    
+                    // Restore inventory balance
+                    if ($inventoryBalance) {
+                        $inventoryBalance->updateBatchQuantity(
                             $oldDetail->product_batch_id,
                             $oldDetail->quantity,
                             'add' // Add back the quantity
                         );
                     }
+                    
+                    // Reverse inventory transaction (create reversal record)
+                    $reversalTransaction = new InventoryTransaction();
+                    $reversalTransaction->type = 1; // Stock In (reversal)
+                    $reversalTransaction->product_id = $oldDetail->product_id;
+                    $reversalTransaction->batch_id = $oldDetail->product_batch_id;
+                    $reversalTransaction->quantity = $oldDetail->quantity;
+                    $reversalTransaction->date = now();
+                    $reversalTransaction->lorry_id = $trip->lorry_id ?? null;
+                    $reversalTransaction->user = $driver->name;
+                    $reversalTransaction->remark = 'Invoice # [' . $invoice->invoiceno . '] - Edit reversal (removed items)';
+                    $reversalTransaction->save();
                 }
-                
-                // Reverse inventory transaction (create reversal record)
-                $reversalTransaction = new InventoryTransaction();
-                $reversalTransaction->type = 1; // Stock In (reversal)
-                $reversalTransaction->product_id = $oldDetail->product_id;
-                $reversalTransaction->batch_id = $oldDetail->product_batch_id;
-                $reversalTransaction->quantity = $oldDetail->quantity;
-                $reversalTransaction->date = now();
-                $reversalTransaction->lorry_id = $trip->lorry_id ?? null;
-                $reversalTransaction->user = $driver->name;
-                $reversalTransaction->remark = 'Invoice # [' . $invoice->invoiceno . '] - Edit reversal (removed items)';
-                $reversalTransaction->save();
             }
             
             // Delete old invoice details
             InvoiceDetail::where('invoice_id', $invoice->id)->delete();
             
             // ============================================
-            // STEP 2: VALIDATE AND PROCESS NEW QUANTITIES
+            // STEP 2: CATEGORIZE NEW ITEMS
             // ============================================
+            $itemsToProcess = [];     // Items that exist in inventory (will deduct stock)
+            $itemsToIgnore = [];       // Items not in inventory (will not deduct stock)
+            $invalidBatches = [];      // Invalid product batches
             
-            // Validate product batches and check quantities
-            foreach ($data['invoicedetail'] as $item) {
+            foreach ($data['invoicedetail'] as $index => $item) {
+                // Check if product batch exists and matches product_id
                 $productBatch = ProductBatch::where('id', $item['product_batch_id'])
                     ->where('product_id', $item['product_id'])
                     ->first();
                 
                 if (empty($productBatch)) {
-                    DB::rollBack();
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__ . $this->message_separator . 'Invalid product batch for product ID: ' . $item['product_id'],
-                        'data' => null
-                    ], 400);
+                    $invalidBatches[] = [
+                        'product_id' => $item['product_id'],
+                        'product_batch_id' => $item['product_batch_id'],
+                        'error' => 'Invalid product batch or product ID mismatch'
+                    ];
+                    continue;
                 }
                 
-                if ($productBatch->quantity < $item['quantity']) {
-                    DB::rollBack();
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__ . $this->message_separator . 'Insufficient batch quantity for product batch: ' . $productBatch->batch_code . '. Available: ' . $productBatch->quantity . ', Requested: ' . $item['quantity'],
-                        'data' => null
-                    ], 400);
+                // Check if batch exists in driver's inventory
+                $hasInventory = false;
+                $availableQuantity = 0;
+                
+                if ($inventoryBalance) {
+                    $availableQuantity = $inventoryBalance->getBatchQuantity($item['product_batch_id']);
+                    if ($availableQuantity >= $item['quantity']) {
+                        $hasInventory = true;
+                    }
                 }
+                
+                if ($hasInventory) {
+                    // Item exists in inventory with sufficient stock
+                    $itemsToProcess[] = [
+                        'index' => $index,
+                        'item' => $item,
+                        'productBatch' => $productBatch,
+                        'availableQuantity' => $availableQuantity
+                    ];
+                } else {
+                    // Item not in inventory or insufficient stock - will be added without deduction
+                    $itemsToIgnore[] = [
+                        'product_id' => $item['product_id'],
+                        'product_batch_id' => $item['product_batch_id'],
+                        'batch_code' => $productBatch->batch_code,
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price'],
+                        'available_quantity' => $availableQuantity,
+                        'reason' => $availableQuantity > 0 ? 'Insufficient stock' : 'Product not found in driver inventory'
+                    ];
+                }
+            }
+            
+            // If there are invalid batches, return error
+            if (!empty($invalidBatches)) {
+                DB::rollBack();
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'Invalid product batches found',
+                    'data' => [
+                        'invalid_batches' => $invalidBatches
+                    ]
+                ], 400);
+            }
+            
+            // Ensure there are some valid items
+            if (empty($itemsToProcess) && empty($itemsToIgnore)) {
+                DB::rollBack();
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'No valid invoice items found',
+                    'data' => null
+                ], 400);
             }
             
             // ============================================
@@ -2290,6 +2439,13 @@ class DriverController extends Controller
             $invoice->paymentterm = $data['paymentterm'];
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
+            
+            // Store ignored items as JSON for reference
+            if (!empty($itemsToIgnore)) {
+                $invoice->ignored_items = json_encode($itemsToIgnore);
+            } else {
+                $invoice->ignored_items = null;
+            }
             
             // Only update invoice number if provided and different
             if (!empty($data['invoiceno']) && $data['invoiceno'] != $invoice->invoiceno) {
@@ -2313,8 +2469,10 @@ class DriverController extends Controller
             // ============================================
             $totalprice = 0;
             
-            foreach ($data['invoicedetail'] as $item) {
-                $productBatch = ProductBatch::find($item['product_batch_id']);
+            // Process items that exist in inventory (deduct stock)
+            foreach ($itemsToProcess as $validItem) {
+                $item = $validItem['item'];
+                $productBatch = $validItem['productBatch'];
                 
                 // Create invoice detail
                 $invoicedetail = new InvoiceDetail();
@@ -2329,7 +2487,7 @@ class DriverController extends Controller
                 
                 $totalprice += $invoicedetail->totalprice;
                 
-                // Deduct quantity from product batch
+                // Deduct quantity from product batch (global batch table)
                 $productBatch->quantity = $productBatch->quantity - $item['quantity'];
                 $productBatch->save();
                 
@@ -2346,16 +2504,33 @@ class DriverController extends Controller
                 $inventoryTransaction->save();
                 
                 // Update lorry inventory balance
-                if ($trip) {
-                    $inventorybalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
-                    if ($inventorybalance) {
-                        $inventorybalance->updateBatchQuantity(
-                            $item['product_batch_id'],
-                            $item['quantity'],
-                            'subtract'
-                        );
-                    }
+                if ($inventoryBalance) {
+                    $inventoryBalance->updateBatchQuantity(
+                        $item['product_batch_id'],
+                        $item['quantity'],
+                        'subtract'
+                    );
                 }
+            }
+            
+            // Process items not in inventory (create invoice details but NO stock deduction)
+            foreach ($itemsToIgnore as $ignoredItem) {
+                // Create invoice detail WITHOUT deducting stock
+                $invoicedetail = new InvoiceDetail();
+                $invoicedetail->invoice_id = $invoice->id;
+                $invoicedetail->product_id = $ignoredItem['product_id'];
+                $invoicedetail->product_batch_id = $ignoredItem['product_batch_id'];
+                $invoicedetail->quantity = $ignoredItem['quantity'];
+                $invoicedetail->price = $ignoredItem['price'];
+                $invoicedetail->totalprice = $ignoredItem['quantity'] * $ignoredItem['price'];
+                $invoicedetail->remark = $ignoredItem['remark'] ?? null;
+                $invoicedetail->save();
+                
+                $totalprice += $invoicedetail->totalprice;
+                
+                // NO stock deduction for ignored items
+                // NO inventory transaction created
+                // NO lorry inventory balance update
             }
             
             // ============================================
@@ -2400,7 +2575,7 @@ class DriverController extends Controller
                     'invoicedetail.batch'
                 ])
                 ->first();
-            
+                        
             // Calculate customer credit
             $creditData = $this->calculateCustomerCredit(
                 $updatedInvoice->customer_id, 
@@ -2409,9 +2584,13 @@ class DriverController extends Controller
             
             $updatedInvoice->newcredit = round($creditData['credit'] ?? 0, 2);
             
+            // Prepare response message
+            $message = 'Invoice updated successfully';
+            
+            
             return response()->json([
                 'result' => true,
-                'message' => __LINE__ . $this->message_separator . 'Invoice updated successfully',
+                'message' => __LINE__ . $this->message_separator . $message,
                 'data' => $updatedInvoice
             ], 200);
             
@@ -7674,7 +7853,7 @@ class DriverController extends Controller
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:products,id',
             'batch_code' => 'required|string|unique:product_batches,batch_code',
-            'expiry_date' => 'required|date|after:today',
+            'expiry_date' => 'required|date',
         ]);
 
         if ($validator->fails()) {
