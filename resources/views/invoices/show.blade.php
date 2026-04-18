@@ -742,7 +742,7 @@
                 let grandTotal = 0;
                 let totalItems = 0;
                 let hasValidItems = true;
-                
+            
                 console.log('Calculating totals for', invoiceItems.length, 'items');
                 
                 $.each(invoiceItems, function(index, item) {
