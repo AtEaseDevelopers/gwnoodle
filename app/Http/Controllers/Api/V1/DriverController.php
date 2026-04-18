@@ -5081,13 +5081,8 @@ class DriverController extends Controller
         }
         
         try {
-            // Get records from last 7 days
-            $sevenDaysAgo = Carbon::now()->subDays(7);
-            
             $inventoryReturns = InventoryReturn::where('driver_id', $driver->id)
                 ->where('trip_id', $driver->trip_id)
-                ->where('created_at', '>=', $sevenDaysAgo)
-                ->orderBy('created_at', 'desc') // Optional: order by most recent first
                 ->get()
                 ->map(function ($inventoryReturn) {
                     // Get approver and rejector names
@@ -5131,8 +5126,8 @@ class DriverController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Stock Return Record retrieved successfully for last 7 days.',
-                'data' => $inventoryReturns,
+                'message' => 'Stock Return Record retrieved successfully.',
+                'data' => $inventoryReturns
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
