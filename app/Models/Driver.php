@@ -20,6 +20,7 @@ class Driver extends Model
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
 
+    const STATUS_DELETED = '3';
 
     protected $dates = ['deleted_at'];
 

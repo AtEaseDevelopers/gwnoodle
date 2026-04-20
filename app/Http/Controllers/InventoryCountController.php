@@ -25,7 +25,7 @@ class InventoryCountController extends Controller
     public function index(InventoryCountDataTable $dataTable, Request $request)
     {
         // Get data for filters
-        $drivers = Driver::all();
+        $drivers = Driver::where('status', '!=',Driver::STATUS_DELETED)->get();
         $products = Product::all();
         $statuses = InventoryCount::getStatusOptions();
         $warehouses = Warehouse::where('stock_out_enabled', 1)->orderBy('name')->get(); // Add this

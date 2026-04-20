@@ -24,7 +24,7 @@ class InventoryReturnController extends Controller
     public function index(InventoryReturnDataTable $dataTable, Request $request)
     {
         // Get data for filters
-        $drivers = Driver::all();
+        $drivers = Driver::where('status', '!=',Driver::STATUS_DELETED)->get();
         $products = Product::all();
         $statuses = InventoryReturn::getStatusOptions();
         // Pass filter parameters to DataTable

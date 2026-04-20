@@ -37,7 +37,7 @@
             {!! Form::select('driver_id', $driverItems ?? [], null, ['class' => 'form-control selectpicker', 'placeholder' => 'Pick a Driver...', 'data-live-search' => 'true']) !!}
         </div>
 
-        <!-- Agent Id Field -->
+        Agent Id Field
         <div class="form-group">
             {!! Form::label('agent_id', __('customers.agent')) !!}:
             {!! Form::select('agent_id', $agentItems ?? [], null, ['class' => 'form-control selectpicker', 'placeholder' => 'Pick a Agent...', 'data-live-search' => 'true']) !!}

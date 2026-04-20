@@ -175,7 +175,7 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('customerItems', $customerItems);
         });
         View::composer(['assigns.fields','drivers.assign','assigns.massfields'], function ($view) {
-            $driverItems = Driver::orderBy("name")->pluck('name','id')->toArray();
+            $driverItems = Driver::where('status', '!=',Driver::STATUS_DELETED)->orderBy("name")->pluck('name','id')->toArray();
             $view->with('driverItems', $driverItems);
         });
         View::composer(['assigns.massfields'], function ($view) {
@@ -272,11 +272,11 @@ class ViewServiceProvider extends ServiceProvider
         //     $view->with('vendorIDItems', $vendorIDItems);
         // });
         View::composer(['home'], function ($view) {
-            $driverItems = Driver::orderBy("name")->pluck('name','id')->toArray();
+            $driverItems = Driver::where('status', '!=',Driver::STATUS_DELETED)->orderBy("name")->pluck('name','id')->toArray();
             $view->with('driverItems', $driverItems);
         });
         View::composer(['home'], function ($view) {
-            $driverIDItems = Driver::pluck('id')->toArray();
+            $driverIDItems = Driver::where('status', '!=',Driver::STATUS_DELETED)->pluck('id')->toArray();
             $view->with('driverIDItems', $driverIDItems);
         });
         View::composer(['home'], function ($view) {
@@ -289,7 +289,7 @@ class ViewServiceProvider extends ServiceProvider
         });
 
         View::composer(['paymentdetails.index'], function ($view) {
-            $driverItems = Driver::where('status',1)->orderBy("name")->pluck('name','id')->toArray();
+            $driverItems = Driver::where('status', '!=',Driver::STATUS_DELETED)->orderBy("name")->pluck('name','id')->toArray();
             $view->with('driverItems', $driverItems);
         });
 

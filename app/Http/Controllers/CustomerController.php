@@ -156,7 +156,7 @@ class CustomerController extends AppBaseController
         $groups = Code::where('code', 'customer_group')->pluck('description', 'value')->toArray();
         $agentItems = Agent::pluck('name', 'id')->toArray();
         $supervisorItems = Supervisor::pluck('name', 'id')->toArray();
-        $driverItems = Driver::pluck('name', 'id')->toArray(); // Added driver dropdown
+        $driverItems = Driver::where('status', '!=',Driver::STATUS_DELETED)->orderBy("name")->pluck('name', 'id')->toArray(); // Added driver dropdown
         $paymentTerm = Customer::$paymentTerm;
 
         // Category options

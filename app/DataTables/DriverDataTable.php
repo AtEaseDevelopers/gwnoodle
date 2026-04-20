@@ -29,7 +29,7 @@ class DriverDataTable extends DataTable
      */
     public function query(Driver $model)
     {
-        return $model->newQuery();
+        return $model->newQuery()->where('status', '!=', 3);
     }
 
     /**

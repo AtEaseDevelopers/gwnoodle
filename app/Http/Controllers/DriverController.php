@@ -164,56 +164,8 @@ class DriverController extends AppBaseController
             return redirect(route('drivers.index'));
         }
 
-        $Trip = Trip::where('driver_id',$id)->get()->toArray();
-        if(count($Trip)>0){
-            Flash::error('Unable to delete '.$driver->name.', '.$driver->name.' is being used in Trip');
-
-            return redirect(route('drivers.index'));
-        }
-
-        $Invoice = Invoice::where('driver_id',$id)->get()->toArray();
-        if(count($Invoice)>0){
-            Flash::error('Unable to delete '.$driver->name.', '.$driver->name.' is being used in Invoice');
-
-            return redirect(route('drivers.index'));
-        }
-
-        $Task = Task::where('driver_id',$id)->get()->toArray();
-        if(count($Task)>0){
-            Flash::error('Unable to delete '.$driver->name.', '.$driver->name.' is being used in Task');
-
-            return redirect(route('drivers.index'));
-        }
-
-        $TaskTransfer = TaskTransfer::where('from_driver_id',$id)->orWhere('to_driver_id',$id)->get()->toArray();
-        if(count($TaskTransfer)>0){
-            Flash::error('Unable to delete '.$driver->name.', '.$driver->name.' is being used in Task Transfer');
-
-            return redirect(route('drivers.index'));
-        }
-
-        $InventoryTransfer = InventoryTransfer::where('from_driver_id',$id)->orWhere('to_driver_id',$id)->get()->toArray();
-        if(count($InventoryTransfer)>0){
-            Flash::error('Unable to delete '.$driver->name.', '.$driver->name.' is being used in Inventory Transfer');
-
-            return redirect(route('drivers.index'));
-        }
-
-        $DriverLocation = DriverLocation::where('driver_id',$id)->get()->toArray();
-        if(count($DriverLocation)>0){
-            Flash::error('Unable to delete '.$driver->name.', '.$driver->name.' is being used in Driver Location');
-
-            return redirect(route('drivers.index'));
-        }
-
-        $Assign = Assign::where('driver_id',$id)->get()->toArray();
-        if(count($Assign)>0){
-            Flash::error('Unable to delete '.$driver->name.', '.$driver->name.' is being used in Assign');
-
-            return redirect(route('drivers.index'));
-        }
-
-        $this->driverRepository->delete($id);
+    $driver->status = Driver::STATUS_DELETED;
+        $driver->save();
 
         Flash::success($driver->name.__('drivers.deleted_successfully'));
 

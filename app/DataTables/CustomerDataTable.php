@@ -86,7 +86,6 @@ class CustomerDataTable extends DataTable
     ";
     
             $query = $model->newQuery()
-                ->with('agent:id,name')
                 ->with('driver:id,name')
                 ->with('supervisor:id,name')
                 ->leftJoin(DB::raw("
@@ -266,11 +265,7 @@ class CustomerDataTable extends DataTable
             'driver_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('Driver'),
             'data' => 'driver.name',
             'name' => 'driver.name']),
-
-            'agent_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('customers.agent'),
-            'data' => 'agent.name',
-            'name' => 'agent.name']),
-
+            
             'phone',
             'status',
             'credit',

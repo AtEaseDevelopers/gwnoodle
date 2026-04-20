@@ -49,10 +49,10 @@
         </div>
 
         <!-- Agent Id Field -->
-        <div class="form-group">
+        <!-- <div class="form-group">
             {!! Form::label('agent_id', __('customers.agent')) !!}:
             <p>{{ $customer->agent->name ?? '-' }}</p>
-        </div>
+        </div> -->
 
         <!-- Phone Field -->
         <div class="form-group">
