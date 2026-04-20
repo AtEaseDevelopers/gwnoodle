@@ -122,7 +122,7 @@ class FinishedGoodsTraceabilityService
                 'uom' => $this->getUOMDisplay($product),
                 'batch_code' => $batch ? $batch->batch_code : 'N/A',
                 'expiry_date' => $batch ? $batch->getFormattedExpiryDateAttribute() : 'N/A',
-                'warehouse' => $delivery->warehouse ? $delivery->warehouse->name : $this->getWarehouseForBatch($delivery->productBatch->id ?? null),
+                'warehouse' => $delivery->warehouse ? $delivery->warehouse->name : $this->getWarehouseForBatch($batch->id ?? null),
                 'price' => $delivery->price,
                 'total_price' => $delivery->totalprice,
             ];
