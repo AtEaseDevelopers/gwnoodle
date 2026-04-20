@@ -121,7 +121,7 @@ class FinishedGoodsTraceabilityService
                 'uom' => $this->getUOMDisplay($product),
                 'batch_code' => $batch ? $batch->batch_code : 'N/A',
                 'expiry_date' => $batch ? $batch->getFormattedExpiryDateAttribute() : 'N/A',
-                'warehouse' => $delivery->warehouse ? $delivery->warehouse->name : 'N/A',
+                'warehouse' => $delivery->warehouse ? $delivery->warehouse->name : WarehouseHelper::getWarehouseForBatch($delivery->productBatch->id ?? null),
                 'price' => $delivery->price,
                 'total_price' => $delivery->totalprice,
             ];
@@ -146,6 +146,28 @@ class FinishedGoodsTraceabilityService
         $reportData['summary']['total_batches'] = count($uniqueBatches);
 
         return $reportData;
+    }
+
+    public static function getWarehouseForBatch($productBatchId)
+    {
+        $balances = WarehouseInventoryBalance::where('batch_id', $productBatchId)
+            ->where('quantity', '>', 0)
+            ->with('warehouse')
+            ->get();
+        
+        if ($balances->isEmpty()) {
+            return 'N/A';
+        }
+        
+        $warehouseNames = $balances->map(function($balance) {
+            return $balance->warehouse ? $balance->warehouse->name : null;
+        })->filter()->unique();
+        
+        if ($warehouseNames->count() === 1) {
+            return $warehouseNames->first();
+        }
+        
+        return $warehouseNames->implode(', ');
     }
 
     /**
