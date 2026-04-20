@@ -7,6 +7,7 @@ use App\Models\InvoiceDetail;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\WarehouseInventoryBalance;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
