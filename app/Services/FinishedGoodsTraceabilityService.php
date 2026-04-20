@@ -152,13 +152,8 @@ class FinishedGoodsTraceabilityService
     public static function getWarehouseForBatch($productBatchId)
     {
         $balances = WarehouseInventoryBalance::where('batch_id', $productBatchId)
-            ->where('quantity', '>', 0)
             ->with('warehouse')
             ->get();
-        
-        if ($balances->isEmpty()) {
-            return 'N/A';
-        }
         
         $warehouseNames = $balances->map(function($balance) {
             return $balance->warehouse ? $balance->warehouse->name : null;
