@@ -222,7 +222,7 @@ class UserController extends AppBaseController
 
             return redirect(route('users.index'));
         }
-
+        
         $this->userRepository->delete($id);
 
         Flash::success('User deleted successfully.');

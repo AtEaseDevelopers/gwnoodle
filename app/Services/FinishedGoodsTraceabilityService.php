@@ -109,7 +109,7 @@ class FinishedGoodsTraceabilityService
             if (!$invoice || !$product) continue;
 
             $item = [
-                'delivery_date' => $invoice->date ? Carbon::parse($invoice->date)->format('d/m/Y H:i') : 'N/A',
+                'delivery_date' => $invoice->date ? Carbon::parse($invoice->date)->format('d/m/Y') : 'N/A',
                 'invoice_no' => $invoice->invoiceno ?? 'N/A',
                 'customer_name' => $customer ? $customer->company : 'N/A',
                 'customer_code' => $customer ? $customer->code : 'N/A',
