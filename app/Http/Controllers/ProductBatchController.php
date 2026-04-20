@@ -801,7 +801,7 @@ class ProductBatchController extends AppBaseController
         imagecopy($canvas, $barcode, $horizontalPadding, $topPadding, 0, 0, imagesx($barcode), imagesy($barcode));
 
         $fontPath = public_path('fonts/DejaVuSans.ttf');
-        $fontSize = 20;
+        $fontSize = 20; // 相应减小字体
         $textBoundingBox = imagettfbbox($fontSize, 0, $fontPath, $batchCode);
         $textWidth = $textBoundingBox[2] - $textBoundingBox[0];
         $textX = max($horizontalPadding, (int) (($width - $textWidth) / 2));
@@ -809,61 +809,15 @@ class ProductBatchController extends AppBaseController
 
         imagettftext($canvas, $fontSize, 0, $textX, $textY, $black, $fontPath, $batchCode);
 
-        // Save the image to a temporary file
-        $tempImagePath = tempnam(sys_get_temp_dir(), 'barcode_');
-        imagepng($canvas, $tempImagePath);
-        
-        // Clean up image resources
+        ob_start();
+        imagepng($canvas);
+        $imageData = ob_get_clean();
+
         imagedestroy($barcode);
         imagedestroy($canvas);
-        
-        // Generate PDF using DomPDF
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML('
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Barcode - ' . $batchCode . '</title>
-                <style>
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        font-family: Arial, sans-serif;
-                    }
-                    .barcode-container {
-                        text-align: center;
-                        margin-top: 50px;
-                    }
-                    .barcode-image {
-                        display: block;
-                        margin: 0 auto;
-                    }
-                    .batch-code {
-                        text-align: center;
-                        font-size: 14px;
-                        margin-top: 10px;
-                        font-family: monospace;
-                    }
-                    @page {
-                        margin: 0;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="barcode-container">
-                    <img src="data:image/png;base64,' . base64_encode(file_get_contents($tempImagePath)) . '" class="barcode-image" />
-                </div>
-            </body>
-            </html>
-        ');
-        
-        // Set paper size (adjust as needed)
-        $pdf->setPaper('A4', 'portrait');
-        
-        // Delete temporary image file
-        unlink($tempImagePath);
-        
-        // Download as PDF
-        return $pdf->download('barcode_' . $batchCode . '.pdf');
+
+        return response($imageData)
+            ->header('Content-Type', 'image/png')
+            ->header('Content-Disposition', "attachment; filename={$batchCode}.png");
     }
 }
