@@ -28,7 +28,7 @@
                                             // Check if the field should be optional based on title
                                             $isProductBatch = isset($reportdetail['title']) && $reportdetail['title'] == 'Product Batch';
                                             $required = $reportdetail['name'] === 'p_agent' ? '' : 'required';
-                                            
+
                                             // Override required for Product Batch multiselect
                                             if($isProductBatch && $reportdetail['type'] == 'multiselect') {
                                                 $required = '';

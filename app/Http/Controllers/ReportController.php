@@ -11,6 +11,7 @@ use App\Repositories\ReportRepository;
 use Flash;
 use App\Http\Controllers\AppBaseController;
 use App\Models\Report;
+use App\Models\ProductBatch;
 use Response;
 use App\Models\Reportdetail;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ use \Exception;
 use Mockery\Expectation;
 use App\Models\paymentdetail;
 use App\Models\Driver;
+use App\Models\Warehouse;
 use App\Models\Lorry;
 use App\Models\Code;
 use App\Models\DailyInventoryBalance;
@@ -124,6 +126,13 @@ class ReportController extends AppBaseController
             
         }
 
+        if($report->sqlvalue == 'STOCK_CARD_REPORT'){
+            $products = Product::select('id', 'name', 'unit_code')->get();
+            $warehouses = Warehouse::where('status', 1)->select('id', 'name')->get();
+            $productBatches = []; // Empty initially, will be loaded via AJAX
+            return view('reports.stock-card-show', compact('report', 'products', 'warehouses', 'productBatches'));
+        }
+        
         $reportdetails = Reportdetail::where('report_id',$id)->where('status','1')->orderBy('sequence','asc')->get()->toarray();
         $c = 0;
         foreach($reportdetails as $reportdetail){
@@ -152,6 +161,51 @@ class ReportController extends AppBaseController
             $c = $c + 1;
         }   
         return view('reports.show')->with('reportdetails', $reportdetails)->with('report', $report);
+    }
+
+    /**
+     * Get product batches for AJAX request
+    */
+    public function getProductBatches(Request $request)
+    {
+        $productId = $request->get('product_id');
+        
+        if (!$productId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product ID is required'
+            ]);
+        }
+        
+        try {
+            $batches = ProductBatch::where('product_id', $productId)
+                ->where('status', 1) // Active batches only
+                ->where('quantity', '>', 0) // Has stock
+                ->orderBy('expiry_date', 'asc') // FEFO order
+                ->get()
+                ->map(function($batch) {
+                    return [
+                        'id' => $batch->id,
+                        'batch_code' => $batch->batch_code,
+                        'quantity' => $batch->quantity,
+                        'expiry_date' => $batch->formatted_expiry_date,
+                        'is_expiring_soon' => $batch->isExpiringSoon()
+                    ];
+                });
+            
+            return response()->json([
+                'success' => true,
+                'batches' => $batches
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error loading product batches: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load batches: ' . $e->getMessage()
+            ]);
+        }
     }
 
     /**
@@ -354,6 +408,7 @@ class ReportController extends AppBaseController
             if (!is_array($product_id)) {
                 $product_id = [$product_id];
             }
+            
             if ($warehouse_id && !is_array($warehouse_id)) {
                 $warehouse_id = [$warehouse_id];
             }

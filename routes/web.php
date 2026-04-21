@@ -284,7 +284,7 @@ Route::group(['middleware' => ['auth']], function() {
     // });
     Route::group(['middleware' => ['permission:report']], function() {
         Route::resource('reports', App\Http\Controllers\ReportController::class);
-        Route::post('/reports/run', [App\Http\Controllers\ReportController::class, 'run']);
+        Route::post('/reports/run', [App\Http\Controllers\ReportController::class, 'run'])->name('reports.run');
         Route::get('/showreport/{id}', [App\Http\Controllers\ReportController::class, 'report'])->name('showreport');
         Route::get('/report/sellerinformationrecord', [App\Http\Controllers\ReportController::class, 'seller_information_record'])->name('seller_information_record');
         Route::get('/report/customerstatementofaccount', [App\Http\Controllers\ReportController::class, 'customer_statement_of_account'])->name('customer_statement_of_account');
@@ -299,7 +299,7 @@ Route::group(['middleware' => ['auth']], function() {
         Route::get('/finished-goods-traceability', [App\Http\Controllers\ReportController::class, 'finishedGoodsTraceabilityView'])->name('finished_goods_traceability_view');
 
         Route::get('/stock-card-report', [App\Http\Controllers\ReportController::class, 'stockCardReportView'])->name('stock_card_report_view');
-
+        Route::get('/get-product-batches', [App\Http\Controllers\ReportController::class, 'getProductBatches'])->name('reports.getProductBatches');
     });
 
 
