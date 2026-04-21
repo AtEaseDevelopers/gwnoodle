@@ -21,7 +21,7 @@
             min-height: 100vh;
             font-family: "dejavu sans", "helvetica", "tahoma", sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
         }
         
         /* Main invoice container - matching PDF style */

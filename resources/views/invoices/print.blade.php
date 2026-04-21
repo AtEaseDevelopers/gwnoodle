@@ -9,9 +9,9 @@
             size: auto;
         }
         body{
-            font-size: 12px;
+            font-size: 14px;
             margin: 0 auto;
-            padding: 10px 15px; /* Balanced left and right padding */
+            padding: 5px 8px; /* Balanced left and right padding */
             font-family: 'Courier New', Courier, monospace;
             width: 80mm; /* Standard receipt width */
             max-width: 100%;

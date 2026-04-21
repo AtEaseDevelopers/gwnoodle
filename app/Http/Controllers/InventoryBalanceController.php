@@ -108,7 +108,7 @@ class InventoryBalanceController extends AppBaseController
             ->get()
             ->keyBy('batch_id');
 
-        foreach ($items as $item) {
+    	foreach ($items as $item) {
             $warehouseInventory = $warehouseInventoryMap->get($item['product_batch_id']);
             $productBatch = $productBatches->get($item['product_batch_id']);
 
@@ -390,35 +390,46 @@ class InventoryBalanceController extends AppBaseController
     /**
      * Get warehouses that have a specific batch (for stock out)
      */
-    public function getWarehousesWithBatch($batchId)
-    {
-        try {
-            $warehouseBalances = WarehouseInventoryBalance::with('warehouse')
-                ->where('batch_id', $batchId)
-                ->where('quantity', '>', 0)
-                ->get();
-            
-            $warehouses = $warehouseBalances->map(function($balance) {
-                return [
-                    'id' => $balance->warehouse_id,
-                    'name' => $balance->warehouse->name,
-                    'location' => $balance->warehouse->location,
-                    'stock' => $balance->quantity
-                ];
-            });
+   /**
+ * Get all active warehouses (for stockout returns)
+ */
+public function getWarehousesWithBatch($batchId)
+{
+    try {
+        // Get all active warehouses instead of only those with the batch
+        $warehouses = Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->get();
 
-            return response()->json([
-                'success' => true,
-                'warehouses' => $warehouses
-            ]);
+        // Optional: Get current stock of this batch in each warehouse
+        $warehouseBalances = WarehouseInventoryBalance::where('batch_id', $batchId)
+            ->get()
+            ->keyBy('warehouse_id');
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error: ' . $e->getMessage()
-            ], 500);
-        }
+        $warehousesData = $warehouses->map(function($warehouse) use ($warehouseBalances, $batchId) {
+            $currentStock = $warehouseBalances->get($warehouse->id);
+
+            return [
+                'id' => $warehouse->id,
+                'name' => $warehouse->name,
+                'location' => $warehouse->location,
+                'stock' => $currentStock ? $currentStock->quantity : 0, // Show 0 if not present
+                'has_batch' => $currentStock ? true : false // Flag to indicate if batch exists
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'warehouses' => $warehousesData
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Transfer stock between lorries
