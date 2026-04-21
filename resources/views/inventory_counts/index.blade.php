@@ -30,7 +30,7 @@
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h4 class="modal-title h6">{{ __('Create Stock Count') }}</h4>
+                    <h4 class="modal-title h6">{{ __('Create Stock Out') }}</h4>
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
                 </div>
                 <div class="modal-body">
@@ -68,31 +68,23 @@
                     
                     <!-- Items Table -->
                     <div class="form-group">
-                        <label class="col-form-label">{{ __('Items') }} <span class="text-danger">*</span>:</label>
+                        <label class="col-form-label">{{ __('Items by Batch') }} <span class="text-danger">*</span>:</label>
                         <div class="table-responsive">
                             <table class="table table-bordered" id="itemsTable">
                                 <thead>
                                     <tr>
                                         <th width="5%">#</th>
-                                        <th width="35%">Product <span class="text-danger">*</span></th>
-                                        <th width="15%">Current Quantity</th>
-                                        <th width="15%">Counted Qty <span class="text-danger">*</span></th>
-                                        <th width="20%">Return Warehouse <span class="text-danger">*</span></th>
-                                        <th width="10%">Actions</th>
+                                        <th width="25%">Product</th>
+                                        <th width="15%">Batch Code</th>
+                                        <th width="8%">Current Qty</th>
+                                        <th width="12%">Counted Qty *</th>
+                                        <th width="8%">Difference</th>
+                                        <th width="20%">Return Warehouse *</th>
                                     </tr>
                                 </thead>
                                 <tbody id="itemsBody">
-                                    <!-- Items will be added here dynamically -->
+                                    <!-- Batches will be added here dynamically -->
                                 </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colspan="6" class="text-right">
-                                            <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
-                                                <i class="fa fa-plus"></i> Add Item
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tfoot>
                             </table>
                         </div>
                         <div class="text-danger" id="itemsError"></div>
@@ -1146,27 +1138,166 @@
             selectedDriverId = driverId;
             
             if (driverId) {
-                // Clear existing items and show loading message
                 $('#itemsBody').empty();
                 var loadingRow = `
                     <tr>
-                        <td colspan="4" class="text-center">
+                        <td colspan="7" class="text-center">
                             <i class="fa fa-spinner fa-spin"></i> Loading driver inventory...
                         </td>
                     </tr>
                 `;
                 $('#itemsBody').append(loadingRow);
-                itemCounter = 0;
                 
-                // Load driver inventory
-                loadDriverInventory(driverId);
+                // Load driver inventory with batches
+                loadDriverInventoryForCreate(driverId);
             } else {
-                // Clear product selects and show message
                 $('#itemsBody').empty();
                 itemCounter = 0;
-                initializeItemsTable();
             }
         });
+
+        // Function to load driver inventory and display batches
+        function loadDriverInventoryForCreate(driverId) {
+            ShowLoad();
+            
+            $.ajax({
+                url: '{{ route("inventoryCounts.getDriverInventory") }}',
+                type: 'GET',
+                data: { driver_id: driverId },
+                dataType: 'json',
+                success: function(response) {
+                    HideLoad();
+                    
+                    if (response.success) {
+                        driverInventory = response.inventory || [];
+                        
+                        if (driverInventory.length === 0) {
+                            $('#itemsBody').empty();
+                            var emptyRow = `
+                                <tr>
+                                    <td colspan="7" class="text-center text-info">
+                                        <div class="p-3">
+                                            <i class="fa fa-info-circle fa-2x mb-2 d-block"></i>
+                                            <strong>No Inventory Found</strong><br>
+                                            This driver has no stock in their lorry.
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                            $('#itemsBody').append(emptyRow);
+                        } else {
+                            // Display batches as individual rows
+                            displayBatchesForCreate(driverInventory);
+                        }
+                    } else {
+                        showNotification('error', response.message || 'Failed to load driver inventory');
+                    }
+                },
+                error: function(xhr) {
+                    HideLoad();
+                    showNotification('error', 'Error loading driver inventory');
+                }
+            });
+        }
+
+        // Function to display batches as individual rows in create modal
+        function displayBatchesForCreate(inventory) {
+            $('#itemsBody').empty();
+            var batchIndex = 0;
+            
+            inventory.forEach(function(product) {
+                if (product.batches && product.batches.length > 0) {
+                    product.batches.forEach(function(batch) {
+                        var expiryInfo = batch.formatted_expiry_date ? 
+                            `<small class="text-muted d-block">Exp: ${batch.formatted_expiry_date}</small>` : '';
+                        var expiringClass = batch.is_expiring_soon ? 'expiring-soon' : '';
+                        
+                        var row = `
+                            <tr class="batch-row" data-batch-index="${batchIndex}">
+                                <td class="align-middle text-center">${batchIndex + 1}</td>
+                                <td class="align-middle">
+                                    <strong>${product.product_name}</strong>
+                                    ${expiryInfo}
+                                    <input type="hidden" name="batches[${batchIndex}][product_id]" value="${product.product_id}">
+                                    <input type="hidden" name="batches[${batchIndex}][product_name]" value="${product.product_name}">
+                                </td>
+                                <td class="align-middle">
+                                    <span class="badge badge-info ${expiringClass}">${batch.batch_code}</span>
+                                    <input type="hidden" name="batches[${batchIndex}][batch_code]" value="${batch.batch_code}">
+                                    <input type="hidden" name="batches[${batchIndex}][batch_id]" value="${batch.batch_id}">
+                                </td>
+                                <td class="align-middle text-center">
+                                    <span class="badge badge-secondary">${batch.quantity}</span>
+                                    <input type="hidden" name="batches[${batchIndex}][current_quantity]" value="${batch.quantity}">
+                                </td>
+                                <td class="align-middle">
+                                    <input type="number" 
+                                        min="0" 
+                                        class="form-control counted-quantity-input" 
+                                        name="batches[${batchIndex}][counted_quantity]" 
+                                        data-current-qty="${batch.quantity}"
+                                        data-batch-id="${batch.batch_id}"
+                                        value=""
+                                        placeholder="Enter counted qty"
+                                        required>
+                                </td>
+                                <td class="align-middle text-center">
+                                    <span class="difference-display">-</span>
+                                </td>
+                                <td class="align-middle">
+                                    ${generateWarehouseDropdown(batchIndex, '')}
+                                </td>
+                            </tr>
+                        `;
+                        $('#itemsBody').append(row);
+                        batchIndex++;
+                    });
+                }
+            });
+            
+            // Initialize Select2 for warehouse dropdowns
+            if ($('.warehouse-select-create').length > 0) {
+                $('.warehouse-select-create').select2({
+                    theme: 'bootstrap',
+                    placeholder: 'Select Warehouse',
+                    allowClear: true,
+                    dropdownParent: $('#createRequest .modal-content'),
+                    width: '100%'
+                });
+            }
+            
+            // Initialize difference calculation
+            $('.counted-quantity-input').on('input', function() {
+                var currentQty = parseFloat($(this).data('current-qty')) || 0;
+                var countedQty = parseFloat($(this).val()) || 0;
+                var difference = countedQty - currentQty;
+                
+                var diffDisplay = $(this).closest('tr').find('.difference-display');
+                diffDisplay.removeClass('difference-positive difference-negative difference-zero');
+                
+                if ($(this).val() === '') {
+                    diffDisplay.text('-');
+                } else {
+                    var diffClass = difference > 0 ? 'difference-positive' : (difference < 0 ? 'difference-negative' : 'difference-zero');
+                    var diffSymbol = difference > 0 ? '+' : '';
+                    diffDisplay.addClass(diffClass);
+                    diffDisplay.text(diffSymbol + difference);
+                }
+            });
+        }
+
+        // Update warehouse dropdown generator for create modal
+        function generateWarehouseDropdown(index, selectedWarehouseId = '') {
+            var options = '<option value="">Select Warehouse</option>';
+            warehouses.forEach(function(warehouse) {
+                var selected = (warehouse.id == selectedWarehouseId) ? 'selected' : '';
+                options += `<option value="${warehouse.id}" ${selected}>${warehouse.name}</option>`;
+            });
+            
+            return `<select class="form-control warehouse-select-create" name="batches[${index}][warehouse_id]" required>
+                ${options}
+            </select>`;
+        }
 
         // Function to load driver inventory
         function loadDriverInventory(driverId) {
@@ -1281,7 +1412,7 @@
             } else if (selectedDriverId) {
                 var emptyRow = `
                     <tr>
-                        <td colspan="4" class="text-center text-warning">
+                        <td colspan="7" class="text-center text-warning">
                             <i class="fa fa-exclamation-triangle"></i> No inventory available for this driver
                         </td>
                     </tr>
@@ -1290,7 +1421,7 @@
             } else {
                 var emptyRow = `
                     <tr>
-                        <td colspan="4" class="text-center text-muted">
+                        <td colspan="7" class="text-center text-muted">
                             <i class="fa fa-info-circle"></i> Please select a driver first
                         </td>
                     </tr>
@@ -1565,7 +1696,6 @@
             
             // Reset errors
             $('#driverError, #itemsError').text('');
-            $('.product-error').text('');
             $('.counted-quantity-input').removeClass('is-invalid');
             $('.warehouse-select-create').removeClass('is-invalid');
             
@@ -1576,97 +1706,24 @@
                 return false;
             }
             
-            // Check if driver has inventory
-            var hasInventory = driverInventory && driverInventory.length > 0;
-            
-            // If driver has no inventory, allow submission with empty items
-            if (!hasInventory) {
-                // Confirm with user that they want to create an empty stock count
-                if (confirm('This driver has no inventory in their lorry.\n\nDo you want to create an empty stock count request?\n\nThis will allow the admin to approve and mark the stock out as completed.')) {
-                    // Prepare form data with empty items
-                    var emptyPostData = {
-                        driver_id: driverId,
-                        items: [], // Empty items array
-                        remarks: $('#remarks').val(),
-                        _token: '{{ csrf_token() }}'
-                    };
-                    
-                    console.log('Sending empty inventory data:', emptyPostData);
-                    
-                    // Submit via AJAX
-                    ShowLoad();
-                    $.ajax({
-                        url: $(this).attr('action'),
-                        type: 'POST',
-                        data: emptyPostData,
-                        dataType: 'json',
-                        success: function(response) {
-                            HideLoad();
-                            if (response.success) {
-                                $('#createRequest').modal('hide');
-                                showNotification('success', response.message || 'Empty stock count request created successfully.');
-                                if (table && typeof table.ajax !== 'undefined') {
-                                    table.ajax.reload(null, false);
-                                }
-                            } else {
-                                showNotification('error', response.message || 'An error occurred');
-                            }
-                        },
-                        error: function(xhr) {
-                            HideLoad();
-                            var errorMsg = 'An error occurred';
-                            if (xhr.responseJSON && xhr.responseJSON.message) {
-                                errorMsg = xhr.responseJSON.message;
-                            }
-                            showNotification('error', errorMsg);
-                            console.error('Error:', xhr.responseJSON);
-                        }
-                    });
-                }
-                return false;
-            }
-            
-            // Continue with normal validation for drivers with inventory
+            // Validate batches
             var hasErrors = false;
-            var items = [];
-            var productIds = new Set();
+            var batches = [];
             var hasAnyCountedQty = false;
             
-            $('#itemsBody tr.item-row').each(function(index) {
-                var productId = $(this).find('.product-select').val();
-                var warehouseId = $(this).find('.warehouse-select-create').val();
-                var countedQty = $(this).find('.counted-quantity-input').val();
+            $('.batch-row').each(function(index) {
                 var $row = $(this);
-                var productError = $(this).find('.product-error');
-                
-                // Reset errors
-                productError.text('');
-                
-                // Validate product
-                if (!productId) {
-                    productError.text('Please select a product');
-                    hasErrors = true;
-                    return;
-                }
-                
-                if (productIds.has(productId)) {
-                    productError.text('Duplicate product selected');
-                    hasErrors = true;
-                    return;
-                }
-                
-                productIds.add(productId);
-                
-                // Validate warehouse
-                if (!warehouseId) {
-                    $(this).find('.warehouse-select-create').addClass('is-invalid');
-                    hasErrors = true;
-                    return;
-                }
+                var batchId = $row.find('input[name*="[batch_id]"]').val();
+                var productId = $row.find('input[name*="[product_id]"]').val();
+                var productName = $row.find('input[name*="[product_name]"]').val();
+                var batchCode = $row.find('input[name*="[batch_code]"]').val();
+                var currentQty = $row.find('input[name*="[current_quantity]"]').val();
+                var countedQty = $row.find('.counted-quantity-input').val();
+                var warehouseId = $row.find('.warehouse-select-create').val();
                 
                 // Validate counted quantity
                 if (countedQty === '' || parseFloat(countedQty) < 0) {
-                    $(this).find('.counted-quantity-input').addClass('is-invalid');
+                    $row.find('.counted-quantity-input').addClass('is-invalid');
                     hasErrors = true;
                     return;
                 }
@@ -1675,44 +1732,27 @@
                     hasAnyCountedQty = true;
                 }
                 
-                // Get batch information from the batch details container
-                var batchItems = [];
-                var batchContainer = $('#batchDetails_' + index);
-                
-                if (batchContainer.length && batchContainer.find('.batch-item').length > 0) {
-                    // Find the product in driver inventory to get batch information
-                    var productInventory = driverInventory.find(p => p.product_id == productId);
-                    
-                    if (productInventory && productInventory.batches && productInventory.batches.length > 0) {
-                        // Create batch entries
-                        productInventory.batches.forEach(function(batch) {
-                            batchItems.push({
-                                batch_id: batch.batch_id,
-                                batch_code: batch.batch_code,
-                                current_quantity: batch.quantity,
-                                counted_quantity: parseFloat(countedQty)
-                            });
-                        });
-                    }
+                // Validate warehouse
+                if (!warehouseId) {
+                    $row.find('.warehouse-select-create').addClass('is-invalid');
+                    hasErrors = true;
+                    return;
                 }
                 
-                // Add to items array with warehouse_id
-                var itemData = {
+                // Add to batches array
+                batches.push({
+                    batch_id: parseInt(batchId),
                     product_id: parseInt(productId),
+                    product_name: productName,
+                    batch_code: batchCode,
+                    current_quantity: parseFloat(currentQty),
                     counted_quantity: parseFloat(countedQty),
                     warehouse_id: parseInt(warehouseId)
-                };
-                
-                // Include batch information if available
-                if (batchItems.length > 0) {
-                    itemData.batches = batchItems;
-                }
-                
-                items.push(itemData);
+                });
             });
             
-            if (items.length === 0) {
-                $('#itemsError').text('Please add at least one product to count');
+            if (batches.length === 0) {
+                $('#itemsError').text('No items to count');
                 hasErrors = true;
             }
             
@@ -1725,10 +1765,10 @@
                 return false;
             }
             
-            // Prepare all form data
+            // Prepare form data
             var postData = {
                 driver_id: driverId,
-                items: items,
+                batches: batches,
                 remarks: $('#remarks').val(),
                 _token: '{{ csrf_token() }}'
             };

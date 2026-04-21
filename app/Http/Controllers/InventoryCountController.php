@@ -294,10 +294,11 @@ class InventoryCountController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'driver_id' => 'required|exists:drivers,id',
-            'items' => 'nullable|array', // Changed from required to nullable
-            'items.*.product_id' => 'required_with:items|exists:products,id',
-            'items.*.counted_quantity' => 'required_with:items|numeric|min:0',
-            'items.*.warehouse_id' => 'required_with:items|exists:warehouses,id',
+            'batches' => 'nullable|array',
+            'batches.*.batch_id' => 'required_with:batches|exists:product_batches,id',
+            'batches.*.product_id' => 'required_with:batches|exists:products,id',
+            'batches.*.counted_quantity' => 'required_with:batches|numeric|min:0',
+            'batches.*.warehouse_id' => 'required_with:batches|exists:warehouses,id',
             'remarks' => 'nullable|string|max:500',
         ]);
         
@@ -309,50 +310,47 @@ class InventoryCountController extends Controller
                     'message' => 'Validation failed'
                 ], 422);
             }
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
+            return redirect()->back()->withErrors($validator)->withInput();
         }
         
         $driver = Driver::find($request->driver_id);
-
+        
         // Get driver's latest trip
         $latestTrip = Trip::where('driver_id', $request->driver_id)
             ->where('uuid', $driver->trip_id)
             ->where('type', Trip::START_TRIP)
             ->first();
-
+        
         if (!$latestTrip) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Driver have not start trip yet.'
+                    'message' => 'Driver has not started trip yet.'
                 ], 422);
             }
             Flash::error('Driver does not have an active trip.');
             return redirect(route('inventoryCounts.index'));
         }
         
-        if ($latestTrip) {
-            $inventoryCountRecord = InventoryCount::where('trip_id', $latestTrip->id)->first();
-            if($inventoryCountRecord && $inventoryCountRecord->status == InventoryCount::STATUS_APPROVED){
-                if ($request->ajax() || $request->wantsJson()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'This Driver already have complete Stock Out record, can proceed to End Trip.'
-                    ], 422);
-                }
-                Flash::error('This Driver already have complete Stock Out record, can proceed to End Trip.');
-                return redirect(route('inventoryCounts.index'));
+        // Check for existing completed count
+        $inventoryCountRecord = InventoryCount::where('trip_id', $latestTrip->id)->first();
+        if($inventoryCountRecord && $inventoryCountRecord->status == InventoryCount::STATUS_APPROVED){
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This Driver already has a complete Stock Out record, can proceed to End Trip.'
+                ], 422);
             }
+            Flash::error('This Driver already has a complete Stock Out record, can proceed to End Trip.');
+            return redirect(route('inventoryCounts.index'));
         }
         
-        // Check for existing pending count for this driver and trip
+        // Check for existing pending count
         $existingCount = InventoryCount::where('driver_id', $request->driver_id)
             ->where('trip_id', $latestTrip->id)
             ->where('status', InventoryCount::STATUS_PENDING)
             ->exists();
-
+        
         if ($existingCount) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
@@ -363,61 +361,44 @@ class InventoryCountController extends Controller
             Flash::error('A pending inventory count already exists for this driver in the current trip.');
             return redirect(route('inventoryCounts.index'));
         }
-
+        
         try {
             $formattedItems = [];
             
-            // Only process items if they are provided
-            if ($request->has('items') && !empty($request->items)) {
-                // Get inventory balance for current quantities
-                $inventoryBalance = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)->first();
-                
-                foreach ($request->items as $item) {
-                    $productId = $item['product_id'];
-                    $countedQuantity = $item['counted_quantity'];
-                    $warehouseId = $item['warehouse_id'];
-                    $currentQuantity = 0;
-                    $batchDetails = [];
-                    
-                    // If inventory balance exists, get batch details for this product
-                    if ($inventoryBalance && !empty($inventoryBalance->batches)) {
-                        $batchIds = array_keys($inventoryBalance->batches);
-                        $productBatches = ProductBatch::where('product_id', $productId)
-                            ->whereIn('id', $batchIds)
-                            ->get();
-                        
-                        foreach ($productBatches as $batch) {
-                            $batchQty = $inventoryBalance->batches[$batch->id] ?? 0;
-                            if ($batchQty > 0) {
-                                $batchDetails[] = [
-                                    'batch_id' => $batch->id,
-                                    'batch_code' => $batch->batch_code,
-                                    'current_quantity' => $batchQty,
-                                    'counted_quantity' => $countedQuantity,
-                                    'warehouse_id' => $warehouseId
-                                ];
-                                $currentQuantity += $batchQty;
-                            }
-                        }
+            // Process batches if provided
+            if ($request->has('batches') && !empty($request->batches)) {
+                // Group batches by product
+                $productBatches = [];
+                foreach ($request->batches as $batch) {
+                    $productId = $batch['product_id'];
+                    if (!isset($productBatches[$productId])) {
+                        $productBatches[$productId] = [];
                     }
+                    $productBatches[$productId][] = $batch;
+                }
+                
+                // Build items array with batches
+                foreach ($productBatches as $productId => $batches) {
+                    $product = Product::find($productId);
+                    $batchDetails = [];
+                    $totalCounted = 0;
                     
-                    // If no batch details found, create a placeholder
-                    if (empty($batchDetails)) {
+                    foreach ($batches as $batch) {
                         $batchDetails[] = [
-                            'batch_id' => null,
-                            'batch_code' => 'N/A',
-                            'current_quantity' => 0,
-                            'counted_quantity' => $countedQuantity,
-                            'warehouse_id' => $warehouseId
+                            'batch_id' => $batch['batch_id'],
+                            'batch_code' => $batch['batch_code'],
+                            'current_quantity' => $batch['current_quantity'],
+                            'counted_quantity' => $batch['counted_quantity'],
+                            'warehouse_id' => $batch['warehouse_id']
                         ];
+                        $totalCounted += $batch['counted_quantity'];
                     }
                     
                     $formattedItems[] = [
                         'product_id' => $productId,
-                        'product_name' => Product::find($productId)->name ?? 'Unknown',
-                        'current_quantity' => $currentQuantity,
-                        'counted_quantity' => $countedQuantity,
-                        'warehouse_id' => $warehouseId,
+                        'product_name' => $product->name ?? 'Unknown',
+                        'current_quantity' => collect($batches)->sum('current_quantity'),
+                        'counted_quantity' => $totalCounted,
                         'batches' => $batchDetails
                     ];
                 }
@@ -426,17 +407,17 @@ class InventoryCountController extends Controller
             $inventoryCount = InventoryCount::create([
                 'driver_id' => $request->driver_id,
                 'trip_id' => $latestTrip->id,
-                'items' => !empty($formattedItems) ? $formattedItems : null, // Allow null items
+                'items' => !empty($formattedItems) ? $formattedItems : null,
                 'lorry_id'=> $latestTrip->lorry_id,
                 'status' => InventoryCount::STATUS_PENDING,
                 'remarks' => $request->remarks,
             ]);
-
+            
             $itemCount = count($formattedItems);
             $message = $itemCount > 0 
-                ? "Inventory count created successfully with {$itemCount} items."
+                ? "Inventory count created successfully with {$itemCount} products."
                 : "Inventory count created successfully. No inventory items to count.";
-
+            
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => true,

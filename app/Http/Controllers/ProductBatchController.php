@@ -396,7 +396,7 @@ class ProductBatchController extends AppBaseController
         }
     }
 
-    public function stockIn(Request $request, $id)
+    public function stockIn(Request $request, $id)//no more use
     {
         try {
             $productBatch = $this->productBatchRepository->find($id);
