@@ -962,9 +962,11 @@ class InvoiceController extends AppBaseController
             abort('404');
         }
 
-        $min = 450;
-        $each = 23;
-        $height = (count($invoice['invoicedetail']) * $each) + $min;
+        $itemCount = count($invoice['invoicedetail']);
+        // Each item renders as 2 rows (price/qty + product name). Use a generous
+        // per-item estimate (70pt) to safely cover text wrapping on narrow receipt width.
+        // Base (700pt) covers company header, address blocks, totals, and footer.
+        $height = ($itemCount * 70) + 700;
 
         $creditData = $this->calculateCustomerCredit(
             $invoice->customer_id, 
@@ -1168,10 +1170,11 @@ class InvoiceController extends AppBaseController
             'msic_code' => '10799'
         ];
 
-        // Calculate dynamic page height
-        $minHeight = 400;
-        $eachItemHeight = 25;
-        $height = (count($invoice->invoicedetail) * $eachItemHeight) + $minHeight;
+        // Calculate dynamic page height based purely on item count.
+        // 45pt per item covers 1 row at 9px font including text wrapping in description column.
+        // 600pt base covers header, company info, customer section, totals, and footer.
+        $itemCount = count($invoice->invoicedetail);
+        $height = ($itemCount * 45) + 600;
 
         // Convert amount to words
         $totalAmountText = $this->convertNumberToWords($totalAmount);

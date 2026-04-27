@@ -12,6 +12,7 @@
         html, body {
             margin: 0;
             padding: 0;
+            page-break-inside: avoid;
         }
         
         body {

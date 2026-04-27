@@ -646,11 +646,6 @@ class InventoryCountController extends Controller
                             $batch['counted_quantity'] = $batchData['counted_quantity'];
                             $batch['warehouse_id'] = $batchData['warehouse_id']; // Add warehouse ID
                             
-                            // Add warehouse name for display purposes (optional)
-                            if (isset($warehousesLookup[$batchData['warehouse_id']])) {
-                                $batch['warehouse_name'] = $warehousesLookup[$batchData['warehouse_id']]['name'];
-                            }
-                            
                             // Remove from lookup to track processed batches
                             unset($batchDataLookup[$batchId]);
                         }

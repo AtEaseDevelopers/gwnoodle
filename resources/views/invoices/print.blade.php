@@ -8,6 +8,9 @@
             margin: 0;
             size: auto;
         }
+        html, body {
+            page-break-inside: avoid;
+        }
         body{
             font-size: 14px;
             margin: 0 auto;

@@ -10,8 +10,10 @@ use App\Models\Driver;
 use App\Models\ProductBatch;
 use App\Models\InventoryTransaction;
 use App\Models\Trip;
+use App\Models\WarehouseInventoryBalance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Flash;
 
@@ -399,146 +401,150 @@ class InventoryRequestController extends Controller
     {
         $inventoryRequest = InventoryRequest::findOrFail($id);
 
-        // Check if request can be approved
         if (!$inventoryRequest->canBeApproved()) {
             if ($request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This request cannot be approved.'
-                ], 403);
+                return response()->json(['success' => false, 'message' => 'This request cannot be approved.'], 403);
             }
-            
             Flash::error('This request cannot be approved.');
             return redirect()->route('inventoryRequests.index');
         }
 
         try {
-            // Check if items exist
             $items = $inventoryRequest->items;
             if (empty($items) || !is_array($items)) {
                 if ($request->ajax()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No items found in this request.'
-                    ], 422);
+                    return response()->json(['success' => false, 'message' => 'No items found in this request.'], 422);
                 }
-                
                 Flash::error('No items found in this request.');
                 return redirect()->route('inventoryRequests.index');
             }
 
-            // Get the latest trip for this driver to find the lorry_id
             $latestTrip = Trip::where('driver_id', $inventoryRequest->driver_id)
                 ->where('type', 1)
                 ->orderBy('date', 'desc')
                 ->first();
-                
+
             if (!$latestTrip) {
                 if ($request->ajax()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No active trip found for this driver.'
-                    ], 422);
+                    return response()->json(['success' => false, 'message' => 'No active trip found for this driver.'], 422);
                 }
-                
                 Flash::error('No active trip found for this driver.');
                 return redirect()->route('inventoryRequests.index');
             }
 
             $lorry_id = $latestTrip->lorry_id;
 
-            // Get or create inventory balance for this lorry
-            $inventoryBalance = InventoryBalance::firstOrNew([
-                'lorry_id' => $lorry_id
-            ]);
+            // Pre-validate all items before making any changes
+            foreach ($items as $item) {
+                $batchId = $item['batch_id'];
+                $quantity = $item['quantity'];
+                $warehouseId = $item['warehouse_id'] ?? null;
 
-            // If new record, initialize with empty batches array
+                if (!$warehouseId) {
+                    $msg = 'No warehouse specified in one or more request items. Please re-submit the request with a warehouse selected.';
+                    if ($request->ajax()) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+                    Flash::error($msg);
+                    return redirect()->route('inventoryRequests.index');
+                }
+
+                $batch = ProductBatch::findOrFail($batchId);
+
+                if ($quantity > $batch->quantity) {
+                    $msg = "Batch {$batch->batch_code} only has {$batch->quantity} available, but {$quantity} requested.";
+                    if ($request->ajax()) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+                    Flash::error($msg);
+                    return redirect()->route('inventoryRequests.index');
+                }
+
+                $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+                    ->where('batch_id', $batchId)
+                    ->first();
+
+                $available = $warehouseInventory ? $warehouseInventory->quantity : 0;
+                if ($available < $quantity) {
+                    $msg = "Batch {$batch->batch_code} only has {$available} units in the selected warehouse, but {$quantity} requested.";
+                    if ($request->ajax()) {
+                        return response()->json(['success' => false, 'message' => $msg], 422);
+                    }
+                    Flash::error($msg);
+                    return redirect()->route('inventoryRequests.index');
+                }
+            }
+
+            $inventoryBalance = InventoryBalance::firstOrNew(['lorry_id' => $lorry_id]);
             if (!$inventoryBalance->exists) {
                 $inventoryBalance->batches = [];
             }
 
-            // Process each item (each item represents a batch allocation)
-            foreach ($items as $item) {
-                $batchId = $item['batch_id'];
-                $quantity = $item['quantity'];
-                $productId = $item['product_id'];
-                // Find the batch
-                $batch = ProductBatch::findOrFail($batchId);
+            DB::beginTransaction();
 
-                // Check if batch has enough quantity
-                if ($quantity > $batch->quantity) {
-                    if ($request->ajax()) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Batch {$batch->batch_code} only has {$batch->quantity} available, but {$quantity} requested."
-                        ], 422);
-                    }
-                    
-                    Flash::error("Batch {$batch->batch_code} only has {$batch->quantity} available, but {$quantity} requested.");
-                    return redirect()->route('inventoryRequests.index');
+            try {
+                foreach ($items as $item) {
+                    $batchId    = $item['batch_id'];
+                    $quantity   = $item['quantity'];
+                    $productId  = $item['product_id'];
+                    $warehouseId = $item['warehouse_id'];
+
+                    $batch = ProductBatch::findOrFail($batchId);
+
+                    // 1. Deduct from WarehouseInventoryBalance
+                    $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+                        ->where('batch_id', $batchId)
+                        ->first();
+                    $warehouseInventory->decreaseQuantity($quantity);
+
+                    // 2. Deduct from ProductBatch master quantity
+                    $batch->decreaseQuantity($quantity, "Stock Request #{$inventoryRequest->id} - Transfer to driver {$inventoryRequest->driver->name}");
+
+                    // 3. Add to driver's lorry inventory
+                    $inventoryBalance->updateBatchQuantity($batchId, $quantity, 'add');
+
+                    // 4. Record transaction
+                    InventoryTransaction::create([
+                        'type'        => InventoryTransaction::TYPE_STOCK_OUT,
+                        'batch_id'    => $batchId,
+                        'quantity'    => -$quantity,
+                        'date'        => now(),
+                        'remark'      => "Stock Request #{$inventoryRequest->id} - Transfer to Driver ({$inventoryRequest->driver->name})",
+                        'user'        => Auth::user()->name,
+                        'lorry_id'    => $lorry_id,
+                        'product_id'  => $productId,
+                        'warehouse_id' => $warehouseId,
+                    ]);
                 }
 
-                // Reduce quantity from warehouse batch
-                $batch->quantity -= $quantity;
-                $batch->save();
-
-                // Add to driver's lorry inventory
-                $inventoryBalance->updateBatchQuantity($batchId, $quantity, 'add');
-
-                // Create inventory transaction record for STOCK OUT from warehouse
-                InventoryTransaction::create([
-                    'type' => InventoryTransaction::TYPE_STOCK_OUT,
-                    'batch_id' => $batchId,
-                    'quantity' => -$quantity,
-                    'date' => now(),
-                    'remark' => "Stock Request #{$inventoryRequest->id} - Transfer to Driver (ID: {$inventoryRequest->driver->name})",
-                    'user' => Auth::user()->name,
-                    'lorry_id' => $lorry_id,
-                    'product_id' => $productId,
+                $inventoryRequest->update([
+                    'status'      => InventoryRequest::STATUS_APPROVED,
+                    'approved_by' => Auth::id(),
+                    'approved_at' => now(),
                 ]);
 
-                // // Create inventory transaction record for STOCK IN to driver's lorry
-                // InventoryTransaction::create([
-                //     'type' => InventoryTransaction::TYPE_STOCK_IN,
-                //     'lorry_id' => $lorry_id,
-                //     'product_id' => $productId,
-                //     'batch_id' => $batchId,
-                //     'quantity' => $quantity,
-                //     'date' => now(),
-                //     'remark' => "Stock Request #{$inventoryRequest->id} - Received from Warehouse",
-                //     'user' => Auth::user()->name,
-                // ]);
+                DB::commit();
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
             }
-
-            // Save the inventory balance
-            $inventoryBalance->save();
-
-            // Update request status
-            $inventoryRequest->update([
-                'status' => InventoryRequest::STATUS_APPROVED,
-                'approved_by' => Auth::id(),
-                'approved_at' => now(),
-            ]);
 
             if ($request->ajax()) {
                 return response()->json([
-                    'success' => true,
-                    'message' => 'Inventory request approved successfully. Quantities added to driver inventory.',
+                    'success'  => true,
+                    'message'  => 'Inventory request approved successfully. Quantities added to driver inventory.',
                     'redirect' => route('inventoryRequests.index')
                 ]);
             }
-            
+
             Flash::success('Inventory request approved successfully. Quantities added to driver inventory.');
             return redirect()->route('inventoryRequests.index');
-            
+
         } catch (\Exception $e) {
             if ($request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to approve request: ' . $e->getMessage()
-                ], 500);
+                return response()->json(['success' => false, 'message' => 'Failed to approve request: ' . $e->getMessage()], 500);
             }
-            
             Flash::error('Failed to approve request: ' . $e->getMessage());
             return redirect()->route('inventoryRequests.index');
         }
