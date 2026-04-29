@@ -161,6 +161,11 @@ class Customer extends Model
         return $this->foc()->where('startdate','<=',date('Y-m-d H:i:s'))->where('enddate','>',date('Y-m-d H:i:s'))->where('status',1);
     }
 
+    public function invoices()
+    {
+        return $this->hasMany(\App\Models\Invoice::class, 'customer_id', 'id');
+    }
+
     public function specialprice(){
         return $this->hasMany(\App\Models\SpecialPrice::class, 'customer_id', 'id');
     }
