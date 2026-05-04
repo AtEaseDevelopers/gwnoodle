@@ -54,7 +54,7 @@ class WarehouseDataTable extends DataTable
                         return '<span class="text-muted">No inventory</span>';
                     }
 
-                    $summary = '<div class="inventory-summary-wrap">';
+                    $summary = '<div class="inventory-summary-wrap" style="max-height:150px;overflow-y:auto;">';
                     $summary .= '<table class="table table-sm table-bordered mb-0">';
                     $summary .= '<thead><tr><th>Product</th><th>Batch</th><th>Qty</th></tr></thead><tbody>';
 
@@ -115,7 +115,17 @@ class WarehouseDataTable extends DataTable
                             window.location.href = "' . route('warehouses.create') . '";
                         }'
                     ],
-                    ['extend' => 'print', 'className' => 'btn btn-default btn-sm no-corner', 'text' => '<i class="fa fa-print"></i> Print'],
+                    [
+                        'extend' => 'print',
+                        'className' => 'btn btn-default btn-sm no-corner',
+                        'text' => '<i class="fa fa-print"></i> Print',
+                        'customize' => 'function(win) {
+                            $(win.document.body).find(".inventory-summary-wrap").css({
+                                "max-height": "none",
+                                "overflow-y": "visible"
+                            });
+                        }'
+                    ],
                     ['extend' => 'reset', 'className' => 'btn btn-default btn-sm no-corner', 'text' => '<i class="fa fa-undo"></i> Reset'],
                     ['extend' => 'reload', 'className' => 'btn btn-default btn-sm no-corner', 'text' => '<i class="fa fa-refresh"></i> Reload'],
                     [
