@@ -1496,7 +1496,8 @@ class DriverController extends Controller
             $invoicepayment->approve_by = $driver->name;
             $invoicepayment->approve_at = date('Y-m-d H:i:s');
             $invoicepayment->save();
-            $invoicepayment->newcredit = round(DB::select('call ice_spGetCustomerCreditByDate("'.date('Y-m-d H:i:s').'",'.$invoicepayment->customer_id.');')[0]->credit,2);
+            $creditResult = DB::select('call ice_spGetCustomerCreditByDate("'.date('Y-m-d H:i:s').'",'.$invoicepayment->customer_id.');');
+            $invoicepayment->newcredit = round($creditResult[0]->credit ?? 0, 2);
             return response()->json([
                 'result' => true,
                 'message' => __LINE__.$this->message_separator.'api.message.payment_insert_successfully_found',
@@ -1577,7 +1578,7 @@ class DriverController extends Controller
                
                
                 $invoice->customer->groupcompany = DB::table('companies')
-                ->where('companies.group_id',explode(',',$invoice->customer->group)[0])
+                ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
                 ->select('companies.*')
                 ->first() ?? null;
                 return response()->json([
@@ -1739,7 +1740,7 @@ class DriverController extends Controller
                     'items' => $invoice->invoicedetail->map(function($detail) {
                         return [
                             'product_id' => $detail->product_id,
-                            'batch_code' => $detail->batch->batch_code,
+                            'batch_code' => $detail->batch->batch_code ?? null,
                             'batch_id' => $detail->product_batch_id,
                             'product_name' => optional($detail->product)->name ?? 'N/A',
                             'quantity' => (float) $detail->quantity,
@@ -1892,7 +1893,7 @@ class DriverController extends Controller
             $invoice->newcredit = round($creditData['credit'] ?? 0, 2);
 
             $invoice->customer->groupcompany = DB::table('companies')
-            ->where('companies.group_id',explode(',',$invoice->customer->group)[0])
+            ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
             ->select('companies.*')
             ->first() ?? null;       
 
@@ -2728,7 +2729,7 @@ class DriverController extends Controller
                  $invoice->newcredit  = 0;
             }
             $invoice->customer->groupcompany = DB::table('companies')
-            ->where('companies.group_id',explode(',',$invoice->customer->group)[0])
+            ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
             ->select('companies.*')
             ->first() ?? null;
             
@@ -3217,7 +3218,7 @@ class DriverController extends Controller
             }
             
             $invoice->customer->groupcompany = DB::table('companies')
-            ->where('companies.group_id',explode(',',$invoice->customer->group)[0])
+            ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
             ->select('companies.*')
             ->first() ?? null;
             
@@ -6317,7 +6318,7 @@ class DriverController extends Controller
                             'type' => InventoryTransaction::TYPE_STOCK_IN,
                             'date' => now(),
                             'user' => $user->name,
-                            'remark' => 'Stock return from Stock Out -[' . $inventoryCount->driver->name . '] - Batch: [' . $batchData['batch_code'] . ']',
+                            'remark' => 'Stock return from Stock Out -[' . ($inventoryCount->driver->name ?? 'Unknown') . '] - Batch: [' . $batchData['batch_code'] . ']',
                         ]);
                         
                         // Update warehouse inventory balance
