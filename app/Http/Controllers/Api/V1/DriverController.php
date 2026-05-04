@@ -2271,7 +2271,7 @@ class DriverController extends Controller
             // Validate request
             $validator = Validator::make($request->all(), [
                 'invoiceno' => 'nullable|string|max:255',
-                'date' => 'date_format:Y-m-d',
+                'date' => 'nullable|date_format:Y-m-d',
                 'customer_id' => 'required|numeric',
                 'paymentterm' => 'required|numeric|gt:0|lt:6',
                 'remark' => 'present|nullable|string',
@@ -2281,7 +2281,7 @@ class DriverController extends Controller
                 'invoicedetail.*.product_batch_id' => 'required|numeric',
                 'invoicedetail.*.quantity' => 'required|numeric|min:1',
                 'invoicedetail.*.price' => 'required|numeric|min:0',
-                'invoicedetail.*.id' => 'nullable|numeric' // For existing details
+                'invoicedetail.*.id' => 'nullable|numeric'
             ]);
             
             if ($validator->fails()) {
@@ -2448,13 +2448,6 @@ class DriverController extends Controller
             $invoice->paymentterm = $data['paymentterm'];
             $invoice->chequeno = $data['cheque_no'] ?? null;
             $invoice->remark = $data['remark'] ?? null;
-            
-            // Store ignored items as JSON for reference
-            if (!empty($itemsToIgnore)) {
-                $invoice->ignored_items = json_encode($itemsToIgnore);
-            } else {
-                $invoice->ignored_items = null;
-            }
             
             // Only update invoice number if provided and different
             if (!empty($data['invoiceno']) && $data['invoiceno'] != $invoice->invoiceno) {
