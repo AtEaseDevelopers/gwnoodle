@@ -60,6 +60,7 @@ class CustomerDataTable extends DataTable
      */
     public function query(Customer $model)
     {
+        // Only credit-term invoices that have NO completed payment = unpaid credit
         $invoicesSubquery = "
         SELECT
             invoices.customer_id,
@@ -68,23 +69,14 @@ class CustomerDataTable extends DataTable
             invoices
             LEFT JOIN invoice_details ON invoices.id = invoice_details.invoice_id
         WHERE
-            invoices.status = 1
+            invoices.paymentterm = 2
+            AND invoices.id NOT IN (
+                SELECT invoice_id FROM invoice_payments WHERE status = 1
+            )
         GROUP BY
             invoices.customer_id
     ";
-    
-    $paymentsSubquery = "
-        SELECT
-            invoice_payments.customer_id,
-            SUM(COALESCE(invoice_payments.amount, 0)) AS amount
-        FROM
-            invoice_payments
-        WHERE
-            invoice_payments.status = 1
-        GROUP BY
-            invoice_payments.customer_id
-    ";
-    
+
             $query = $model->newQuery()
                 ->with('driver:id,name')
                 ->with('supervisor:id,name')
@@ -93,17 +85,13 @@ class CustomerDataTable extends DataTable
                  SELECT
                     customers.id AS customer_id,
                     COALESCE(total_invoiced.totalprice, 0) AS totalprice,
-                    COALESCE(paymentsummary.amount, 0) AS paid,
-                    (COALESCE(total_invoiced.totalprice, 0) - COALESCE(paymentsummary.amount, 0)) AS credit
+                    -(COALESCE(total_invoiced.totalprice, 0)) AS credit
                 FROM
                     customers
                     LEFT JOIN (
                         {$invoicesSubquery}
                     ) AS total_invoiced ON customers.id = total_invoiced.customer_id
-                    LEFT JOIN (
-                        {$paymentsSubquery}
-                    ) AS paymentsummary ON customers.id = paymentsummary.customer_id
-                
+
                 ) as invoicesummary
             "), function ($join) {
                 $join->on('customers.id', '=', 'invoicesummary.customer_id');
@@ -111,16 +99,7 @@ class CustomerDataTable extends DataTable
             ->select(
                 'customers.*',
                 DB::raw("COALESCE(invoicesummary.totalprice, 0) as totalprice"),
-                DB::raw("COALESCE(invoicesummary.paid, 0) as paid"),
-                DB::raw("
-                 CASE
-                WHEN (COALESCE(invoicesummary.totalprice, 0) - COALESCE(invoicesummary.paid, 0)) >= 0 THEN
-                    ABS(COALESCE(invoicesummary.totalprice, 0) - COALESCE(invoicesummary.paid, 0))
-                ELSE
-                    CONCAT('(', COALESCE(invoicesummary.totalprice, 0) - COALESCE(invoicesummary.paid, 0), ')')
-            END as credit
-    
-                ")
+                DB::raw("COALESCE(invoicesummary.credit, 0) as credit")
             );
                 
             if ($this->request()->has('group_id') && $this->request()->input('group_id') != -1) {

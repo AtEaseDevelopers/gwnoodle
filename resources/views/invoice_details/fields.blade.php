@@ -18,62 +18,82 @@
                                 <strong>Create Invoice Details</strong>
                             </div>
                             <div class="card-body">
-                                {!! Form::model($invoiceDetail, ['route' => ['invoiceDetails.update', Crypt::encrypt($invoiceDetail->id)], 'method' => 'patch']) !!}                                   
+                                @php
+                                    $readonly = isset($invoiceDetail) && $invoiceDetail->exists && empty($invoiceDetail->warehouse_id);
+                                @endphp
+                                {!! Form::model($invoiceDetail, ['route' => ['invoiceDetails.update', Crypt::encrypt($invoiceDetail->id)], 'method' => 'patch']) !!}
                                 @csrf
+
+                                @if($readonly)
+                                    <div class="alert alert-warning">
+                                        <i class="fa fa-lock"></i> <strong>View Only:</strong> This invoice detail was created by the driver and cannot be edited.
+                                    </div>
+                                @endif
+
                                     <!-- Invoice Id Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('invoice_id', __('invoice_details.invoice')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::select('invoice_id', $invoiceItems, null, ['class' => 'form-control select2', 'placeholder' => 'Pick a Invoice...', 'id' => 'invoice_id']) !!}
+                                        {!! Form::select('invoice_id', $invoiceItems ?? [], $invoiceDetail->invoice_id, ['class' => 'form-control select2', 'placeholder' => 'Pick a Invoice...', 'id' => 'invoice_id', 'disabled']) !!}
                                     </div>
 
                                     <!-- Warehouse Selection Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('warehouse_id', 'Select Warehouse') !!}<span class="asterisk"> *</span>
-                                        {!! Form::select('warehouse_id', $warehouseItems, null, ['class' => 'form-control select2', 'placeholder' => 'Select Warehouse...', 'id' => 'warehouse_id']) !!}
+                                        @if(!empty($readonly) && $readonly)
+                                            {!! Form::text('warehouse_id_display', $invoiceDetail->warehouse->name ?? 'N/A (Driver Created)', ['class' => 'form-control', 'disabled']) !!}
+                                        @else
+                                            {!! Form::select('warehouse_id', $warehouseItems, $invoiceDetail->warehouse_id, ['class' => 'form-control select2', 'placeholder' => 'Select Warehouse...', 'id' => 'warehouse_id']) !!}
+                                        @endif
                                     </div>
 
                                     <!-- Product Id Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('product_id', __('invoice_details.product')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::select('product_id', $productItems, null, ['class' => 'form-control select2', 'placeholder' => 'Pick a Product...', 'id' => 'product_id', 'disabled']) !!}
+                                        {!! Form::select('product_id', $productItems ?? [$invoiceDetail->product_id => optional($invoiceDetail->product)->name], $invoiceDetail->product_id, ['class' => 'form-control select2', 'placeholder' => 'Pick a Product...', 'id' => 'product_id', (!empty($readonly) && $readonly) ? 'disabled' : '']) !!}
                                     </div>
 
                                     <!-- Batch Selection Field -->
-                                    <div class="form-group col-sm-6" id="batch_selection_group" style="display: none;">
+                                    <div class="form-group col-sm-6" id="batch_selection_group" @if(empty($readonly) || !$readonly) style="display: none;" @endif>
                                         {!! Form::label('product_batch_id', 'Select Batch') !!}<span class="asterisk"> *</span>
-                                        {!! Form::select('product_batch_id', [], null, ['class' => 'form-control select2', 'placeholder' => 'First select product', 'id' => 'product_batch_id']) !!}
-                                        <small class="text-muted" id="batch_quantity_info"></small>
+                                        @if(!empty($readonly) && $readonly)
+                                            {!! Form::text('batch_display', optional($invoiceDetail->batch)->batch_code ?? 'N/A', ['class' => 'form-control', 'disabled']) !!}
+                                        @else
+                                            {!! Form::select('product_batch_id', [], $invoiceDetail->product_batch_id, ['class' => 'form-control select2', 'placeholder' => 'First select product', 'id' => 'product_batch_id']) !!}
+                                            <small class="text-muted" id="batch_quantity_info"></small>
+                                        @endif
                                     </div>
 
                                     <!-- Quantity Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('quantity', __('invoice_details.quantity')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::number('quantity', null, ['class' => 'form-control', 'min' => 1, 'step' => 1, 'id' => 'quantity', 'disabled']) !!}
+                                        {!! Form::number('quantity', $invoiceDetail->quantity, ['class' => 'form-control', 'min' => 1, 'step' => 1, 'id' => 'quantity', (!empty($readonly) && $readonly) ? 'readonly' : 'disabled']) !!}
                                     </div>
 
                                     <!-- Price Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('price', __('invoice_details.price')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::text('price', null, ['class' => 'form-control', 'min' => 0, 'step' => 0.01, 'id' => 'price', 'readonly']) !!}
+                                        {!! Form::text('price', $invoiceDetail->price, ['class' => 'form-control', 'min' => 0, 'step' => 0.01, 'id' => 'price', 'readonly']) !!}
                                     </div>
 
                                     <!-- Remark Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('remark', __('invoice_details.remark')) !!}
-                                        {!! Form::text('remark', null, ['class' => 'form-control', 'maxlength' => 255]) !!}
+                                        {!! Form::text('remark', $invoiceDetail->remark, ['class' => 'form-control', 'maxlength' => 255, (!empty($readonly) && $readonly) ? 'readonly' : '']) !!}
                                     </div>
 
                                     <!-- Available Stock Info -->
                                     <div class="form-group col-sm-12" id="stock_info" style="display: none;">
                                         <div class="alert alert-info">
-                                            <i class="fa fa-info-circle"></i> 
+                                            <i class="fa fa-info-circle"></i>
                                             <span id="stock_info_text"></span>
                                         </div>
                                     </div>
 
                                     <!-- Submit Field -->
                                     <div class="form-group col-sm-12">
-                                        {!! Form::submit(__('invoice_details.save'), ['class' => 'btn btn-primary', 'id' => 'submitBtn', 'disabled']) !!}
+                                        @if(empty($readonly) || !$readonly)
+                                            {!! Form::submit(__('invoice_details.save'), ['class' => 'btn btn-primary', 'id' => 'submitBtn', 'disabled']) !!}
+                                        @endif
                                         <a href="{{ route('invoiceDetails.index') }}" class="btn btn-secondary">{{ __('invoice_details.cancel') }}</a>
                                     </div>
 

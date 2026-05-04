@@ -9,14 +9,13 @@
             size: auto;
         }
         body{
+            page-break-inside: avoid;
             font-size: 12px;
-            margin: 0 auto;
-            padding: 10px 15px;
             font-family: 'Courier New', Courier, monospace;
-            width: 80mm;
-            max-width: 100%;
             line-height: 1.3;
-            box-sizing: border-box;
+            margin: 0 8px;
+            padding: 0;
+            width: auto;
         }
         table{
             width: 100%;
@@ -304,11 +303,6 @@
 
         <div class="divider"></div>
 
-        <!-- Footer -->
-        <div class="footer-section">
-            <div class="small-text">This is a computer generated receipt.</div>
-            <div class="small-text">Thank you for your payment!</div>
-        </div>
     </div>
 </body>
 </html>
