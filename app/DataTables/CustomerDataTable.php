@@ -209,7 +209,7 @@ class CustomerDataTable extends DataTable
                         'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
                     ],
                     [
-                        'targets' => 7, // Status column index (adjust as needed)
+                        'targets' => 6, // Status column index (adjust as needed)
                         'render' => 'function(data, type){return data == 1 ? "Active" : "Inactive";}'
                     ],
                 ],
