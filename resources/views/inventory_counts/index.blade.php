@@ -1245,7 +1245,7 @@
                                     <span class="difference-display">-</span>
                                 </td>
                                 <td class="align-middle">
-                                    ${generateWarehouseDropdown(batchIndex, '')}
+                                    ${generateCreateWarehouseDropdown(batchIndex, '')}
                                 </td>
                             </tr>
                         `;
@@ -1287,7 +1287,7 @@
         }
 
         // Update warehouse dropdown generator for create modal
-        function generateWarehouseDropdown(index, selectedWarehouseId = '') {
+        function generateCreateWarehouseDropdown(index, selectedWarehouseId = '') {
             var options = '<option value="">Select Warehouse</option>';
             warehouses.forEach(function(warehouse) {
                 var selected = (warehouse.id == selectedWarehouseId) ? 'selected' : '';

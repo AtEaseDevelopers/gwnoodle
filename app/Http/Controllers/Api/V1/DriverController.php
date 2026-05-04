@@ -2102,10 +2102,6 @@ class DriverController extends Controller
             $invoice->trip_uuid = $driver->trip_id;
             $invoice->status = Invoice::STATUS_COMPLETED;
 
-            // Store ignored items as JSON for reference
-            if (!empty($itemsToIgnore)) {
-                $invoice->ignored_items = json_encode($itemsToIgnore);
-            }
 
             $invoice->save();
             
@@ -2723,7 +2719,7 @@ class DriverController extends Controller
 
                 if($credit)
                 {
-                    $invoice->newcredit = round($credit[0]->credit,2);
+                    $invoice->newcredit = round($credit['credit'] ?? 0, 2);
                 }
     
             }
@@ -3611,7 +3607,7 @@ class DriverController extends Controller
             ], 400);
         }
         $todriver = Driver::where('id',$inventorytransfer->to_driver_id)->first();
-        if(empty($fromdriver)){
+        if(empty($todriver)){
             return response()->json([
               'result' => false,
               'message' => __LINE__.$this->message_separator.'api.message.to_driver_not_found',
@@ -3627,7 +3623,7 @@ class DriverController extends Controller
                 $inventorytransfer->save();
                 DB::commit();
                 return response()->json([
-                   'result' => false,
+                   'result' => true,
                     'message' => __LINE__.$this->message_separator.'api.message.transfer_rejecet_successfully',
                     'data' => null
                 ], 200);
@@ -3635,51 +3631,9 @@ class DriverController extends Controller
             if($data['status'] == 2){
                 $inventorytransfer->status = 2;
                 $inventorytransfer->save();
-                 //from
-                 $frominventorybalance = Inventorybalance::where('lorry_id',$inventorytransfer->from_lorry_id)
-                 ->where('product_id',$inventorytransfer->product_id)->first();
-                 if(empty($frominventorybalance)){
-                     $newfrominventorybalance = New Inventorybalance();
-                     $newfrominventorybalance->lorry_id = $inventorytransfer->from_lorry_id;
-                     $newfrominventorybalance->product_id = $inventorytransfer->product_id;
-                     $newfrominventorybalance->quantity = 0 - $inventorytransfer->quantity;
-                     $newfrominventorybalance->save();
-                 }else{
-                     $frominventorybalance->quantity = $frominventorybalance->quantity - $inventorytransfer->quantity;
-                     $frominventorybalance->save();
-                 }
-                 $frominventorytransaction = New InventoryTransaction();
-                 $frominventorytransaction->lorry_id = $inventorytransfer->from_lorry_id;
-                 $frominventorytransaction->product_id = $inventorytransfer->product_id;
-                 $frominventorytransaction->quantity = $inventorytransfer->quantity * -1;
-                 $frominventorytransaction->type = 4;
-                 $frominventorytransaction->user = $fromdriver->employeeid . " (".$fromdriver->name.") => " . $todriver->employeeid . " (".$todriver->name.")";
-                 $frominventorytransaction->date = date('Y-m-d H:i:s');
-                 $frominventorytransaction->save();
-                 //to
-                 $toinventorybalance = Inventorybalance::where('lorry_id',$inventorytransfer->to_lorry_id)
-                 ->where('product_id',$inventorytransfer->product_id)->first();
-                 if(empty($toinventorybalance)){
-                     $newtoinventorybalance = New Inventorybalance();
-                     $newtoinventorybalance->lorry_id = $inventorytransfer->to_lorry_id;
-                     $newtoinventorybalance->product_id = $inventorytransfer->product_id;
-                     $newtoinventorybalance->quantity = $inventorytransfer->quantity;
-                     $newtoinventorybalance->save();
-                 }else{
-                     $toinventorybalance->quantity = $toinventorybalance->quantity + $inventorytransfer->quantity;
-                     $toinventorybalance->save();
-                 }
-                 $toinventorytransaction = New InventoryTransaction();
-                 $toinventorytransaction->lorry_id = $inventorytransfer->to_lorry_id;
-                 $toinventorytransaction->product_id = $inventorytransfer->product_id;
-                 $toinventorytransaction->quantity = $inventorytransfer->quantity;
-                 $toinventorytransaction->type = 4;
-                 $toinventorytransaction->user = $fromdriver->employeeid . " (".$fromdriver->name.") => " . $todriver->employeeid . " (".$todriver->name.")";
-                 $toinventorytransaction->date = date('Y-m-d H:i:s');
-                 $toinventorytransaction->save();
                  DB::commit();
                  return response()->json([
-                    'result' => false,
+                    'result' => true,
                     'message' => __LINE__.$this->message_separator.'api.message.transfer_accept_successfully',
                      'data' => null
                  ], 200);

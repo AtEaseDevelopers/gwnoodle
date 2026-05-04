@@ -5,159 +5,143 @@
     <title>{{config('app.name')}}</title>
     <style>
         @page {
-            margin: 0;
-            size: auto;
-        }
-        html, body {
-            page-break-inside: avoid;
-        }
-        body{
-            font-size: 14px;
-            margin: 0 auto;
-            padding: 5px 8px; /* Balanced left and right padding */
-            font-family: 'Courier New', Courier, monospace;
-            width: 80mm; /* Standard receipt width */
-            max-width: 100%;
-            line-height: 1.3;
-            box-sizing: border-box; /* Ensures padding is included in width */
-        }
-        table{
-            width: 100%;
-            border-collapse: collapse;
-        }
-        table td, table th{
-            padding: 2px 0;
-            vertical-align: top;
-        }
-        .company{
-            font-weight: bold;
-            text-align: center;
-            font-size: 14px;
-            margin: 0 0 2px 0;
-            text-transform: uppercase;
-            width: 100%;
-        }
-        .address{
-            text-align: center;
-            font-size: 10px;
-            margin: 1px 0;
-            white-space: nowrap;
-            width: 100%;
-        }
-        .header-line{
-            text-align: center;
-            margin: 5px 0;
-            font-size: 11px;
-            width: 100%;
-        }
-        .divider{
-            border-top: 1px dashed #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .divider-solid{
-            border-top: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .ta-r{
-            text-align: right;
-        }
-        .ta-l{
-            text-align: left;
-        }
-        .ta-c{
-            text-align: center;
-        }
-        p{
-            margin: 0;
-        }
-        .item-row td{
-            padding: 1px 0;
-            font-size: 11px;
-        }
-        .item-name{
-            font-size: 11px;
-            padding-left: 5px;
-            color: #555;
-        }
-        .totals td{
-            padding: 3px 0;
-            font-size: 12px;
-            font-weight: bold;
+    margin: 0;
+    size: auto;
+}
+html {
+    margin: 0;
+    padding: 0;
+}
+body {
+    page-break-inside: avoid;
+    font-size: 22px;
+    font-family: 'Courier New', Courier, monospace;
+    line-height: 1.3;
+    margin: 0 10px;
+    padding: 0;
+    width: auto;
+}
+.receipt-container {
+    width: 100%;
+}
+table{
+    width: 100%;
+    border-collapse: collapse;
+}
+table td, table th{
+    padding: 2px 0;
+    vertical-align: top;
+}
+.company{
+    font-weight: bold;
+    text-align: center;
+    font-size: 18px;
+    margin: 0 0 2px 0;
+    text-transform: uppercase;
+    width: 100%;
+}
+.address{
+    text-align: center;
+    font-size: 18px;
+    margin: 1px 0;
+    white-space: normal;
+    word-break: break-word;
+    width: 100%;
+}
+.header-line{
+    text-align: center;
+    margin: 5px 0;
+    font-size: 18px;
+    width: 100%;
+}
+.divider{
+    border-top: 1px dashed #000;
+    margin: 8px 0;
+    width: 100%;
+}
+.divider-solid{
+    border-top: 1px solid #000;
+    margin: 8px 0;
+    width: 100%;
+}
+.ta-r{
+    text-align: right;
+}
+.ta-l{
+    text-align: left;
+}
+.ta-c{
+    text-align: center;
+}
+p{
+    margin: 0;
+}
+.item-row td{
+    padding: 1px 0;
+    font-size: 14px;
+}
+.item-name{
+    font-size: 14px;
+    padding-left: 5px;
+    color: #555;
+}
+.totals td{
+    padding: 3px 0;
+    font-size: 18px;
+    font-weight: bold;
 
-        }
-        .payment-line{
-            font-size: 12px;
-            margin: 2px 0;
-        }
-        .barcode{
-            text-align: center;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 14px;
-            margin: 8px 0 5px 0;
-            letter-spacing: 2px;
-        }
-        .small-text{
-            font-size: 9px;
-            text-align: center;
-            color: #666;
-            margin: 2px 0;
-        }
-        .address-block{
-            font-size: 10px;
-            margin: 2px 0;
-            white-space: normal;
-            word-wrap: break-word;
-            text-align: center;
-        }
-        .address-label{
-            font-weight: bold;
-            font-size: 10px;
-            text-transform: uppercase;
-            display: block;
-            margin-bottom: 2px;
-        }
-        .document-info {
-            width: 100%;
-            margin: 5px 0;
-        }
-        .document-info td {
-            padding: 1px 0;
-        }
-        .items-summary {
-            width: 100%;
-            margin: 5px 0;
-        }
-        .items-summary td {
-            padding: 2px 0;
-        }
-        .itemize-header {
-            font-weight: bold;
-            margin: 10px 0 5px 0;
-            text-align: left;
-            text-decoration: underline;
-        }
-        .total-count {
-            text-align: right;
-            margin: 5px 0;
-            font-weight: normal;
-        }
-        .payment-section {
-            width: 100%;
-            margin: 8px 0;
-        }
-        .payment-section td {
-            padding: 2px 0;
-        }
-        .footer-section {
-            margin-top: 10px;
-            text-align: center;
-        }
-        .receipt-container {
-            width: 100%;
-            margin: 0 auto;
-        }
+}
+.address-block{
+    font-size: 16px;
+    margin: 2px 0;
+    white-space: normal;
+    word-wrap: break-word;
+    text-align: center;
+}
+.address-label{
+    font-weight: bold;
+    font-size: 16px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 2px;
+}
+.document-info {
+    width: 100%;
+    margin: 5px 0;
+    font-size: 18px;
+}
+.document-info td {
+    padding: 1px 0;
+}
+.items-summary {
+    width: 100%;
+    margin: 5px 0;
+}
+.items-summary td {
+    padding: 2px 0;
+}
+.itemize-header {
+    font-weight: bold;
+    margin: 10px 0 5px 0;
+    text-align: left;
+    text-decoration: underline;
+}
+.total-count {
+    text-align: right;
+    margin: 5px 0;
+    font-weight: normal;
+}
+.payment-section {
+    width: 100%;
+    margin: 8px 0;
+}
+.payment-section td {
+    padding: 2px 0;
+}
+.footer-section {
+    margin-top: 10px;
+    text-align: center;
+}
     </style>
 </head>
 <body>
@@ -247,7 +231,7 @@
             <thead>
                 <tr style="font-weight: bold;">
                     <td class="ta-l">Price</td>
-                    <td class="ta-l">Qty</td>
+                    <td class="ta-r">Qty</td>
                     <td class="ta-r">Amount</td>
                 </tr>
             </thead>
@@ -256,7 +240,7 @@
 
                 <tr class="item-row">
                     <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['price'], 2) }}</td>
-                    <td class="ta-l" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
+                    <td class="ta-r" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
                     <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                 </tr>
                 <tr class="item-row">
@@ -270,7 +254,7 @@
             </tbody>
                 <tr class="item-row">
                     <td class="ta-l" style="width: 25%;"></td>
-                    <td class="ta-l" style="width: 30%;">{{ $totalquantity }}</td>
+                    <td class="ta-r" style="width: 30%;">{{ $totalquantity }}</td>
                     <td class="ta-r" style="width: 20%;">{{ number_format($totalamount, 2) }}</td>
                 </tr>
             </tbody>
@@ -281,7 +265,7 @@
         <table class="totals">
             <tr>
                 <td class="ta-r">Total :</td>
-                <td class="ta-r" style = "font-size: 20px;">{{ number_format($totalamount, 2) }}</td>
+                <td class="ta-r" style = "font-size: 20px;">RM {{ number_format($totalamount, 2) }}</td>
             </tr>
             
         </table>
@@ -291,18 +275,13 @@
         <!-- Payments -->
         <table class="payment-section">
             <tr>
-                <td class="ta-l">payments :</td>
+                <td class="ta-l">Payments :</td>
                 <td class="ta-r">Cash {{ number_format($totalamount, 2) }}</td>
             </tr>
          
         </table>
 
         <div class="divider"></div>
-
-        <!-- Footer -->
-        <div class="footer-section">
-            <div class="small-text">Thank you for your business!</div>
-        </div>
     </div>
 </body>
 </html>

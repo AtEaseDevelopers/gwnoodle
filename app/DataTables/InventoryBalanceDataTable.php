@@ -26,8 +26,10 @@ class InventoryBalanceDataTable extends DataTable
                 }
                 
                 $batches = $inventoryBalance->batches_with_details;
-                $html = '<div style="max-height: 200px; overflow-y: auto;">';
-                $html .= '<table class="table table-sm table-bordered mb-0">';
+                
+                // Remove the max-height and overflow for screen view
+                $html = '<div class="batch-container">';
+                $html .= '<table class="table table-sm table-bordered mb-0 batch-details-table">';
                 $html .= '<thead><tr><th>Batch Code</th><th>Product</th><th>Qty</th><th>Expiry</th></tr></thead><tbody>';
                 
                 foreach ($batches as $batch) {
@@ -43,10 +45,10 @@ class InventoryBalanceDataTable extends DataTable
                     }
                     
                     $html .= '<tr>';
-                    $html .= '<td><strong>' . $batch['batch_code'] . '</strong></td>';
-                    $html .= '<td>' . $batch['product_name'] . '<br><small>' . '</small></td>';
+                    $html .= '<td><strong>' . e($batch['batch_code']) . '</strong></td>';
+                    $html .= '<td>' . e($batch['product_name']) . '</td>';
                     $html .= '<td class="text-center">' . number_format($batch['quantity']) . '</td>';
-                    $html .= '<td class="text-center ' . $expiryClass . '">' . $batch['expiry_date'] . '</td>';
+                    $html .= '<td class="text-center ' . $expiryClass . '">' . e($batch['expiry_date']) . '</td>';
                     $html .= '</tr>';
                 }
                 
