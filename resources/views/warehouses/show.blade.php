@@ -64,8 +64,13 @@
                             
                             @if($warehouse->inventoryBalances->count() > 0)
                                 <h5>Inventory Details</h5>
+                                <div class="row mb-2">
+                                    <div class="col-md-4">
+                                        <input type="text" id="inventoryFilter" class="form-control form-control-sm" placeholder="Filter by product or batch code...">
+                                    </div>
+                                </div>
                                 <div class="table-responsive">
-                                    <table class="table table-bordered table-striped">
+                                    <table id="inventoryTable" class="table table-bordered table-striped">
                                         <thead>
                                             <tr>
                                                 <th>#</th>
@@ -171,4 +176,18 @@
             font-weight: bold;
         }
     </style>
+@endpush
+
+@push('scripts')
+<script>
+    document.getElementById('inventoryFilter').addEventListener('input', function () {
+        var filter = this.value.toLowerCase();
+        var rows = document.querySelectorAll('#inventoryTable tbody tr');
+        rows.forEach(function (row) {
+            var product = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
+            var batch = row.cells[2] ? row.cells[2].textContent.toLowerCase() : '';
+            row.style.display = (product.includes(filter) || batch.includes(filter)) ? '' : 'none';
+        });
+    });
+</script>
 @endpush

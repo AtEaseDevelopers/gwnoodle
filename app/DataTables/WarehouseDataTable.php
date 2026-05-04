@@ -49,16 +49,16 @@ class WarehouseDataTable extends DataTable
                     $nonZeroBalances = $warehouse->inventoryBalances->filter(function($balance) {
                         return $balance->quantity > 0;
                     });
-                    
+
                     if ($nonZeroBalances->isEmpty()) {
                         return '<span class="text-muted">No inventory</span>';
                     }
-                    
-                    $summary = '<div style="max-height: 150px; overflow-y: auto;">';
+
+                    $summary = '<div class="inventory-summary-wrap">';
                     $summary .= '<table class="table table-sm table-bordered mb-0">';
                     $summary .= '<thead><tr><th>Product</th><th>Batch</th><th>Qty</th></tr></thead><tbody>';
-                    
-                    $warehouse->inventoryBalances->take(5)->each(function($item) use (&$summary) {
+
+                    $nonZeroBalances->each(function($item) use (&$summary) {
                         $expiringClass = ($item->batch && $item->batch->isExpiringSoon()) ? 'expiring-soon' : '';
                         $summary .= '<tr>';
                         $summary .= '<td>' . ($item->product ? $item->product->name : 'Unknown') . '</td>';
@@ -66,14 +66,10 @@ class WarehouseDataTable extends DataTable
                         $summary .= '<td class="text-center">' . $item->quantity . '</td>';
                         $summary .= '</tr>';
                     });
-                    
-                    if ($warehouse->inventoryBalances->count() > 5) {
-                        $summary .= '<tr><td colspan="3" class="text-center text-muted">+ ' . ($warehouse->inventoryBalances->count() - 5) . ' more...</td></tr>';
-                    }
-                    
+
                     $summary .= '</tbody></table>';
                     $summary .= '</div>';
-                    
+
                     return $summary;
                 })
             ->rawColumns(['action', 'status', 'stock_out_enabled', 'total_batches', 'total_quantity', 'products_count', 'inventory_summary']);
