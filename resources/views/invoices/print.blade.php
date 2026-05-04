@@ -78,7 +78,7 @@ p{
 }
 .item-row td{
     padding: 1px 0;
-    font-size: 14px;
+    font-size: 12px;
 }
 .item-name{
     font-size: 14px;
