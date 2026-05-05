@@ -8624,8 +8624,6 @@ class DriverController extends Controller
                 $totalprice = 0;
 
                 foreach ($resolvedDetails as $detail) {
-                    $batch = $detail['batch'];
-
                     $price = $detail['price'];
                     if ($price === null) {
                         $specialPrice = SpecialPrice::where('product_id', $detail['product_id'])
@@ -8649,9 +8647,6 @@ class DriverController extends Controller
                     $invoiceDetail->totalprice      = $itemTotal;
                     $invoiceDetail->remark          = $detail['remark'];
                     $invoiceDetail->save();
-
-                    $batch->quantity = max(0, $batch->quantity - $detail['quantity']);
-                    $batch->save();
 
                     $inventoryTransaction             = new InventoryTransaction();
                     $inventoryTransaction->type       = InventoryTransaction::TYPE_STOCK_OUT;
