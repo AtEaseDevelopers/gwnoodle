@@ -2126,11 +2126,6 @@ class DriverController extends Controller
                 
                 $totalprice += $invoicedetail->totalprice;
                 
-                // Deduct quantity from product batch (global batch table)
-                $oldQuantity = $productBatch->quantity;
-                $productBatch->quantity = $oldQuantity - $item['quantity'];
-                $productBatch->save();
-                
                 // Create inventory transaction record
                 $inventoryTransaction = new InventoryTransaction();
                 $inventoryTransaction->type = 2;
@@ -2326,13 +2321,6 @@ class DriverController extends Controller
                 }
                 
                 if ($hasInventory) {
-                    // Only restore if it was originally deducted from inventory
-                    // Restore quantity to product batch (global batch table)
-                    $oldBatch = ProductBatch::find($oldDetail->product_batch_id);
-                    if ($oldBatch) {
-                        $oldBatch->quantity = $oldBatch->quantity + $oldDetail->quantity;
-                        $oldBatch->save();
-                    }
                     
                     // Restore inventory balance
                     if ($inventoryBalance) {
@@ -2485,11 +2473,7 @@ class DriverController extends Controller
                 $invoicedetail->save();
                 
                 $totalprice += $invoicedetail->totalprice;
-                
-                // Deduct quantity from product batch (global batch table)
-                $productBatch->quantity = $productBatch->quantity - $item['quantity'];
-                $productBatch->save();
-                
+                                
                 // Create inventory transaction record
                 $inventoryTransaction = new InventoryTransaction();
                 $inventoryTransaction->type = 2; // Stock Out
