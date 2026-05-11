@@ -78,12 +78,13 @@ p{
 }
 .item-row td{
     padding: 1px 0;
-    font-size: 12px;
+    font-size: 18px;
 }
 .item-name{
-    font-size: 14px;
+    font-size: 18px;
     padding-left: 5px;
-    color: #555;
+    color: #000;
+    font-weight: bold;
 }
 .totals td{
     padding: 3px 0;
@@ -141,6 +142,18 @@ p{
 .footer-section {
     margin-top: 10px;
     text-align: center;
+}
+@media print {
+    .item-name {
+        font-size: 12pt !important;
+        font-weight: bold !important;
+        color: black !important;
+    }
+    
+    body, td, div, span {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
 }
     </style>
 </head>
