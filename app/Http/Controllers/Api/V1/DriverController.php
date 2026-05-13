@@ -8756,46 +8756,42 @@ class DriverController extends Controller
                 ->orderBy('company')
                 ->get();
 
-            $products = Product::select('id', 'unit_code', 'name', 'price', 'status')
+            $products = Product::select('id', 'unit_code', 'name', 'price')
                 ->where('status', 1)
                 ->orderBy('name')
-                ->get();
-
-            $specialPricesByProduct = SpecialPrice::where('status', 1)
                 ->get()
-                ->groupBy('product_id');
+                ->map(fn($p) => [
+                    'id'            => $p->id,
+                    'name'          => $p->name,
+                    'unit_code'     => $p->unit_code,
+                    'default_price' => (float) $p->price,
+                ]);
 
-            $result = $customers->map(function ($customer) use ($products, $specialPricesByProduct) {
-                $productList = $products->map(function ($product) use ($customer, $specialPricesByProduct) {
-                    $spList     = $specialPricesByProduct->get($product->id, collect());
-                    $customerSp = $spList->firstWhere('customer_id', $customer->id);
+            // Only load special prices for assigned customers to keep the dataset small
+            $specialPricesByCustomer = SpecialPrice::where('status', 1)
+                ->whereIn('customer_id', $assignedCustomerIds)
+                ->get()
+                ->groupBy('customer_id')
+                ->map(fn($rows) => $rows->keyBy('product_id')->map(fn($sp) => (float) $sp->price));
 
-                    return [
-                        'id'            => $product->id,
-                        'name'          => $product->name,
-                        'unit_code'     => $product->unit_code,
-                        'default_price' => (float) $product->price,
-                        'special_price' => $customerSp ? (float) $customerSp->price : null,
-                    ];
-                })->values();
-
-                return [
-                    'id'               => $customer->id,
-                    'company'          => $customer->company,
-                    'phone'            => $customer->phone,
-                    'paymentterm'      => $customer->paymentterm,
-                    'billing_address'  => $customer->billing_address,
-                    'delivery_address' => $customer->delivery_address,
-                    'products'         => $productList,
-                ];
-            })->values();
+            $customerList = $customers->map(fn($customer) => [
+                'id'               => $customer->id,
+                'company'          => $customer->company,
+                'phone'            => $customer->phone,
+                'paymentterm'      => $customer->paymentterm,
+                'billing_address'  => $customer->billing_address,
+                'delivery_address' => $customer->delivery_address,
+                // keyed by product_id — only entries where a special price exists
+                'special_prices'   => $specialPricesByCustomer->get($customer->id, collect()),
+            ])->values();
 
             return response()->json([
                 'result'  => true,
                 'message' => __LINE__ . $this->message_separator . 'Offline customer list retrieved successfully',
                 'data'    => [
-                    'total_customers' => $result->count(),
-                    'customers'       => $result,
+                    'total_customers' => $customerList->count(),
+                    'products'        => $products->values(),
+                    'customers'       => $customerList,
                 ]
             ], 200);
 
