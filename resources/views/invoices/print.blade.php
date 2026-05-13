@@ -143,6 +143,14 @@ p{
     margin-top: 10px;
     text-align: center;
 }
+/* Added bold class for customer name */
+.customer-name-bold {
+    font-weight: bold !important;
+}
+/* Added bold class for totals section */
+.totals-section-bold {
+    font-weight: bold !important;
+}
 @media print {
     .item-name {
         font-size: 12pt !important;
@@ -215,7 +223,8 @@ p{
         <!-- Billing Address -->
         <div class="address-label">BILLING TO :</div>
         <div class="address-block">
-            {{ $invoice->customer['company'] ?? '' }}<br>
+            <!-- CUSTOMER NAME IN BOLD - First requirement -->
+            <strong class="customer-name-bold">{{ $invoice->customer['company'] ?? '' }}</strong><br>
             ({{ $invoice->customer['phone'] ?? '' }})<br>
             {{ $invoice->customer['billing_address'] ?? 'No billing address provided' }}
         </div>
@@ -274,13 +283,12 @@ p{
         </table>
         <div class="divider"></div>
 
-        <!-- Totals -->
-        <table class="totals">
+        <!-- Totals - Second requirement with bold text -->
+        <table class="totals totals-section-bold">
             <tr>
                 <td class="ta-r">Total :</td>
-                <td class="ta-r" style = "font-size: 20px;">RM {{ number_format($totalamount, 2) }}</td>
+                <td class="ta-r" style="font-size: 20px; font-weight: bold;">RM {{ number_format($totalamount, 2) }}</td>
             </tr>
-            
         </table>
 
         <div class="divider-solid"></div>
@@ -291,7 +299,6 @@ p{
                 <td class="ta-l">Payments :</td>
                 <td class="ta-r">Cash {{ number_format($totalamount, 2) }}</td>
             </tr>
-         
         </table>
 
         <div class="divider"></div>
