@@ -8507,14 +8507,17 @@ class DriverController extends Controller
                 }
 
                 $validator = Validator::make($invoiceInput, [
-                    'invoiceno'            => 'nullable|string|max:255',
-                    'date'                 => 'required|date_format:d-m-Y',
-                    'customer_id'          => 'required|exists:customers,id',
-                    'paymentterm'          => 'required|numeric|gt:0|lt:6',
-                    'remark'               => 'nullable|string|max:255',
-                    'details'              => 'required|array|min:1',
-                    'details.*.product_id' => 'required|exists:products,id',
-                    'details.*.quantity'   => 'required|numeric|min:0.01',
+                    'invoiceno'                          => 'nullable|string|max:255',
+                    'date'                               => 'date_format:Y-m-d',
+                    'customer_id'                        => 'required|numeric',
+                    'paymentterm'                        => 'required|numeric|gt:0|lt:6',
+                    'remark'                             => 'present|nullable|string',
+                    'cheque_no'                          => 'nullable|string',
+                    'invoicedetail'                      => 'required|array|min:1',
+                    'invoicedetail.*.product_id'         => 'required|numeric',
+                    'invoicedetail.*.product_batch_id'   => 'required|numeric',
+                    'invoicedetail.*.quantity'           => 'required|numeric|min:1',
+                    'invoicedetail.*.price'              => 'required|numeric|min:0',
                 ]);
 
                 if ($validator->fails()) {
@@ -8527,77 +8530,51 @@ class DriverController extends Controller
                     continue;
                 }
 
-                // Auto-select batches (FEFO) from lorry inventory for each product
-                $insufficientProducts = [];
-                $resolvedDetails = [];
+                $itemsToProcess = [];
+                $itemsToIgnore  = [];
+                $invalidBatches = [];
 
-                foreach ($invoiceInput['details'] as $detail) {
-                    $productId      = $detail['product_id'];
-                    $quantityNeeded = $detail['quantity'];
+                foreach ($invoiceInput['invoicedetail'] as $item) {
+                    $productBatch = ProductBatch::where('id', $item['product_batch_id'])
+                        ->where('product_id', $item['product_id'])
+                        ->first();
 
-                    $batches = ProductBatch::where('product_id', $productId)
-                        ->where('status', ProductBatch::STATUS_ACTIVE)
-                        ->orderBy('expiry_date', 'asc')
-                        ->get();
-
-                    $availableTotal = 0;
-                    $selectedBatches = [];
-                    $remaining = $quantityNeeded;
-
-                    foreach ($batches as $batch) {
-                        $inLorry = $inventoryBalance ? $inventoryBalance->getBatchQuantity($batch->id) : 0;
-                        if ($inLorry <= 0) continue;
-
-                        $take = min($inLorry, $remaining);
-                        $selectedBatches[] = [
-                            'batch'    => $batch,
-                            'quantity' => $take,
-                            'price'    => $detail['price'] ?? null,
-                            'remark'   => $detail['remark'] ?? null,
+                    if (empty($productBatch)) {
+                        $invalidBatches[] = [
+                            'product_id'       => $item['product_id'],
+                            'product_batch_id' => $item['product_batch_id'],
+                            'error'            => 'Invalid product batch or product ID mismatch',
                         ];
-                        $availableTotal += $inLorry;
-                        $remaining -= $take;
-
-                        if ($remaining <= 0) break;
+                        continue;
                     }
 
-                    if ($remaining > 0) {
-                        $product = Product::find($productId);
-                        $insufficientProducts[] = [
-                            'product_id'         => $productId,
-                            'product_name'       => $product ? $product->name : 'Unknown',
-                            'required_quantity'  => $quantityNeeded,
-                            'available_quantity' => $availableTotal,
-                            'error'              => $availableTotal == 0 ? 'No inventory record found' : 'Insufficient inventory',
+                    $availableQuantity = $inventoryBalance ? $inventoryBalance->getBatchQuantity($item['product_batch_id']) : 0;
+
+                    if ($availableQuantity > 0) {
+                        $itemsToProcess[] = [
+                            'item'         => $item,
+                            'productBatch' => $productBatch,
                         ];
                     } else {
-                        foreach ($selectedBatches as $sel) {
-                            $resolvedDetails[] = [
-                                'product_id'       => $productId,
-                                'product_batch_id' => $sel['batch']->id,
-                                'batch'            => $sel['batch'],
-                                'quantity'         => $sel['quantity'],
-                                'price'            => $sel['price'],
-                                'remark'           => $sel['remark'],
-                            ];
-                        }
+                        $itemsToIgnore[] = [
+                            'item'         => $item,
+                            'productBatch' => $productBatch,
+                        ];
                     }
                 }
 
-                if (!empty($insufficientProducts)) {
+                if (!empty($invalidBatches)) {
                     $results[] = [
-                        'index'                 => $index,
-                        'success'               => false,
-                        'error'                 => 'Insufficient inventory balance',
-                        'insufficient_products' => $insufficientProducts,
-                        'input'                 => $invoiceInput
+                        'index'          => $index,
+                        'success'        => false,
+                        'error'          => 'Invalid product batches found',
+                        'invalid_batches'=> $invalidBatches,
+                        'input'          => $invoiceInput
                     ];
                     continue;
                 }
 
                 DB::beginTransaction();
-
-                $date = \Carbon\Carbon::createFromFormat('d-m-Y', $invoiceInput['date'])->format('Y-m-d');
 
                 $invoiceNo = !empty($invoiceInput['invoiceno']) && $invoiceInput['invoiceno'] !== 'SYSTEM GENERATED IF BLANK'
                     ? $invoiceInput['invoiceno']
@@ -8612,10 +8589,11 @@ class DriverController extends Controller
 
                 $invoice = new Invoice();
                 $invoice->invoiceno   = $invoiceNo;
-                $invoice->date        = $date;
+                $invoice->date        = $invoiceInput['date'] ?? date('Y-m-d H:i:s');
                 $invoice->customer_id = $customer->id;
                 $invoice->driver_id   = $driver->id;
                 $invoice->paymentterm = $invoiceInput['paymentterm'];
+                $invoice->chequeno    = $invoiceInput['cheque_no'] ?? null;
                 $invoice->remark      = $invoiceInput['remark'] ?? null;
                 $invoice->trip_uuid   = $driver->trip_id;
                 $invoice->status      = Invoice::STATUS_COMPLETED;
@@ -8623,48 +8601,54 @@ class DriverController extends Controller
 
                 $totalprice = 0;
 
-                foreach ($resolvedDetails as $detail) {
-                    $price = $detail['price'];
-                    if ($price === null) {
-                        $specialPrice = SpecialPrice::where('product_id', $detail['product_id'])
-                            ->where('customer_id', $customer->id)
-                            ->where('status', 1)
-                            ->first();
-                        $price = $specialPrice
-                            ? (float) $specialPrice->price
-                            : (float) Product::find($detail['product_id'])->price;
-                    }
+                foreach ($itemsToProcess as $validItem) {
+                    $item = $validItem['item'];
 
-                    $itemTotal   = $detail['quantity'] * $price;
-                    $totalprice += $itemTotal;
-
-                    $invoiceDetail                  = new InvoiceDetail();
-                    $invoiceDetail->invoice_id      = $invoice->id;
-                    $invoiceDetail->product_id      = $detail['product_id'];
-                    $invoiceDetail->product_batch_id = $detail['product_batch_id'];
-                    $invoiceDetail->quantity        = $detail['quantity'];
-                    $invoiceDetail->price           = $price;
-                    $invoiceDetail->totalprice      = $itemTotal;
-                    $invoiceDetail->remark          = $detail['remark'];
+                    $invoiceDetail                   = new InvoiceDetail();
+                    $invoiceDetail->invoice_id       = $invoice->id;
+                    $invoiceDetail->product_id       = $item['product_id'];
+                    $invoiceDetail->product_batch_id = $item['product_batch_id'];
+                    $invoiceDetail->quantity         = $item['quantity'];
+                    $invoiceDetail->price            = $item['price'];
+                    $invoiceDetail->totalprice       = $item['quantity'] * $item['price'];
+                    $invoiceDetail->remark           = $item['remark'] ?? null;
                     $invoiceDetail->save();
+
+                    $totalprice += $invoiceDetail->totalprice;
 
                     $inventoryTransaction             = new InventoryTransaction();
                     $inventoryTransaction->type       = InventoryTransaction::TYPE_STOCK_OUT;
-                    $inventoryTransaction->product_id = $detail['product_id'];
-                    $inventoryTransaction->batch_id   = $detail['product_batch_id'];
-                    $inventoryTransaction->quantity   = -$detail['quantity'];
+                    $inventoryTransaction->product_id = $item['product_id'];
+                    $inventoryTransaction->batch_id   = $item['product_batch_id'];
+                    $inventoryTransaction->quantity   = -$item['quantity'];
                     $inventoryTransaction->date       = now();
                     $inventoryTransaction->lorry_id   = $trip->lorry_id;
                     $inventoryTransaction->user       = $driver->name;
-                    $inventoryTransaction->remark     = 'Bulk Invoice #' . $invoice->invoiceno;
+                    $inventoryTransaction->remark     = 'Invoice #' . $invoice->invoiceno . ' - Sale of product';
                     $inventoryTransaction->save();
 
                     if ($inventoryBalance) {
-                        $inventoryBalance->updateBatchQuantity($detail['product_batch_id'], $detail['quantity'], 'subtract');
+                        $inventoryBalance->updateBatchQuantity($item['product_batch_id'], $item['quantity'], 'subtract');
                     }
                 }
 
-                if ((int) $invoiceInput['paymentterm'] === Invoice::PAYMENT_TERM_CASH) {
+                foreach ($itemsToIgnore as $ignoredItem) {
+                    $item = $ignoredItem['item'];
+
+                    $invoiceDetail                   = new InvoiceDetail();
+                    $invoiceDetail->invoice_id       = $invoice->id;
+                    $invoiceDetail->product_id       = $item['product_id'];
+                    $invoiceDetail->product_batch_id = $item['product_batch_id'];
+                    $invoiceDetail->quantity         = $item['quantity'];
+                    $invoiceDetail->price            = $item['price'];
+                    $invoiceDetail->totalprice       = $item['quantity'] * $item['price'];
+                    $invoiceDetail->remark           = $item['remark'] ?? null;
+                    $invoiceDetail->save();
+
+                    $totalprice += $invoiceDetail->totalprice;
+                }
+
+                if ($invoiceInput['paymentterm'] == 1) {
                     $invoicePayment              = new InvoicePayment();
                     $invoicePayment->invoice_id  = $invoice->id;
                     $invoicePayment->type        = 1;
@@ -8673,8 +8657,7 @@ class DriverController extends Controller
                     $invoicePayment->status      = 1;
                     $invoicePayment->driver_id   = $driver->id;
                     $invoicePayment->approve_by  = $driver->name;
-                    $invoicePayment->approve_at  = now();
-                    $invoicePayment->remark      = $invoiceInput['payment_remark'] ?? 'Cash payment for invoice: ' . $invoice->invoiceno;
+                    $invoicePayment->approve_at  = date('Y-m-d H:i:s');
                     $invoicePayment->save();
                 }
 
@@ -8689,14 +8672,14 @@ class DriverController extends Controller
                     'success'         => true,
                     'invoiceno'       => $invoice->invoiceno,
                     'invoice_id'      => $invoice->id,
-                    'date'            => \Carbon\Carbon::parse($invoice->date)->format('d-m-Y'),
+                    'date'            => $invoice->date,
                     'customer_id'     => $invoice->customer_id,
                     'customer_name'   => $customer->company,
                     'total'           => $totalprice,
                     'paymentterm'     => $invoice->paymentterm,
                     'status'          => $invoice->status,
-                    'payment_created' => (int) $invoiceInput['paymentterm'] === Invoice::PAYMENT_TERM_CASH,
-                    'items_count'     => count($resolvedDetails),
+                    'payment_created' => $invoiceInput['paymentterm'] == 1,
+                    'items_count'     => count($itemsToProcess) + count($itemsToIgnore),
                     'created_at'      => $invoice->created_at->format('Y-m-d H:i:s'),
                 ];
 
