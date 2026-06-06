@@ -381,7 +381,7 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('/productBatches/stock-in/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
         Route::post('/productBatches/stock-in-bulk', [App\Http\Controllers\ProductBatchController::class, 'stockInBulk'])->name('productBatches.stock-in-bulk');
         Route::post('/productBatches/stock-out/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockOut'])->name('productBatches.stock-out');
-        oute::post('/productBatches/adjust-stock/{id}', [App\Http\Controllers\ProductBatchController::class, 'adjustStock'])->name('productBatches.adjust-stock');
+        Route::post('/productBatches/adjust-stock/{id}', [App\Http\Controllers\ProductBatchController::class, 'adjustStock'])->name('productBatches.adjust-stock');
         // Mass actions
         Route::post('/productBatches/massdestroy', [App\Http\Controllers\ProductBatchController::class, 'massdestroy'])->name('productBatches.massdestroy');
         
