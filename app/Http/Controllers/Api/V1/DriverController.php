@@ -9001,7 +9001,7 @@ class DriverController extends Controller
                 <div class="address-label">BILLING TO :</div>
                 <div class="address-block">
                     <!-- CUSTOMER NAME IN BOLD - First requirement -->
-                    <strong class="customer-name-bold">@companyName</strong><br>
+                    <strong class="customer-name-bold" style="font-weight: bold;">@companyName</strong><br>
                     (@companyPhone)<br>
                     @billingAddress
                 </div>
@@ -9017,7 +9017,7 @@ class DriverController extends Controller
                 <table class="items-summary">
                     <tr>
                         <td class="ta-l">total @itemCount items :</td>
-                        <td class="ta-r">@totalAmount</td>
+                        <td class="ta-r" style="font-weight: bold;">@totalAmount</td>
                     </tr>
                 </table>
 
