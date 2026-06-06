@@ -125,7 +125,20 @@
                                 
                                 <tr>
                                     <th style="font-size: 1rem;">Current Quantity</th>
-                                    <td style="font-size: 1.1rem; font-weight: 500;">{{ number_format($productBatch->quantity) }} units</td>
+                                    <td style="font-size: 1.1rem; font-weight: 500;">
+                                        @if(auth()->user() && auth()->user()->hasRole('admin'))
+                                            <span id="batchQtyEditable"
+                                                  data-id="{{ Crypt::encrypt($productBatch->id) }}"
+                                                  data-qty="{{ (int) $productBatch->quantity }}">
+                                                <span class="qty-value">{{ number_format($productBatch->quantity) }}</span> units
+                                                <a href="#" id="batchQtyEditBtn" class="ml-2 text-info" title="Edit quantity">
+                                                    <i class="fa fa-pencil"></i>
+                                                </a>
+                                            </span>
+                                        @else
+                                            {{ number_format($productBatch->quantity) }} units
+                                        @endif
+                                    </td>
                                 </tr>
                                 
                             </table>
@@ -159,12 +172,16 @@
                                             <td>
                                                 @if($transaction->type == 1)
                                                     <span class="badge badge-success" style="font-size: 0.9rem;">Stock In</span>
-                                                @else
+                                                @elseif($transaction->type == 2)
                                                     <span class="badge badge-warning" style="font-size: 0.9rem;">Stock Out</span>
+                                                @elseif($transaction->type == 5)
+                                                    <span class="badge badge-info" style="font-size: 0.9rem;">Adjustment</span>
+                                                @else
+                                                    <span class="badge badge-secondary" style="font-size: 0.9rem;">Other</span>
                                                 @endif
                                             </td>
-                                            <td class="{{ $transaction->type == 1 ? 'text-success' : 'text-danger' }}" style="font-size: 1.2rem; font-weight: 500;">
-                                                {{ $transaction->type == 1 ? '+' : '-' }}{{ number_format(abs($transaction->quantity)) }}
+                                            <td class="{{ $transaction->quantity >= 0 ? 'text-success' : 'text-danger' }}" style="font-size: 1.2rem; font-weight: 500;">
+                                                {{ $transaction->quantity >= 0 ? '+' : '' }}{{ number_format($transaction->quantity) }}
                                             </td>
                                             <td style="font-size: 1.2rem;">{{ $transaction->remark ?? '-' }}</td>
                                             <td style="font-size: 1.2rem;">{{ $transaction->user ?? 'system' }}</td>
@@ -204,6 +221,110 @@
 
         $(document).ready(function () {
             HideLoad();
+
+            @if(auth()->user() && auth()->user()->hasRole('admin'))
+            (function () {
+                var $cell = $('#batchQtyEditable');
+                if (!$cell.length) return;
+
+                var adjustUrl = '{{ url('productBatches/adjust-stock') }}/' + encodeURIComponent($cell.attr('data-id'));
+                var csrfToken = '{{ csrf_token() }}';
+                var editing = false;
+
+                function startEdit() {
+                    if (editing) return;
+                    editing = true;
+
+                    var current = parseInt($cell.attr('data-qty'), 10) || 0;
+
+                    var $input = $('<input type="number" min="0" step="1" class="form-control form-control-sm d-inline-block">')
+                        .css({ width: '120px' })
+                        .val(current);
+
+                    $cell.html('').append($input).append(' units');
+                    $input.trigger('focus').trigger('select');
+
+                    var committed = false;
+
+                    function restore(displayQty) {
+                        var qty = (typeof displayQty === 'number') ? displayQty : current;
+                        $cell.attr('data-qty', qty);
+                        $cell.html(
+                            '<span class="qty-value">' + Number(qty).toLocaleString() + '</span> units'
+                            + ' <a href="#" id="batchQtyEditBtn" class="ml-2 text-info" title="Edit quantity">'
+                            + '<i class="fa fa-pencil"></i></a>'
+                        );
+                        editing = false;
+                    }
+
+                    function commit() {
+                        if (committed) return;
+                        committed = true;
+
+                        var raw = $input.val();
+                        var newQty = parseInt(raw, 10);
+
+                        if (raw === '' || isNaN(newQty) || newQty < 0) {
+                            toastr.error('Enter a valid non-negative quantity.', 'Invalid quantity');
+                            restore(current);
+                            return;
+                        }
+                        if (newQty === current) {
+                            restore(current);
+                            return;
+                        }
+
+                        $input.prop('disabled', true);
+
+                        $.ajax({
+                            url: adjustUrl,
+                            method: 'POST',
+                            data: { _token: csrfToken, new_quantity: newQty },
+                            dataType: 'json'
+                        }).done(function (resp) {
+                            if (resp && resp.success) {
+                                toastr.success(resp.message || 'Stock updated.');
+                                if (resp.no_change) {
+                                    restore(current);
+                                } else {
+                                    setTimeout(function () { location.reload(); }, 400);
+                                }
+                            } else {
+                                toastr.error((resp && resp.message) || 'Update failed.');
+                                restore(current);
+                            }
+                        }).fail(function (xhr) {
+                            var msg = 'Update failed.';
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                msg = xhr.responseJSON.message;
+                            }
+                            toastr.error(msg);
+                            restore(current);
+                        });
+                    }
+
+                    $input.on('keydown', function (ev) {
+                        if (ev.key === 'Enter') {
+                            ev.preventDefault();
+                            commit();
+                        } else if (ev.key === 'Escape') {
+                            ev.preventDefault();
+                            committed = true;
+                            restore(current);
+                        }
+                    });
+
+                    $input.on('blur', function () {
+                        setTimeout(commit, 50);
+                    });
+                }
+
+                $(document).on('click', '#batchQtyEditBtn', function (e) {
+                    e.preventDefault();
+                    startEdit();
+                });
+            })();
+            @endif
         });
     </script>
 @endpush

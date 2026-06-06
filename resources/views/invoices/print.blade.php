@@ -224,7 +224,7 @@ p{
         <div class="address-label">BILLING TO :</div>
         <div class="address-block">
             <!-- CUSTOMER NAME IN BOLD - First requirement -->
-            <strong class="customer-name-bold">{{ $invoice->customer['company'] ?? '' }}</strong><br>
+            <strong class="customer-name-bold" style="font-weight: bold;">{{ $invoice->customer['company'] ?? '' }}</strong><br>
             ({{ $invoice->customer['phone'] ?? '' }})<br>
             {{ $invoice->customer['billing_address'] ?? 'No billing address provided' }}
         </div>
@@ -240,7 +240,7 @@ p{
         <table class="items-summary">
             <tr>
                 <td class="ta-l">total {{ count($invoice['invoicedetail']) }} items :</td>
-                <td class="ta-r">{{ number_format($totalamount, 2) }}</td>
+                <td class="ta-r" style="font-weight: bold;">{{ number_format($totalamount, 2) }}</td>
             </tr>
         </table>
 

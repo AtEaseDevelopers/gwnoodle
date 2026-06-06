@@ -684,6 +684,108 @@ class ProductBatchController extends AppBaseController
     }
 
     /**
+     * Admin-only: directly adjust a batch's aggregate quantity.
+     * Writes an InventoryTransaction with TYPE_STOCK_ADJUSTMENT for the audit trail.
+     * Warehouse balances are intentionally not modified — drift is the documented trade-off.
+     */
+    public function adjustStock(Request $request, $id)
+    {
+        try {
+            $id = Crypt::decrypt($id);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid batch identifier'
+            ], 400);
+        }
+
+        if (!Auth::check() || !Auth::user()->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $productBatch = $this->productBatchRepository->find($id);
+
+        if (empty($productBatch)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product Batch not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'new_quantity' => 'required|integer|min:0',
+            'remark' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first()
+            ], 422);
+        }
+
+        $newQuantity = (int) $request->new_quantity;
+        $delta = $newQuantity - (int) $productBatch->quantity;
+
+        if ($delta === 0) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No change — quantity is already ' . $newQuantity,
+                'new_quantity' => $newQuantity,
+                'no_change' => true,
+            ]);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $productBatch->quantity = $newQuantity;
+
+            if ($newQuantity == 0) {
+                $productBatch->status = 3; // Inactive
+            } elseif (in_array($productBatch->status, [2, 3]) && !$productBatch->isExpired()) {
+                $productBatch->status = 1; // Active
+            }
+
+            $productBatch->save();
+
+            $remarkText = trim((string) $request->remark);
+            if ($remarkText === '') {
+                $remarkText = 'Inline cell edit';
+            }
+
+            InventoryTransaction::create([
+                'warehouse_id' => null,
+                'product_id' => $productBatch->product_id,
+                'batch_id' => $productBatch->id,
+                'quantity' => $delta,
+                'type' => InventoryTransaction::TYPE_STOCK_ADJUSTMENT,
+                'remark' => 'Admin stock adjustment: ' . $remarkText,
+                'date' => now(),
+                'user' => Auth::user()->name ?? 'system',
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Stock adjusted successfully. New quantity: ' . $newQuantity,
+                'new_quantity' => $newQuantity,
+                'delta' => $delta,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error adjusting stock: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    /**
      * Check expiry and update status
      */
     public function checkExpiry()
