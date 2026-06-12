@@ -884,13 +884,12 @@ class ProductBatchController extends AppBaseController
 
         $encodeType = ctype_digit($batchCode) ? 'C128C' : 'C128B';
         
-        $barcodeBase64 = DNS1D::getBarcodePNG($batchCode, $encodeType, 2, 100, [0,0,0], false);
+        $barcodeBase64 = DNS1D::getBarcodePNG($batchCode, $encodeType, 1, 50, [0,0,0], false);
         $barcode = imagecreatefromstring(base64_decode($barcodeBase64));
 
-        // 相应减小内边距
-        $horizontalPadding = 30;
-        $topPadding = 20;
-        $bottomPadding = 40;
+        $horizontalPadding = 10;
+        $topPadding = 5;
+        $bottomPadding = 28;
         
         $width = imagesx($barcode) + ($horizontalPadding * 2);
         $height = imagesy($barcode) + $topPadding + $bottomPadding;
@@ -903,11 +902,11 @@ class ProductBatchController extends AppBaseController
         imagecopy($canvas, $barcode, $horizontalPadding, $topPadding, 0, 0, imagesx($barcode), imagesy($barcode));
 
         $fontPath = public_path('fonts/DejaVuSans.ttf');
-        $fontSize = 20; // 相应减小字体
+        $fontSize = 10;
         $textBoundingBox = imagettfbbox($fontSize, 0, $fontPath, $batchCode);
         $textWidth = $textBoundingBox[2] - $textBoundingBox[0];
         $textX = max($horizontalPadding, (int) (($width - $textWidth) / 2));
-        $textY = $height - 15;
+        $textY = $height - 8;
 
         imagettftext($canvas, $fontSize, 0, $textX, $textY, $black, $fontPath, $batchCode);
 
