@@ -841,32 +841,50 @@ class InvoiceController extends AppBaseController
             $productBatch = ProductBatch::find($invoicedetail->product_batch_id);
             
             if ($productBatch) {
-                // Add back the quantity to the batch
-                $productBatch->quantity = $productBatch->quantity + $invoicedetail->quantity;
-                $productBatch->save();
-
-                // Create inventory transaction record for the reversal
                 $reversalTransaction = new InventoryTransaction();
-                $reversalTransaction->type = 1; // Stock In (Reversal)
+                $reversalTransaction->type = 1;
                 $reversalTransaction->product_id = $invoicedetail->product_id;
                 $reversalTransaction->batch_id = $invoicedetail->product_batch_id;
                 $reversalTransaction->quantity = $invoicedetail->quantity;
                 $reversalTransaction->date = now();
                 $reversalTransaction->user = Auth::user()->name;
                 $reversalTransaction->remark = 'Reversal from deleted invoice detail - Invoice #' . ($invoice->invoiceno ?? '');
-                $reversalTransaction->save();
 
-                // Update lorry inventory balance - add back the quantity
-                $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
-                
-                if ($inventorybalance) {
-                    // Use helper function to add back quantity
-                    $inventorybalance->updateBatchQuantity(
-                        $invoicedetail->product_batch_id,
-                        $invoicedetail->quantity,
-                        'add'
-                    );
+                if ($invoicedetail->warehouse_id) {
+                    // Admin invoice — return stock to warehouse
+                    $warehouseBalance = \App\Models\WarehouseInventoryBalance::where('warehouse_id', $invoicedetail->warehouse_id)
+                        ->where('batch_id', $invoicedetail->product_batch_id)
+                        ->first();
+
+                    if ($warehouseBalance) {
+                        $warehouseBalance->quantity += $invoicedetail->quantity;
+                        $warehouseBalance->save();
+                    } else {
+                        \App\Models\WarehouseInventoryBalance::create([
+                            'warehouse_id' => $invoicedetail->warehouse_id,
+                            'product_id'   => $invoicedetail->product_id,
+                            'batch_id'     => $invoicedetail->product_batch_id,
+                            'quantity'     => $invoicedetail->quantity,
+                        ]);
+                    }
+
+                    $reversalTransaction->warehouse_id = $invoicedetail->warehouse_id;
+                } else {
+                    // Driver invoice — return stock to lorry inventory balance
+                    $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
+
+                    if ($inventorybalance) {
+                        $inventorybalance->updateBatchQuantity(
+                            $invoicedetail->product_batch_id,
+                            $invoicedetail->quantity,
+                            'add'
+                        );
+                    }
+
+                    $reversalTransaction->lorry_id = $invoice->driver->trip->lorry_id ?? null;
                 }
+
+                $reversalTransaction->save();
             }
 
             // Update invoice payment if cash term
