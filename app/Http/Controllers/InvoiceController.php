@@ -851,7 +851,11 @@ class InvoiceController extends AppBaseController
                 $reversalTransaction->remark = 'Reversal from deleted invoice detail - Invoice #' . ($invoice->invoiceno ?? '');
 
                 if ($invoicedetail->warehouse_id) {
-                    // Admin invoice — return stock to warehouse
+                    // Admin invoice — add back to product batch quantity
+                    $productBatch->quantity += $invoicedetail->quantity;
+                    $productBatch->save();
+
+                    // Return stock to warehouse inventory balance
                     $warehouseBalance = \App\Models\WarehouseInventoryBalance::where('warehouse_id', $invoicedetail->warehouse_id)
                         ->where('batch_id', $invoicedetail->product_batch_id)
                         ->first();
