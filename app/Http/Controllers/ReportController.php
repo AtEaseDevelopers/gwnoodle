@@ -132,7 +132,12 @@ class ReportController extends AppBaseController
             $productBatches = []; // Empty initially, will be loaded via AJAX
             return view('reports.stock-card-show', compact('report', 'products', 'warehouses', 'productBatches'));
         }
-        
+
+        if($report->sqlvalue == 'STOCK_REQUEST_FORM'){
+            $products = Product::where('status', 1)->select('id', 'name', 'unit_code', 'price')->orderBy('name')->get();
+            return view('reports.stock-request-form-show', compact('report', 'products'));
+        }
+
         $reportdetails = Reportdetail::where('report_id',$id)->where('status','1')->orderBy('sequence','asc')->get()->toarray();
         $c = 0;
         foreach($reportdetails as $reportdetail){
@@ -424,6 +429,11 @@ class ReportController extends AppBaseController
                 'warehouse_id' => $warehouse_id,
                 'batch_id' => $batch_id,
             ]);
+        }
+
+        if ($sp == 'STOCK_REQUEST_FORM') {
+            session()->put('stock_request_form_data', $data);
+            return redirect()->route('stock_request_form_pdf');
         }
 
         $param = '';
@@ -1318,6 +1328,64 @@ class ReportController extends AppBaseController
             abort(404);
         }
 
+    }
+
+    public function generateStockRequestFormPDF(Request $request)
+    {
+        $data = session()->get('stock_request_form_data', []);
+
+        // Resolve product names for each row
+        $items = [];
+        $productIds  = $data['product_id']    ?? [];
+        $quantities  = $data['quantity']       ?? [];
+        $amounts     = $data['amount']         ?? [];
+        $itemCodes   = $data['item_code']      ?? [];
+        $uoms        = $data['uom']            ?? [];
+        $descriptions = $data['item_description'] ?? [];
+
+        foreach ($productIds as $i => $productId) {
+            if (!$productId) continue;
+            $product = Product::find($productId);
+            $items[] = [
+                'no'          => count($items) + 1,
+                'item_code'   => $itemCodes[$i] ?? ($product->name ?? ''),
+                'description' => $descriptions[$i] ?? ($product->name ?? ''),
+                'qty'         => $quantities[$i] ?? '',
+                'uom'         => $uoms[$i] ?? '',
+                'amount'      => $amounts[$i] ?? '',
+            ];
+        }
+
+        $formData = [
+            'description'    => $data['description'] ?? '',
+            'ref_doc_no'     => $data['ref_doc_no'] ?? '',
+            'reason'         => $data['reason'] ?? '',
+            'authorised_by'  => $data['authorised_by'] ?? '',
+            'doc_no'         => $data['doc_no'] ?? '',
+            'date'           => $data['date'] ?? date('Y-m-d'),
+            'from_location'  => $data['from_location'] ?? '',
+            'to_location'    => $data['to_location'] ?? '',
+            'note'           => $data['note'] ?? '',
+            'items'          => $items,
+        ];
+
+        try {
+            $pdf = Pdf::loadView('reports.stock_request_form_pdf', compact('formData'));
+            $pdf->setPaper('A4', 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled'  => true,
+                'isRemoteEnabled' => true,
+                'defaultFont'   => 'sans-serif',
+                'margin_left'   => 15,
+                'margin_right'  => 15,
+                'margin_top'    => 15,
+                'margin_bottom' => 15,
+            ]);
+            return $pdf->stream('stock_request_form_' . date('YmdHis') . '.pdf');
+        } catch (Exception $e) {
+            \Log::error('Stock Request Form PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
     }
 
 

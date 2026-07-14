@@ -300,6 +300,7 @@ Route::group(['middleware' => ['auth']], function() {
 
         Route::get('/stock-card-report', [App\Http\Controllers\ReportController::class, 'stockCardReportView'])->name('stock_card_report_view');
         Route::get('/get-product-batches', [App\Http\Controllers\ReportController::class, 'getProductBatches'])->name('reports.getProductBatches');
+        Route::get('/stock-request-form-pdf', [App\Http\Controllers\ReportController::class, 'generateStockRequestFormPDF'])->name('stock_request_form_pdf');
     });
 
 
