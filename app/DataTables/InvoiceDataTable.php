@@ -39,7 +39,7 @@ class InvoiceDataTable extends DataTable
                 return $invoice->driver->name ?? 'Driver';
             }
 
-            return $invoice->creator->name ?? 'Admin';
+            return 'Admin';
         });
 
         return $dataTable->addColumn('action', 'invoices.datatables_actions');
@@ -56,7 +56,6 @@ class InvoiceDataTable extends DataTable
         return $model->newQuery()
         ->with('customer')
         ->with('driver:id,name')
-        ->with('creator:id,name')
         ->with('kelindan:id,name')
         ->with('agent:id,name')
         ->with('supervisor:id,name')

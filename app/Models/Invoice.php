@@ -36,7 +36,6 @@ class Invoice extends Model
         'date',
         'customer_id',
         'driver_id',
-        'created_by',
         'default_driver_id',
         'kelindan_id',
         'agent_id',
@@ -59,7 +58,6 @@ class Invoice extends Model
         'date' => 'datetime:d-m-Y H:i:s',
         'customer_id' => 'integer',
         'driver_id' => 'integer',
-        'created_by' => 'integer',
         'default_driver_id' => 'integer',
         'kelindan_id' => 'integer',
         'agent_id' => 'integer',
@@ -100,11 +98,6 @@ class Invoice extends Model
     public function driver()
     {
         return $this->belongsTo(\App\Models\Driver::class, 'driver_id', 'id');
-    }
-
-    public function creator()
-    {
-        return $this->belongsTo(\App\Models\User::class, 'created_by', 'id');
     }
 
     public function defaultDriver()

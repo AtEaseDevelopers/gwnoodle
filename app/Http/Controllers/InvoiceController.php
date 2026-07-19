@@ -91,7 +91,6 @@ class InvoiceController extends AppBaseController
             }
         }
         $input['status'] = 0; // Set default status to 0 (New)
-        $input['created_by'] = Auth::id();
         $invoice = $this->invoiceRepository->create($input);
         Flash::success('Invoice created successfully.');
         
