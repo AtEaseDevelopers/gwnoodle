@@ -301,7 +301,9 @@ class InvoiceDataTable extends DataTable
             'date' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('invoices.date'),
                 'data' => 'date',
-                'name' => 'date'
+                // Sort by id (true creation order) rather than the business-entered
+                // date value, so the most recently created invoice always shows first
+                'name' => 'id'
             ]),
 
             'customer_id' => new \Yajra\DataTables\Html\Column([
