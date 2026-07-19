@@ -34,6 +34,10 @@ class InvoiceDataTable extends DataTable
             });
         }
 
+        $dataTable->addColumn('created_by', function ($invoice) {
+            return $invoice->trip_uuid ? 'Driver' : 'Admin';
+        });
+
         return $dataTable->addColumn('action', 'invoices.datatables_actions');
     }
 
@@ -349,6 +353,14 @@ class InvoiceDataTable extends DataTable
                 'title' => trans('invoices.autocount_status'),
                 'data' => 'autocount_status',
                 'name' => 'invoices.autocount_status',
+                'searchable' => false
+            ]),
+
+            'created_by' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Created By',
+                'data' => 'created_by',
+                'name' => 'created_by',
+                'orderable' => false,
                 'searchable' => false
             ]),
         ];

@@ -26,17 +26,31 @@
                                         {!! Form::select('invoice_id', $invoiceItems, $id, ['class' => 'form-control', 'placeholder' => 'Pick a Invoice...','disabled']) !!}
                                     </div>
 
-                                    <!-- Warehouse Selection Field (NEW) -->
-                                    <div class="form-group col-sm-6">
-                                        {!! Form::label('warehouse_id', 'Select Warehouse') !!}<span class="asterisk"> *</span>
-                                        {!! Form::select('warehouse_id', $warehouseItems, null, ['class' => 'form-control select2', 'placeholder' => 'Select Warehouse...', 'id' => 'warehouse_id']) !!}
-                                    </div>
+                                    @if($isDriverInvoice)
+                                        <!-- Driver Stock Info (replaces Warehouse selection) -->
+                                        <div class="form-group col-sm-6">
+                                            {!! Form::label('driver_info', 'Stock Source') !!}
+                                            <input type="text" class="form-control" readonly value="Driver: {{ $invoice->driver->name ?? 'Unknown' }} (deducting from lorry stock)">
+                                        </div>
 
-                                    <!-- Product Id Field -->
-                                    <div class="form-group col-sm-6">
-                                        {!! Form::label('product_id', __('invoice_details.product')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::select('product_id', $productItems, null, ['class' => 'form-control select2', 'placeholder' => 'Pick a Product...', 'id' => 'product_id', 'disabled']) !!}
-                                    </div>
+                                        <!-- Product Id Field (scoped to driver's current lorry stock) -->
+                                        <div class="form-group col-sm-6">
+                                            {!! Form::label('product_id', __('invoice_details.product')) !!}<span class="asterisk"> *</span>
+                                            {!! Form::select('product_id', $driverProducts, null, ['class' => 'form-control select2', 'placeholder' => 'Pick a Product...', 'id' => 'product_id']) !!}
+                                        </div>
+                                    @else
+                                        <!-- Warehouse Selection Field (NEW) -->
+                                        <div class="form-group col-sm-6">
+                                            {!! Form::label('warehouse_id', 'Select Warehouse') !!}<span class="asterisk"> *</span>
+                                            {!! Form::select('warehouse_id', $warehouseItems, null, ['class' => 'form-control select2', 'placeholder' => 'Select Warehouse...', 'id' => 'warehouse_id']) !!}
+                                        </div>
+
+                                        <!-- Product Id Field -->
+                                        <div class="form-group col-sm-6">
+                                            {!! Form::label('product_id', __('invoice_details.product')) !!}<span class="asterisk"> *</span>
+                                            {!! Form::select('product_id', $productItems, null, ['class' => 'form-control select2', 'placeholder' => 'Pick a Product...', 'id' => 'product_id', 'disabled']) !!}
+                                        </div>
+                                    @endif
 
                                     <!-- Batch Selection Field -->
                                     <div class="form-group col-sm-6" id="batch_selection_group" style="display: none;">
@@ -91,9 +105,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
     
     <script>
+        var isDriverInvoice = {{ $isDriverInvoice ? 'true' : 'false' }};
+        var driverLorryId = {{ $driverLorryId ? (int) $driverLorryId : 'null' }};
+
         $(document).ready(function () {
             HideLoad();
-            
+
             // Initialize Select2
             $('.select2').select2({
                 width: '100%'
@@ -103,7 +120,7 @@
             $("#warehouse_id").change(function() {
                 var warehouseId = $(this).val();
                 var productSelect = $('#product_id');
-                
+
                 if (warehouseId) {
                     productSelect.prop('disabled', false);
                     // Reset and disable dependent fields
@@ -118,7 +135,7 @@
                 }
             });
 
-            // When product is selected, load available batches from selected warehouse
+            // When product is selected, load available batches (from driver's lorry stock or selected warehouse)
             $("#product_id").change(function() {
                 getprice();
                 loadWarehouseProductBatches();
@@ -152,59 +169,69 @@
                 validateForm();
             });
             
-            // Load product batches from selected warehouse via AJAX
+            // Load product batches from the driver's lorry stock, or from the selected warehouse, via AJAX
             function loadWarehouseProductBatches() {
-                var warehouseId = $('#warehouse_id').val();
                 var productId = $('#product_id').val();
                 var batchSelect = $('#product_batch_id');
-                
-                if (warehouseId && productId) {
+                var sourceLabel = isDriverInvoice ? 'driver\'s lorry stock' : 'selected warehouse';
+
+                var ajaxUrl = null;
+                if (isDriverInvoice) {
+                    if (driverLorryId && productId) {
+                        ajaxUrl = '{{ url("inventoryBalances") }}/' + driverLorryId + '/products/' + productId + '/batches';
+                    }
+                } else {
+                    var warehouseId = $('#warehouse_id').val();
+                    if (warehouseId && productId) {
+                        ajaxUrl = '{{ url("warehouses") }}/' + warehouseId + '/products/' + productId + '/batches';
+                    }
+                }
+
+                if (ajaxUrl) {
                     $.ajax({
-                        url: '{{ url("warehouses") }}/' + warehouseId + '/products/' + productId + '/batches',
+                        url: ajaxUrl,
                         type: 'GET',
-                        data: {
-                            warehouse_id: warehouseId,
-                            product_id: productId
-                        },
                         success: function(response) {
                             batchSelect.empty().append('<option value="">{{ __("Select Batch") }}</option>');
-                            
+
                             if (response.success && response.batches && response.batches.length > 0) {
                                 var hasAvailableBatches = false;
-                                
+
                                 $.each(response.batches, function(index, batch) {
                                     if (batch.quantity > 0) {
                                         hasAvailableBatches = true;
+                                        var label = isDriverInvoice
+                                            ? (batch.batch_code + ' (Qty left: ' + batch.quantity + ')')
+                                            : (batch.batch_code + ' (Exp: ' + batch.expiry_date + ') - ' + batch.quantity + ' units');
                                         batchSelect.append(
                                             '<option value="' + batch.batch_id + '" ' +
                                             'data-quantity="' + batch.quantity + '" ' +
-                                            'data-expiry="' + batch.expiry_date + '">' +
-                                            batch.batch_code + ' (Exp: ' + batch.expiry_date + ') - ' + 
-                                            batch.quantity + ' units' +
+                                            'data-expiry="' + (batch.expiry_date || '') + '">' +
+                                            label +
                                             '</option>'
                                         );
                                     }
                                 });
-                                
+
                                 if (hasAvailableBatches) {
                                     $('#batch_selection_group').show();
                                     batchSelect.prop('disabled', false);
                                     $("#stock_info").hide();
                                 } else {
-                                    batchSelect.empty().append('<option value="">{{ __("No batches with available stock in this warehouse") }}</option>');
+                                    batchSelect.empty().append('<option value="">{{ __("No batches with available stock") }}</option>');
                                     $('#batch_selection_group').show();
                                     batchSelect.prop('disabled', true);
                                     $("#stock_info").show().removeClass('alert-info').addClass('alert-warning');
-                                    $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> No available stock for this product in selected warehouse');
+                                    $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> No available stock for this product in ' + sourceLabel);
                                 }
                             } else {
-                                batchSelect.empty().append('<option value="">{{ __("No batches found for this product in selected warehouse") }}</option>');
+                                batchSelect.empty().append('<option value="">{{ __("No batches found for this product") }}</option>');
                                 $('#batch_selection_group').show();
                                 batchSelect.prop('disabled', true);
                                 $("#stock_info").show().removeClass('alert-info').addClass('alert-warning');
-                                $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> This product has no batches in selected warehouse');
+                                $("#stock_info_text").html('<i class="fa fa-exclamation-triangle"></i> This product has no batches in ' + sourceLabel);
                             }
-                            
+
                             batchSelect.trigger('change.select2');
                         },
                         error: function(xhr, status, error) {
@@ -218,7 +245,7 @@
                     });
                 } else {
                     $('#batch_selection_group').hide();
-                    batchSelect.empty().append('<option value="">{{ __("Select warehouse and product first") }}</option>');
+                    batchSelect.empty().append('<option value="">{{ __("Select product first") }}</option>');
                     $("#stock_info").hide();
                 }
             }
@@ -274,13 +301,13 @@
             
             // Validate form before submission
             function validateForm() {
-                var warehouseSelected = $('#warehouse_id').val() !== '';
+                var warehouseSelected = isDriverInvoice || $('#warehouse_id').val() !== '';
                 var productSelected = $('#product_id').val() !== '';
                 var batchSelected = $('#product_batch_id').val() !== '';
                 var quantity = $('#quantity').val();
                 var maxQuantity = $('#quantity').attr('max') || 0;
                 var quantityValid = quantity && parseInt(quantity) > 0 && parseInt(quantity) <= parseInt(maxQuantity);
-                
+
                 var isValid = warehouseSelected && productSelected && batchSelected && quantityValid;
                 
                 $('#submitBtn').prop('disabled', !isValid);

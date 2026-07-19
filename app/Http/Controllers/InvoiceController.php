@@ -123,7 +123,14 @@ class InvoiceController extends AppBaseController
 
         $invoicedetails = InvoiceDetail::with('product')->with('batch')->where('invoice_id',$id)->get()->toArray();
 
-        return view('invoices.show')->with('invoice', $invoice)->with('invoicedetails', $invoicedetails)->with('id',$id);
+        $isDriverInvoice = !empty($invoice->trip_uuid);
+        $needsReturnWarehouseSelection = $isDriverInvoice && !($invoice->driver && $invoice->driver->trip_id);
+
+        return view('invoices.show')
+            ->with('invoice', $invoice)
+            ->with('invoicedetails', $invoicedetails)
+            ->with('id',$id)
+            ->with('needsReturnWarehouseSelection', $needsReturnWarehouseSelection);
     }
 
     /**
@@ -463,17 +470,43 @@ class InvoiceController extends AppBaseController
         $id = Crypt::decrypt($id);
         $invoice = $this->invoiceRepository->find($id);
 
-        $warehouseItems = Warehouse::where('status', 'active')
-            ->orderBy('name')
-            ->pluck('name', 'id');
-
         if (empty($invoice)) {
             Flash::error('Invoice not found');
 
             return redirect(route('invoices.index'));
         }
 
-        return view('invoices.detail',compact('id', 'warehouseItems'));
+        $warehouseItems = Warehouse::where('status', 'active')
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
+        $isDriverInvoice = !empty($invoice->trip_uuid);
+        $driverLorryId = null;
+        $driverProducts = [];
+
+        if ($isDriverInvoice) {
+            $driver = $invoice->driver;
+
+            if (!$driver || empty($driver->trip_id)) {
+                Flash::error('This invoice belongs to a driver who is not currently on a trip. Items cannot be added from the driver\'s stock right now.');
+
+                return redirect(route('invoices.show', encrypt($id)));
+            }
+
+            $trip = Trip::where('uuid', $driver->trip_id)->first();
+            $driverLorryId = $trip->lorry_id ?? null;
+
+            $inventoryBalance = InventoryBalance::where('lorry_id', $driverLorryId)->first();
+
+            if ($inventoryBalance) {
+                $driverProducts = collect($inventoryBalance->batches_with_details)
+                    ->unique('product_id')
+                    ->pluck('product_name', 'product_id')
+                    ->toArray();
+            }
+        }
+
+        return view('invoices.detail', compact('id', 'warehouseItems', 'invoice', 'isDriverInvoice', 'driverLorryId', 'driverProducts'));
     }
 
     public function adddetail($id, Request $request)
@@ -492,15 +525,35 @@ class InvoiceController extends AppBaseController
         if ($request->has('items') && is_array($request->items) && count($request->items) > 0) {
             // Handle multiple items submission
             return $this->addMultipleItems($id, $request, $invoice);
-        } 
+        }
         // Handle single item submission (from other pages - detail page)
         else {
+            $isDriverInvoice = !empty($invoice->trip_uuid);
+
+            if ($isDriverInvoice) {
+                // Driver invoice - item comes from the driver's own lorry stock, no warehouse involved
+                if (!isset($input['product_batch_id']) || empty($input['product_batch_id'])) {
+                    Flash::error('Please select a product batch');
+                    return redirect()->back()->withInput();
+                }
+
+                $input['invoice_id'] = $id;
+                Session::put('invoice_detail_data', $input);
+
+                $res = $this->syncDriverDetailToXero($request);
+                if ($res != null) {
+                    return $res;
+                }
+
+                return redirect(route('invoices.show', encrypt($id)));
+            }
+
             // Validate single item
             if (!isset($input['warehouse_id']) || empty($input['warehouse_id'])) {
                 Flash::error('Please select a warehouse');
                 return redirect()->back()->withInput();
             }
-            
+
             $input['invoice_id'] = $id;
             Session::put('invoice_detail_data', $input);
 
@@ -508,7 +561,7 @@ class InvoiceController extends AppBaseController
             if ($res != null) {
                 return $res;
             }
-            
+
             return redirect(route('invoices.show', encrypt($id)));
         }
     }
@@ -822,24 +875,195 @@ class InvoiceController extends AppBaseController
         }
     }
 
-   public function deletedetail($id){
+    /**
+     * Add/update a single invoice detail on a DRIVER-created invoice, deducting from
+     * that driver's current lorry stock (InventoryBalance) instead of a warehouse.
+     */
+    private function syncDriverDetailToXero(Request $request)
+    {
+        $input = Session::get('invoice_detail_data');
+        if ($input == null) {
+            return null;
+        }
+
+        $invoice = Invoice::where('id', $input['invoice_id'])->first();
+
+        if (empty($invoice)) {
+            Flash::error('Invoice not found');
+            return redirect()->back();
+        }
+
+        if (empty($invoice->trip_uuid)) {
+            Flash::error('This invoice is not a driver invoice.');
+            return redirect()->back();
+        }
+
+        $driver = $invoice->driver;
+
+        if (!$driver || empty($driver->trip_id)) {
+            Flash::error('Driver is not currently on an active trip. Cannot add item from driver stock.');
+            return redirect()->back()->withInput();
+        }
+
+        $trip = Trip::where('uuid', $driver->trip_id)->first();
+        $lorryId = $trip->lorry_id ?? null;
+
+        if (!isset($input['product_batch_id']) || empty($input['product_batch_id'])) {
+            Flash::error('Please select a product batch');
+            return redirect()->back()->withInput();
+        }
+
+        $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
+
+        if (!$inventoryBalance) {
+            Flash::error('No stock found for the driver\'s current lorry');
+            return redirect()->back()->withInput();
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Check if we're updating an existing detail
+            $existingDetail = null;
+            if (isset($input['detail_id']) && !empty($input['detail_id'])) {
+                $existingDetail = InvoiceDetail::find($input['detail_id']);
+            }
+
+            // Reverse the old quantity back into the lorry balance first if we're editing
+            if ($existingDetail && $existingDetail->product_batch_id) {
+                $inventoryBalance->updateBatchQuantity($existingDetail->product_batch_id, $existingDetail->quantity, 'add');
+
+                $reversalTransaction = new InventoryTransaction();
+                $reversalTransaction->type = 1; // Stock In (Reversal)
+                $reversalTransaction->lorry_id = $lorryId;
+                $reversalTransaction->product_id = $existingDetail->product_id;
+                $reversalTransaction->batch_id = $existingDetail->product_batch_id;
+                $reversalTransaction->quantity = $existingDetail->quantity;
+                $reversalTransaction->date = now();
+                $reversalTransaction->user = Auth::user()->name;
+                $reversalTransaction->remark = 'Reversal for invoice #' . $invoice->invoiceno . ' - Detail ID: ' . $existingDetail->id;
+                $reversalTransaction->save();
+            }
+
+            $availableQty = $inventoryBalance->getBatchQuantity($input['product_batch_id']);
+            if ($availableQty < $input['quantity']) {
+                throw new \Exception('Insufficient stock in driver\'s lorry. Available: ' . $availableQty . ', Requested: ' . $input['quantity']);
+            }
+
+            // Deduct quantity from the driver's lorry inventory balance
+            $inventoryBalance->updateBatchQuantity($input['product_batch_id'], $input['quantity'], 'subtract');
+
+            // Create or update invoice detail (warehouse_id stays null - marks this as driver-sourced)
+            if ($existingDetail) {
+                $existingDetail->warehouse_id = null;
+                $existingDetail->product_id = $input['product_id'];
+                $existingDetail->product_batch_id = $input['product_batch_id'];
+                $existingDetail->quantity = $input['quantity'];
+                $existingDetail->price = $input['price'];
+                $existingDetail->totalprice = $input['quantity'] * $input['price'];
+                $existingDetail->remark = $input['remark'] ?? null;
+                $existingDetail->save();
+
+                $invoicedetail = $existingDetail;
+            } else {
+                $invoicedetail = new InvoiceDetail();
+                $invoicedetail->invoice_id = $input['invoice_id'];
+                $invoicedetail->warehouse_id = null;
+                $invoicedetail->product_id = $input['product_id'];
+                $invoicedetail->product_batch_id = $input['product_batch_id'];
+                $invoicedetail->quantity = $input['quantity'];
+                $invoicedetail->price = $input['price'];
+                $invoicedetail->totalprice = $input['quantity'] * $input['price'];
+                $invoicedetail->remark = $input['remark'] ?? null;
+                $invoicedetail->save();
+            }
+
+            // Create inventory transaction record for the new sale (using driver's lorry)
+            $inventoryTransaction = new InventoryTransaction();
+            $inventoryTransaction->type = 2; // Stock Out (Sale)
+            $inventoryTransaction->lorry_id = $lorryId;
+            $inventoryTransaction->product_id = $input['product_id'];
+            $inventoryTransaction->batch_id = $input['product_batch_id'];
+            $inventoryTransaction->quantity = -$input['quantity'];
+            $inventoryTransaction->date = now();
+            $inventoryTransaction->user = Auth::user()->name;
+            $inventoryTransaction->remark = 'Invoice- [' . $invoice->invoiceno . '] - Admin added item to driver\'s lorry stock';
+            $inventoryTransaction->save();
+
+            // Handle invoice payment if cash term (same as admin/warehouse flow)
+            if ($invoice->paymentterm == 1) {
+                $invoiceId = $input['invoice_id'];
+                $invoicePayment = InvoicePayment::where('invoice_id', $invoiceId)->first();
+
+                $totalAmount = InvoiceDetail::where('invoice_id', $invoiceId)->sum('totalprice');
+
+                if (!$invoicePayment) {
+                    $invoicepayment_new = new InvoicePayment();
+                    $invoicepayment_new->invoice_id = $invoiceId;
+                    $invoicepayment_new->type = 1;
+                    $invoicepayment_new->customer_id = $invoice->customer_id;
+                    $invoicepayment_new->amount = $totalAmount;
+                    $invoicepayment_new->status = $invoice->status;
+                    $invoicepayment_new->driver_id = $invoice->driver_id;
+                    $invoicepayment_new->approve_by = Auth::user()->email;
+                    $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
+                    $invoicepayment_new->save();
+                } else {
+                    $invoicePayment->status = 1;
+                    $invoicePayment->amount = $totalAmount;
+                    $invoicePayment->save();
+                }
+            }
+
+            DB::commit();
+
+            $action = $existingDetail ? 'updated' : 'saved';
+            Flash::success('Invoice Detail ' . $action . ' successfully. Stock deducted: ' . $input['quantity'] . ' units from driver\'s lorry stock.');
+
+            Session::forget('invoice_detail_data');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error saving invoice detail: ' . $e->getMessage());
+            return redirect()->back()->withInput();
+        }
+    }
+
+   public function deletedetail($id, Request $request){
         $id = Crypt::decrypt($id);
 
-        $invoicedetail = InvoiceDetail::with('invoice')->where('id', $id)->first();
+        $invoicedetail = InvoiceDetail::with('invoice.driver')->where('id', $id)->first();
 
         if (empty($invoicedetail)) {
             Flash::error('Invoice Detail not found');
             return redirect()->back();
         }
 
+        $invoice = $invoicedetail->invoice;
+
+        // Driver-sourced item (warehouse_id is null) - if the driver is not currently on
+        // a trip there is no active lorry balance to return stock to, so the admin must
+        // pick a warehouse before we proceed. Check this before starting any writes.
+        $returnWarehouseId = null;
+        if (empty($invoicedetail->warehouse_id)) {
+            $driver = $invoice->driver;
+            $driverOnTrip = $driver && !empty($driver->trip_id);
+
+            if (!$driverOnTrip) {
+                $returnWarehouseId = $request->input('return_warehouse_id');
+                if (empty($returnWarehouseId)) {
+                    Flash::error('Driver is not currently on a trip. Please select a warehouse to return this stock to.');
+                    return redirect()->back();
+                }
+            }
+        }
+
         DB::beginTransaction();
-        
+
         try {
-            $invoice = $invoicedetail->invoice;
-            
             // Get the product batch
             $productBatch = ProductBatch::find($invoicedetail->product_batch_id);
-            
+
             if ($productBatch) {
                 $reversalTransaction = new InventoryTransaction();
                 $reversalTransaction->type = 1;
@@ -873,9 +1097,35 @@ class InvoiceController extends AppBaseController
                     }
 
                     $reversalTransaction->warehouse_id = $invoicedetail->warehouse_id;
+                } elseif ($returnWarehouseId) {
+                    // Driver not currently on a trip — admin chose a warehouse to return stock to instead
+                    $warehouseBalance = WarehouseInventoryBalance::where('warehouse_id', $returnWarehouseId)
+                        ->where('batch_id', $invoicedetail->product_batch_id)
+                        ->first();
+
+                    if ($warehouseBalance) {
+                        $warehouseBalance->quantity += $invoicedetail->quantity;
+                        $warehouseBalance->save();
+                    } else {
+                        WarehouseInventoryBalance::create([
+                            'warehouse_id' => $returnWarehouseId,
+                            'product_id'   => $invoicedetail->product_id,
+                            'batch_id'     => $invoicedetail->product_batch_id,
+                            'quantity'     => $invoicedetail->quantity,
+                        ]);
+                    }
+
+                    $productBatch->quantity += $invoicedetail->quantity;
+                    $productBatch->save();
+
+                    $reversalTransaction->warehouse_id = $returnWarehouseId;
                 } else {
-                    // Driver invoice — return stock to lorry inventory balance
-                    $inventorybalance = InventoryBalance::where('lorry_id', $invoice->driver->trip->lorry_id ?? null)->first();
+                    // Driver invoice, driver currently on a trip — return stock to their current lorry's inventory balance
+                    $driver = $invoice->driver;
+                    $trip = Trip::where('uuid', $driver->trip_id ?? null)->first();
+                    $lorryId = $trip->lorry_id ?? null;
+
+                    $inventorybalance = InventoryBalance::where('lorry_id', $lorryId)->first();
 
                     if ($inventorybalance) {
                         $inventorybalance->updateBatchQuantity(
@@ -885,7 +1135,7 @@ class InvoiceController extends AppBaseController
                         );
                     }
 
-                    $reversalTransaction->lorry_id = $invoice->driver->trip->lorry_id ?? null;
+                    $reversalTransaction->lorry_id = $lorryId;
                 }
 
                 $reversalTransaction->save();

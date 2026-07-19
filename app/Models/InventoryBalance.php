@@ -53,6 +53,7 @@ class InventoryBalance extends Model
         foreach ($batches as $batch) {
             $result[] = [
                 'batch_id' => $batch->id,
+                'product_id' => $batch->product_id,
                 'batch_code' => $batch->batch_code,
                 'product_name' => $batch->product->name ?? 'N/A',
                 'unit_code' => $batch->product->unit_code ?? 'N/A',

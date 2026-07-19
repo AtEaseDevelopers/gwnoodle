@@ -536,6 +536,7 @@ Route::group(['middleware' => ['auth']], function() {
 
         Route::get('/print/invoices/getInvoiceSimplePDF/{id}/{function}', [App\Http\Controllers\InvoiceController::class, 'getInvoiceSimplePDF'])->name('invoice.print_pdf');
         Route::get('invoices/get-available-batches/{invoice_id}', [App\Http\Controllers\InvoiceController::class, 'getAvailableBatches'])->name('invoices.get-available-batches');
+        Route::get('/inventoryBalances/{lorry_id}/products/{product_id}/batches', [App\Http\Controllers\InventoryBalanceController::class, 'getLorryProductBatches'])->name('inventoryBalances.get-lorry-product-batches');
         //Print Receipt
         Route::get('/print/invoicePayments/getReceiptViewPDF/{id}/{function}', [App\Http\Controllers\InvoicePaymentController::class, 'getReceiptViewPDF'])->name('invoicePayments.print');
 

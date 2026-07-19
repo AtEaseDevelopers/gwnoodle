@@ -64,12 +64,12 @@
                                                     <td>{{ number_format($invoicedetail['price'], 2) }}</td>
                                                     <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>
-                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete']) !!}
+                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                         <div class='btn-group'>
                                                             {!! Form::button('<i class="fa fa-trash"></i>', [
                                                                 'type' => 'submit',
                                                                 'class' => 'btn btn-ghost-danger',
-                                                                'onclick' => "return confirm('Are you sure to delete the Invoice Detail?')"
+                                                                'data-needs-warehouse-return' => ($invoicedetail['warehouse_id'] === null && $needsReturnWarehouseSelection) ? '1' : '0',
                                                             ]) !!}
                                                         </div>
                                                     {!! Form::close() !!}
@@ -83,12 +83,12 @@
                                                     <td>{{ number_format($invoicedetail['price'], 2) }}</td>
                                                     <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>
-                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete']) !!}
+                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                         <div class='btn-group'>
                                                             {!! Form::button('<i class="fa fa-trash"></i>', [
                                                                 'type' => 'submit',
                                                                 'class' => 'btn btn-ghost-danger',
-                                                                'onclick' => "return confirm('Are you sure to delete the Invoice Detail?')"
+                                                                'data-needs-warehouse-return' => ($invoicedetail['warehouse_id'] === null && $needsReturnWarehouseSelection) ? '1' : '0',
                                                             ]) !!}
                                                         </div>
                                                     {!! Form::close() !!}
@@ -276,6 +276,29 @@
             </div>
         </div>
     </div>
+
+    <!-- Return Stock To Warehouse Modal (driver not currently on a trip) -->
+    <div id="returnWarehouseModal" class="modal fade">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h4 class="modal-title h6">Select Warehouse to Return Stock</h4>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>This driver is not currently on a trip, so this stock can't be returned to their lorry. Please choose a warehouse to return it to instead.</p>
+                    <div class="form-group">
+                        {!! Form::label('return_warehouse_id', 'Select Warehouse') !!}<span class="asterisk"> *</span>
+                        {!! Form::select('return_warehouse_id', $warehouseItems, null, ['class' => 'form-control select2', 'placeholder' => 'Select Warehouse...', 'id' => 'return_warehouse_id']) !!}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmReturnWarehouseBtn">Confirm Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -386,7 +409,47 @@
                 width: '100%',
                 dropdownParent: $('#addInvoiceItemModal')
             });
-            
+
+            $('#return_warehouse_id').select2({
+                width: '100%',
+                dropdownParent: $('#returnWarehouseModal')
+            });
+
+            // Delete invoice detail - some rows (driver-sourced item, driver not currently
+            // on a trip) need the admin to pick a warehouse to return stock to first.
+            var pendingDeleteForm = null;
+
+            $('.invoice-detail-delete-form').on('submit', function(e) {
+                var needsWarehouseReturn = $(this).find('button[type=submit]').data('needs-warehouse-return');
+
+                if (needsWarehouseReturn == '1' || needsWarehouseReturn === 1) {
+                    e.preventDefault();
+                    pendingDeleteForm = this;
+                    $('#return_warehouse_id').val('').trigger('change');
+                    $('#returnWarehouseModal').modal('show');
+                    return false;
+                }
+
+                return confirm('Are you sure to delete the Invoice Detail?');
+            });
+
+            $('#confirmReturnWarehouseBtn').on('click', function() {
+                var warehouseId = $('#return_warehouse_id').val();
+
+                if (!warehouseId) {
+                    noti('e', 'Please select a warehouse', '');
+                    return;
+                }
+
+                if (pendingDeleteForm) {
+                    $(pendingDeleteForm).append(
+                        '<input type="hidden" name="return_warehouse_id" value="' + warehouseId + '">'
+                    );
+                    $('#returnWarehouseModal').modal('hide');
+                    pendingDeleteForm.submit();
+                }
+            });
+
             // Warehouse selection change
             $('#modal_warehouse_id').on('change', function() {
                 var warehouseId = $(this).val();

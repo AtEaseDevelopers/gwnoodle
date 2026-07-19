@@ -217,6 +217,37 @@ class InventoryBalanceController extends AppBaseController
     }
 
     /**
+     * Get batches for a specific product within a specific lorry's inventory (AJAX)
+     */
+    public function getLorryProductBatches($lorryId, $productId)
+    {
+        try {
+            $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
+
+            if (!$inventoryBalance || empty($inventoryBalance->batches)) {
+                return response()->json(['success' => true, 'batches' => []]);
+            }
+
+            $batches = collect($inventoryBalance->batches_with_details)
+                ->where('product_id', (int) $productId)
+                ->where('quantity', '>', 0)
+                ->values();
+
+            return response()->json([
+                'success' => true,
+                'batches' => $batches,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in getLorryProductBatches: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error loading batches: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Stock Out - Return batch from lorry to warehouse
      */
     public function stockout(Request $request)
