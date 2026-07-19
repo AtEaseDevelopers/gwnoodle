@@ -79,19 +79,38 @@ class InvoiceController extends AppBaseController
         $input = $request->all();
 
         $input['date'] = date_create($input['date']);
+        $input['status'] = 0; // Set default status to 0 (New)
 
-        if(empty($input['invoiceno']) || $input['invoiceno'] == 'SYSTEM GENERATED IF BLANK') {
-            // Generate new invoice number using the new method
-            $input['invoiceno'] = Invoice::generateInvoiceNumber();
-        } else {
-            // Check if the provided invoice number already exists
-            if(Invoice::invoiceNumberExists($input['invoiceno'])) {
-                // If exists, generate a new one with incremented number
-                $input['invoiceno'] = Invoice::generateInvoiceNumber();
+        $requestedInvoiceNo = (!empty($input['invoiceno']) && $input['invoiceno'] !== 'SYSTEM GENERATED IF BLANK')
+            ? $input['invoiceno']
+            : null;
+
+        $invoice = null;
+        $attempts = 0;
+        $useRequestedInvoiceNo = true;
+
+        while (!$invoice) {
+            $attempts++;
+
+            try {
+                $invoice = DB::transaction(function () use (&$input, $requestedInvoiceNo, $useRequestedInvoiceNo) {
+                    if ($useRequestedInvoiceNo && $requestedInvoiceNo && !Invoice::invoiceNumberExists($requestedInvoiceNo)) {
+                        $input['invoiceno'] = $requestedInvoiceNo;
+                    } else {
+                        $input['invoiceno'] = Invoice::generateInvoiceNumber();
+                    }
+
+                    return $this->invoiceRepository->create($input);
+                });
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($attempts >= 5 || !Invoice::isDuplicateInvoiceNumberException($e)) {
+                    throw $e;
+                }
+                // Duplicate invoiceno race - retry with a freshly generated number
+                $useRequestedInvoiceNo = false;
             }
         }
-        $input['status'] = 0; // Set default status to 0 (New)
-        $invoice = $this->invoiceRepository->create($input);
+
         Flash::success('Invoice created successfully.');
         
 

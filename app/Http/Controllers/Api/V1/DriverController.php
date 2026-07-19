@@ -2083,29 +2083,44 @@ class DriverController extends Controller
             }
             
             DB::beginTransaction();
-            
-            // Generate invoice number
-            if(!empty($data['invoiceno'])){
-                $invoiceno = $data['invoiceno'];
-            }else{
-                $invoiceno = Invoice::generateInvoiceNumber($driver->id);
+
+            // Create invoice - retry with a freshly generated number if an auto-generated
+            // invoiceno collides with a concurrently-created one (race condition guard)
+            $invoice = null;
+            $attempts = 0;
+
+            while (!$invoice) {
+                $attempts++;
+
+                try {
+                    $invoice = DB::transaction(function () use ($data, $driver) {
+                        $invoiceno = !empty($data['invoiceno'])
+                            ? $data['invoiceno']
+                            : Invoice::generateInvoiceNumber($driver->id);
+
+                        $newInvoice = new Invoice();
+                        $newInvoice->date = $data['date'] ?? date('Y-m-d H:i:s');
+                        $newInvoice->invoiceno = $invoiceno;
+                        $newInvoice->customer_id = $data['customer_id'];
+                        $newInvoice->driver_id = $driver->id;
+                        $newInvoice->paymentterm = $data['paymentterm'];
+                        $newInvoice->chequeno = $data['cheque_no'] ?? null;
+                        $newInvoice->remark = $data['remark'] ?? null;
+                        $newInvoice->trip_uuid = $driver->trip_id;
+                        $newInvoice->status = Invoice::STATUS_COMPLETED;
+                        $newInvoice->save();
+
+                        return $newInvoice;
+                    });
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // Only retry auto-generated numbers - an explicitly provided invoiceno
+                    // colliding should surface as a real error, not be silently replaced
+                    if (!empty($data['invoiceno']) || $attempts >= 5 || !Invoice::isDuplicateInvoiceNumberException($e)) {
+                        throw $e;
+                    }
+                }
             }
-            
-            // Create invoice
-            $invoice = new Invoice();
-            $invoice->date = $data['date'] ?? date('Y-m-d H:i:s');
-            $invoice->invoiceno = $invoiceno;
-            $invoice->customer_id = $data['customer_id'];
-            $invoice->driver_id = $driver->id;
-            $invoice->paymentterm = $data['paymentterm'];
-            $invoice->chequeno = $data['cheque_no'] ?? null;
-            $invoice->remark = $data['remark'] ?? null;
-            $invoice->trip_uuid = $driver->trip_id;
-            $invoice->status = Invoice::STATUS_COMPLETED;
 
-
-            $invoice->save();
-            
             $totalprice = 0;
             
             // Process items that exist in inventory (deduct stock)
@@ -8576,28 +8591,46 @@ class DriverController extends Controller
 
                 DB::beginTransaction();
 
-                $invoiceNo = !empty($invoiceInput['invoiceno']) && $invoiceInput['invoiceno'] !== 'SYSTEM GENERATED IF BLANK'
+                $requestedInvoiceNo = !empty($invoiceInput['invoiceno']) && $invoiceInput['invoiceno'] !== 'SYSTEM GENERATED IF BLANK'
                     ? $invoiceInput['invoiceno']
                     : null;
 
-                if ($invoiceNo && Invoice::where('invoiceno', $invoiceNo)->exists()) {
-                    $invoiceNo = null;
-                }
-                if (!$invoiceNo) {
-                    $invoiceNo = Invoice::generateInvoiceNumber($driver->id);
-                }
+                // Create invoice - retry with a freshly generated number if it collides
+                // with a concurrently-created one (race condition guard)
+                $invoice = null;
+                $invoiceAttempts = 0;
+                $useRequestedInvoiceNo = true;
 
-                $invoice = new Invoice();
-                $invoice->invoiceno   = $invoiceNo;
-                $invoice->date        = $invoiceInput['date'] ?? date('Y-m-d H:i:s');
-                $invoice->customer_id = $customer->id;
-                $invoice->driver_id   = $driver->id;
-                $invoice->paymentterm = $invoiceInput['paymentterm'];
-                $invoice->chequeno    = $invoiceInput['cheque_no'] ?? null;
-                $invoice->remark      = $invoiceInput['remark'] ?? null;
-                $invoice->trip_uuid   = $driver->trip_id;
-                $invoice->status      = Invoice::STATUS_COMPLETED;
-                $invoice->save();
+                while (!$invoice) {
+                    $invoiceAttempts++;
+
+                    try {
+                        $invoice = DB::transaction(function () use ($invoiceInput, $customer, $driver, $requestedInvoiceNo, $useRequestedInvoiceNo) {
+                            $invoiceNo = ($useRequestedInvoiceNo && $requestedInvoiceNo && !Invoice::where('invoiceno', $requestedInvoiceNo)->exists())
+                                ? $requestedInvoiceNo
+                                : Invoice::generateInvoiceNumber($driver->id);
+
+                            $newInvoice = new Invoice();
+                            $newInvoice->invoiceno   = $invoiceNo;
+                            $newInvoice->date        = $invoiceInput['date'] ?? date('Y-m-d H:i:s');
+                            $newInvoice->customer_id = $customer->id;
+                            $newInvoice->driver_id   = $driver->id;
+                            $newInvoice->paymentterm = $invoiceInput['paymentterm'];
+                            $newInvoice->chequeno    = $invoiceInput['cheque_no'] ?? null;
+                            $newInvoice->remark      = $invoiceInput['remark'] ?? null;
+                            $newInvoice->trip_uuid   = $driver->trip_id;
+                            $newInvoice->status      = Invoice::STATUS_COMPLETED;
+                            $newInvoice->save();
+
+                            return $newInvoice;
+                        });
+                    } catch (\Illuminate\Database\QueryException $e) {
+                        if ($invoiceAttempts >= 5 || !Invoice::isDuplicateInvoiceNumberException($e)) {
+                            throw $e;
+                        }
+                        $useRequestedInvoiceNo = false;
+                    }
+                }
 
                 $totalprice = 0;
 

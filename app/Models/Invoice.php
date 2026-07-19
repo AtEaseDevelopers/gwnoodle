@@ -159,12 +159,15 @@ class Invoice extends Model
         }
 
         $userCode = $user->invoice_code ?? ''; // Default to R00 if not set
-        
+
         // Get the latest invoice number for current month and user code
         $prefix = "INV{$year}{$month}/{$userCode}/";
-        
-        // Find the latest invoice with this prefix
-        $latestInvoice = self::orderBy('id', 'desc')
+
+        // Find the latest invoice matching this exact prefix (not just the globally
+        // latest invoice, which may belong to a different driver/month/prefix)
+        $latestInvoice = self::where('invoiceno', 'like', $prefix . '%')
+            ->orderBy('id', 'desc')
+            ->lockForUpdate()
             ->first();
         if ($latestInvoice) {
             // Extract the numeric part
@@ -200,6 +203,17 @@ class Invoice extends Model
     public static function getNextInvoiceNumber($driver_id = null)
     {
         return self::generateInvoiceNumber($driver_id);
+    }
+
+    /**
+     * Whether a QueryException was caused by the invoiceno unique constraint
+     * (e.g. two concurrent requests generating the same next number).
+     */
+    public static function isDuplicateInvoiceNumberException(\Throwable $e): bool
+    {
+        return $e instanceof \Illuminate\Database\QueryException
+            && $e->getCode() == 23000
+            && str_contains($e->getMessage(), 'invoiceno');
     }
 
     public static function invoiceNumberExists($invoiceNumber)
