@@ -32,9 +32,11 @@
 
                                     <div class="pull-right">
                                         <a href="{{ route('invoices.detail', Crypt::encrypt($id)) }}" >Add Item <i class="fa fa-plus-square fa-lg"></i></a>
-                                        <button class="border-0 bg-transparent text-primary" data-toggle="modal" data-target="#addInvoiceItemModal">
-                                            Scan Barcode <i class="fa fa-barcode fa-lg"></i>
-                                        </button>
+                                        @unless($isDriverInvoice)
+                                            <button class="border-0 bg-transparent text-primary" data-toggle="modal" data-target="#addInvoiceItemModal">
+                                                Scan Barcode <i class="fa fa-barcode fa-lg"></i>
+                                            </button>
+                                        @endunless
                                     </div>
                              </div>
                              <div class="card-body">

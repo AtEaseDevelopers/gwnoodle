@@ -91,6 +91,7 @@ class InvoiceController extends AppBaseController
             }
         }
         $input['status'] = 0; // Set default status to 0 (New)
+        $input['created_by'] = Auth::id();
         $invoice = $this->invoiceRepository->create($input);
         Flash::success('Invoice created successfully.');
         
@@ -130,6 +131,7 @@ class InvoiceController extends AppBaseController
             ->with('invoice', $invoice)
             ->with('invoicedetails', $invoicedetails)
             ->with('id',$id)
+            ->with('isDriverInvoice', $isDriverInvoice)
             ->with('needsReturnWarehouseSelection', $needsReturnWarehouseSelection);
     }
 

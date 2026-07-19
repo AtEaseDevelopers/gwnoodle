@@ -35,7 +35,11 @@ class InvoiceDataTable extends DataTable
         }
 
         $dataTable->addColumn('created_by', function ($invoice) {
-            return $invoice->trip_uuid ? 'Driver' : 'Admin';
+            if ($invoice->trip_uuid) {
+                return $invoice->driver->name ?? 'Driver';
+            }
+
+            return $invoice->creator->name ?? 'Admin';
         });
 
         return $dataTable->addColumn('action', 'invoices.datatables_actions');
@@ -52,6 +56,7 @@ class InvoiceDataTable extends DataTable
         return $model->newQuery()
         ->with('customer')
         ->with('driver:id,name')
+        ->with('creator:id,name')
         ->with('kelindan:id,name')
         ->with('agent:id,name')
         ->with('supervisor:id,name')
