@@ -194,6 +194,7 @@ class WarehouseDataTable extends DataTable
                 'name' => 'id',
                 'searchable' => true,
                 'orderable' => true,
+                'visible' => false,
                 'width' => '50px'
             ],
             [
