@@ -104,7 +104,7 @@ class WarehouseDataTable extends DataTable
                 'stateSave' => true,
                 'stateDuration' => 0,
                 'processing' => true,
-                'order'     => [[0, 'desc']],
+                'order'     => [[0, 'asc']],
                 'lengthMenu' => [[10, 50, 100, 300], ['10 rows', '50 rows', '100 rows', '300 rows']],
                 'buttons' => [
                     [
@@ -188,15 +188,6 @@ class WarehouseDataTable extends DataTable
     protected function getColumns()
     {
         return [
-            [
-                'title' => 'ID',
-                'data' => 'id',
-                'name' => 'id',
-                'searchable' => true,
-                'orderable' => true,
-                'visible' => false,
-                'width' => '50px'
-            ],
             [
                 'title' => 'Warehouse Name',
                 'data' => 'name',
