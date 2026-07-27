@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\autocount_plugin;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
@@ -38,6 +39,11 @@ class ProductController extends Controller
 
                 // Check if ItemCode matches allowed prefix + has a dash (e.g. OEM123-xxx)
                 if (!$this->isAllowedItemCode($itemCode)) {
+                    Log::channel('autocount_ignored_products')->info('Ignored product - prefix not allowed', [
+                        'item_code'   => $itemCode ?: null,
+                        'description' => $record['Description'] ?? null,
+                    ]);
+
                     $processedResults[] = [
                         'unit_code' => $itemCode ?: null,
                         'status'    => 'skipped',
