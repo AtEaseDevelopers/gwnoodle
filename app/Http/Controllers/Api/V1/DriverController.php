@@ -2705,10 +2705,6 @@ class DriverController extends Controller
             ->with('invoicedetail.product')
             ->first();
     
-            if (empty($invoice)) {
-                abort('404');
-            }
-    
             $min = 450;
             $each = 23;
             $height = (count($invoice['invoicedetail']) * $each) + $min;
