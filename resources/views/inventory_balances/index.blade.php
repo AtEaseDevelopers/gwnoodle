@@ -96,11 +96,6 @@
                         <span id="summaryText"></span>
                     </div>
 
-                    <div class="form-group">
-                        <label for="remark_stockin" class="col-form-label">{{ __('Remark') }}:</label>
-                        <textarea name="remark" id="remark_stockin" class="form-control" rows="2" placeholder="{{ __('Optional - leave blank to use default remark') }}"></textarea>
-                    </div>
-
                     <div class="form-group text-right mt-3">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('Cancel') }}</button>
                         <button type="submit" name="button" class="btn btn-success" id="stockinSubmitBtn" disabled>{{ __('Stock In') }}</button>
@@ -155,11 +150,6 @@
                     <div class="alert alert-info" id="batchDetails" style="display: none;">
                         <strong>{{ __('Return Details:') }}</strong>
                         <div id="batchDetailsText"></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="remark_stockout" class="col-form-label">{{ __('Remark') }}:</label>
-                        <textarea name="remark" id="remark_stockout" class="form-control" rows="2" placeholder="{{ __('Optional - leave blank to use default remark') }}"></textarea>
                     </div>
 
                     <div class="form-group text-right mt-3">
@@ -1198,7 +1188,6 @@
             $('#warehouse_id_stockin').val('').trigger('change');
             $('#lorry_id_stockin').val('').trigger('change');
             $('#batch_code_scan').val('');
-            $('#remark_stockin').val('');
             stockinWarehouseBatches = {};
             clearStockInItems();
             hideStockInMessages();
@@ -1210,7 +1199,6 @@
         $('#stockout').on('hidden.bs.modal', function() {
             $(this).find('select').val('').trigger('change');
             $(this).find('input[type="number"]').val('');
-            $('#remark_stockout').val('');
             $(this).find('.quantity-error').hide();
             $(this).find('#batchDetails').hide();
             $('#stockoutSubmitBtn').prop('disabled', true);
