@@ -9058,7 +9058,7 @@ class DriverController extends Controller
                 <table style="margin-bottom: 5px;">
                     <thead>
                         <tr style="font-weight: bold;">
-                            <td class="ta-l">Price</td>
+                            <td class="ta-l"></td>
                             <td class="ta-r">Qty</td>
                             <td class="ta-r">Amount</td>
                         </tr>
