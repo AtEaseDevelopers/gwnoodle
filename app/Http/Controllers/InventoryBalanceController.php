@@ -75,7 +75,8 @@ class InventoryBalanceController extends AppBaseController
             'lorry_id' => 'required|exists:lorrys,id',
             'items' => 'required|array|min:1',
             'items.*.product_batch_id' => 'required|exists:product_batches,id',
-            'items.*.quantity' => 'required|integer|min:1'
+            'items.*.quantity' => 'required|integer|min:1',
+            'remark' => 'nullable|string|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -86,6 +87,7 @@ class InventoryBalanceController extends AppBaseController
         
         $lorry = Lorry::find($request->lorry_id);
         $warehouseId = $request->warehouse_id;
+        $remark = trim((string) $request->input('remark'));
         $items = collect($request->input('items', []))
             ->groupBy('product_batch_id')
             ->map(function ($group, $batchId) {
@@ -160,7 +162,7 @@ class InventoryBalanceController extends AppBaseController
                     'quantity' => $item['quantity'],
                     'date' => now(),
                     'user' => Auth::user()->name,
-                    'remark' => 'Received from warehouse'
+                    'remark' => $remark !== '' ? $remark : 'Received from warehouse'
                 ]);
 
                 InventoryTransaction::create([
@@ -172,7 +174,7 @@ class InventoryBalanceController extends AppBaseController
                     'quantity' => -$item['quantity'],
                     'date' => now(),
                     'user' => Auth::user()->name,
-                    'remark' => "Distributed to van #{$lorry->lorryno}."
+                    'remark' => $remark !== '' ? $remark : "Distributed to van #{$lorry->lorryno}."
                 ]);
 
                 $totalUnits += $item['quantity'];
@@ -256,7 +258,8 @@ class InventoryBalanceController extends AppBaseController
             'lorry_id' => 'required|exists:lorrys,id',
             'batch_id' => 'required|exists:product_batches,id',
             'to_warehouse_id' => 'required|exists:warehouses,id',
-            'quantity' => 'required|integer|min:1'
+            'quantity' => 'required|integer|min:1',
+            'remark' => 'nullable|string|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -272,6 +275,7 @@ class InventoryBalanceController extends AppBaseController
             return redirect()->back();
         }
 
+        $remark = trim((string) $request->input('remark'));
         $currentQuantity = $inventoryBalance->getBatchQuantity($request->batch_id);
 
         if ($currentQuantity < $request->quantity) {
@@ -324,7 +328,7 @@ class InventoryBalanceController extends AppBaseController
                 'quantity' => -$request->quantity,
                 'date' => now(),
                 'user' => Auth::user()->name,
-                'remark' => 'Returned from van to warehouse'
+                'remark' => $remark !== '' ? $remark : 'Returned from van to warehouse'
             ]);
 
             // Create inventory transaction for warehouse (stock in)
@@ -337,7 +341,7 @@ class InventoryBalanceController extends AppBaseController
                 'quantity' => $request->quantity,
                 'date' => now(),
                 'user' => Auth::user()->name,
-                'remark' => 'Received from van'
+                'remark' => $remark !== '' ? $remark : 'Received from van'
             ]);
 
             DB::commit();
