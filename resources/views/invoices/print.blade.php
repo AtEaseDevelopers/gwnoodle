@@ -252,7 +252,7 @@ p{
         <table style="margin-bottom: 5px;">
             <thead>
                 <tr style="font-weight: bold;">
-                    <td class="ta-l"></td>
+                    <td class="ta-l">Price</td>
                     <td class="ta-r">Qty</td>
                     <td class="ta-r">Amount</td>
                 </tr>
@@ -261,11 +261,13 @@ p{
                 @foreach ($invoice['invoicedetail'] as $invoicedetail)
 
                 <tr class="item-row">
-                    <td class="ta-l" style="width: 25%;">{{ $invoicedetail['product']['name'] }} <br>({{$invoicedetail->batch->batch_code }})</td>
+                    <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['price'], 2) }}</td>
                     <td class="ta-r" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
                     <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                 </tr>
-
+                <tr class="item-row">
+                    <td colspan="3" class="item-name">{{ $invoicedetail['product']['name'] }} <br>({{$invoicedetail->batch->batch_code }})</td>
+                </tr>
                 @endforeach
             </tbody>
         </table>
