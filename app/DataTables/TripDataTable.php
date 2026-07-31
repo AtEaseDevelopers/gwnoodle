@@ -145,19 +145,19 @@ class TripDataTable extends DataTable
                             if(columns[index].title == \'Type\'){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Start Trip</option><option value="0">End Trip</option></select>\';
                                 $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
-                                    column.search($(this).val(),true,false).draw();
+                                    column.search($(this).val(),false,true).draw();
                                     ShowLoad();
                                 });
                             }else if(columns[index].title == \'Date\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
                                 $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
-                                    column.search($(this).val(),true,false).draw();
+                                    column.search($(this).val(),false,true).draw();
                                     ShowLoad();
                                 });
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                                 $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
-                                    column.search($(this).val(),true,false).draw();
+                                    column.search($(this).val(),false,true).draw();
                                     ShowLoad();
                                 });
                             }

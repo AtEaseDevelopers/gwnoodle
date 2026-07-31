@@ -377,8 +377,8 @@
                 <th class="col-description">Description</th>
                 <th class="col-qty">Qty</th>
                 <th class="col-uom">UOM</th>
-                <th class="col-price">U/Price</th>
                 @if($mode !== 'do')
+                <th class="col-price">U/Price</th>
                 <th class="col-disc">Disc.</th>
                 <th class="col-total">Total RM</th>
                 @endif
@@ -392,8 +392,8 @@
                 <td class="col-description">{{ $detail->product->name ?? '-' }}({{ $detail->batch->batch_code }})</td>
                 <td class="col-qty">{{ number_format($detail->quantity) }}</td>
                 <td class="col-uom">{{ $detail->product->uom ?? 'PCS' }}</td>
-                <td class="col-price">{{ number_format($detail->price, 2) }}</td>
                 @if($mode !== 'do')
+                <td class="col-price">{{ number_format($detail->price, 2) }}</td>
                 <td class="col-disc">-</td>
                 <td class="col-total">{{ number_format($detail->totalprice, 2) }}</td>
                 @endif
@@ -448,16 +448,15 @@
             <div class="note-item">2. Goods sold are neither returnable nor refundable. Otherwise a cancellation fee of 20% on purchase price will be imposed.</div>
         </div>
 
-        <!-- Authorised Signature -->
-        <table style="width: 100%; margin-top: 40px;">
-            <tr>
-                <td style="text-align: center;">
-                    <div style="border-top: 1px solid #000; width: 220px;">
-                        <span style="font-size: 13px; font-weight: bold; white-space: nowrap;">Authorised Signature</span>
-                    </div>
-                </td>
-            </tr>
-        </table>
+        <!-- Computer Generated Notice -->
+        <div style="margin-top: 40px; text-align: center;">
+            <span style="font-size: 13px; font-weight: bold;">Computer generated, no signature required</span>
+        </div>
+
+        <!-- Bank Info -->
+        <div style="margin-top: 15px; font-size: 13px;">
+            <strong>Maybank :</strong> 551285084789 GW NOODLES SDN. BHD.
+        </div>
     </div>
 
 </div>

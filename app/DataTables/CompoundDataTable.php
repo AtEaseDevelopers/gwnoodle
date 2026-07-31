@@ -94,7 +94,7 @@ class CompoundDataTable extends DataTable
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }
                             $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
-                                column.search($(this).val(),true,false).draw();
+                                column.search($(this).val(),false,true).draw();
                                 ShowLoad();
                             })
                         }

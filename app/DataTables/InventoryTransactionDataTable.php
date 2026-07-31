@@ -202,7 +202,7 @@ class InventoryTransactionDataTable extends DataTable
                                 var input = \'<input type="text" class="form-control-sm" placeholder="Search">\';
                             }
                             $(input).appendTo($(column.footer()).empty()).on(\'keyup change\', function(){
-                                column.search($(this).val(),true,false).draw();
+                                column.search($(this).val(),false,true).draw();
                                 ShowLoad();
                             });
                         }
