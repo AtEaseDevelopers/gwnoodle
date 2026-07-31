@@ -171,14 +171,17 @@ class InvoiceDataTable extends DataTable
                                 return data ? data : "";
                             }
 
-                            var statusColor = "#6c757d"; // default/other - gray
+                            var badgeClass = "secondary"; // default/other - gray
                             if (data === "success") {
-                                statusColor = "#28a745"; // green
+                                badgeClass = "success"; // green
                             } else if (data === "failed") {
-                                statusColor = "#dc3545"; // red
+                                badgeClass = "danger"; // red
                             } else if (data === "pending") {
-                                statusColor = "#e0a800"; // amber
+                                badgeClass = "warning"; // amber
                             }
+
+                            var label = data.charAt(0).toUpperCase() + data.slice(1);
+                            var badgeHtml = "<span class=\'badge badge-" + badgeClass + "\' style=\'padding: 5px 10px; min-width: 60px; display: inline-block; text-align: center;\'>" + label + "</span>";
 
                             if (row.autocount_message) {
                                 var rawMsg = row.autocount_message;
@@ -203,10 +206,10 @@ class InvoiceDataTable extends DataTable
                                     .replace(/</g, "&lt;")
                                     .replace(/>/g, "&gt;");
 
-                                return "<span class=\'autocount-error-popover\' data-msg=\'" + safeMsg + "\' style=\'cursor:pointer; border-bottom: 2px dotted " + statusColor + "; color: " + statusColor + "; font-weight: 500;\'>" + data + "</span>";
+                                return "<span class=\'autocount-error-popover\' data-msg=\'" + safeMsg + "\' style=\'cursor:pointer;\'>" + badgeHtml + "</span>";
                             }
 
-                            return "<span style=\'color: " + statusColor + "; font-weight: 500;\'>" + data + "</span>";
+                            return badgeHtml;
                         }'
                     ],
                   
