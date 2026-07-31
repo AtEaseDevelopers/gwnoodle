@@ -171,6 +171,12 @@ class InvoiceController extends AppBaseController
             return redirect(route('invoices.index'));
         }
 
+        if (strtolower($invoice->autocount_status ?? '') === 'completed') {
+            Flash::error('This invoice has been submitted to Autocount and can no longer be edited.');
+
+            return redirect(route('invoices.index'));
+        }
+
         return view('invoices.edit')->with('invoice', $invoice);
     }
 
@@ -192,7 +198,13 @@ class InvoiceController extends AppBaseController
 
             return redirect(route('invoices.index'));
         }
-    
+
+        if (strtolower($invoice->autocount_status ?? '') === 'completed') {
+            Flash::error('This invoice has been submitted to Autocount and can no longer be edited.');
+
+            return redirect(route('invoices.index'));
+        }
+
         $old_payment = $invoice['paymentterm'];
         
         $input = $request->all();

@@ -63,6 +63,7 @@ class ActivityLogDataTable extends DataTable
     {
         return $model->newQuery()
             ->with('user')
+            ->where('user_name', '!=', 'System')
             ->select('activity_logs.*')
             ->latest();
     }

@@ -13,9 +13,11 @@
     <a href="{{ route('invoices.show', encrypt($id)) }}" class='btn btn-ghost-success'>
        <i class="fa fa-eye"></i>
     </a>
+   @if(strtolower($autocount_status ?? '') !== 'completed')
    <a href="{{ route('invoices.edit', encrypt($id)) }}" class='btn btn-ghost-info'>
        <i class="fa fa-edit"></i>
     </a>
+   @endif
       @noeinvoice
     {!! Form::button('<i class="fa fa-trash"></i>', [
         'type' => 'submit',
