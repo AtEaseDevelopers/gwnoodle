@@ -2137,10 +2137,11 @@ class DriverController extends Controller
                 $invoicedetail->price = $item['price'];
                 $invoicedetail->totalprice = $item['quantity'] * $item['price'];
                 $invoicedetail->remark = $item['remark'] ?? null;
+                $invoicedetail->deducted_from_inventory = true;
                 $invoicedetail->save();
-                
+
                 $totalprice += $invoicedetail->totalprice;
-                
+
                 // Create inventory transaction record
                 $inventoryTransaction = new InventoryTransaction();
                 $inventoryTransaction->type = 2;
@@ -2174,15 +2175,16 @@ class DriverController extends Controller
                 $invoicedetail->price = $ignoredItem['price'];
                 $invoicedetail->totalprice = $ignoredItem['quantity'] * $ignoredItem['price'];
                 $invoicedetail->remark = $ignoredItem['remark'] ?? null;
+                $invoicedetail->deducted_from_inventory = false;
                 $invoicedetail->save();
-                
+
                 $totalprice += $invoicedetail->totalprice;
-                
+
                 // NO stock deduction for ignored items
                 // NO inventory transaction created
                 // NO lorry inventory balance update
             }
-            
+
             // Create invoice payment for cash transactions
             if ($data['paymentterm'] == 1) {
                 $invoicepayment = new InvoicePayment();
@@ -2326,17 +2328,15 @@ class DriverController extends Controller
             }
             
             foreach ($oldDetails as $oldDetail) {
-                // Check if this batch exists in inventory balance
-                $hasInventory = false;
-                if ($inventoryBalance) {
-                    $availableQuantity = $inventoryBalance->getBatchQuantity($oldDetail->product_batch_id);
-                    if ($availableQuantity > 0 || $inventoryBalance->batches && array_key_exists($oldDetail->product_batch_id, ($inventoryBalance->batches ?? []))) {
-                        $hasInventory = true;
-                    }
-                }
-                
+                // Whether this line item's stock was actually deducted from the
+                // lorry inventory at creation time (persisted flag - NOT inferred
+                // from the current balance, since a batch that's since been fully
+                // used up gets its key removed from InventoryBalance::batches,
+                // making it indistinguishable from "was never deducted").
+                $hasInventory = $oldDetail->deducted_from_inventory && $inventoryBalance;
+
                 if ($hasInventory) {
-                    
+
                     // Restore inventory balance
                     if ($inventoryBalance) {
                         $inventoryBalance->updateBatchQuantity(
@@ -2485,10 +2485,11 @@ class DriverController extends Controller
                 $invoicedetail->price = $item['price'];
                 $invoicedetail->totalprice = $item['quantity'] * $item['price'];
                 $invoicedetail->remark = $item['remark'] ?? null;
+                $invoicedetail->deducted_from_inventory = true;
                 $invoicedetail->save();
-                
+
                 $totalprice += $invoicedetail->totalprice;
-                                
+
                 // Create inventory transaction record
                 $inventoryTransaction = new InventoryTransaction();
                 $inventoryTransaction->type = 2; // Stock Out
@@ -2522,15 +2523,16 @@ class DriverController extends Controller
                 $invoicedetail->price = $ignoredItem['price'];
                 $invoicedetail->totalprice = $ignoredItem['quantity'] * $ignoredItem['price'];
                 $invoicedetail->remark = $ignoredItem['remark'] ?? null;
+                $invoicedetail->deducted_from_inventory = false;
                 $invoicedetail->save();
-                
+
                 $totalprice += $invoicedetail->totalprice;
-                
+
                 // NO stock deduction for ignored items
                 // NO inventory transaction created
                 // NO lorry inventory balance update
             }
-            
+
             // ============================================
             // STEP 5: UPDATE INVOICE PAYMENT
             // ============================================

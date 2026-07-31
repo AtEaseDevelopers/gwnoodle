@@ -19,12 +19,13 @@ class InvoiceDetail extends Model
     public $fillable = [
         'invoice_id',
         'product_id',
-        'product_batch_id', 
+        'product_batch_id',
         'warehouse_id',
         'quantity',
         'price',
         'totalprice',
-        'remark'
+        'remark',
+        'deducted_from_inventory'
     ];
 
     /**
@@ -40,7 +41,8 @@ class InvoiceDetail extends Model
         'quantity' => 'integer',
         'price' => 'float',
         'totalprice' => 'float',
-        'remark' => 'string'
+        'remark' => 'string',
+        'deducted_from_inventory' => 'boolean'
     ];
 
     /**
