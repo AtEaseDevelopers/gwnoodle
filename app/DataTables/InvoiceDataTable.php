@@ -181,7 +181,7 @@ class InvoiceDataTable extends DataTable
                             }
 
                             var label = data.charAt(0).toUpperCase() + data.slice(1);
-                            var badgeHtml = "<span class=\'badge badge-" + badgeClass + "\' style=\'padding: 5px 10px; min-width: 60px; display: inline-block; text-align: center;\'>" + label + "</span>";
+                            var badgeHtml = "<span class=\'badge badge-" + badgeClass + "\' style=\'padding: 5px 10px; min-width: 60px; display: inline-block; text-align: center; color: #000;\'>" + label + "</span>";
 
                             if (row.autocount_message) {
                                 var rawMsg = row.autocount_message;
