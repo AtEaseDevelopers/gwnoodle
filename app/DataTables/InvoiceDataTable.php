@@ -206,18 +206,22 @@ class InvoiceDataTable extends DataTable
                                 return;
                             }
 
-                            var bgColor = "#6c757d"; // default/other - gray
+                            var bgColor = "#e2e3e5"; // default/other - light gray
+                            var textColor = "#383d41";
                             if (cellData === "success") {
-                                bgColor = "#28a745"; // green
+                                bgColor = "#d4edda"; // light green
+                                textColor = "#155724";
                             } else if (cellData === "failed") {
-                                bgColor = "#dc3545"; // red
+                                bgColor = "#f8d7da"; // light red
+                                textColor = "#721c24";
                             } else if (cellData === "pending") {
-                                bgColor = "#e0a800"; // amber
+                                bgColor = "#fff3cd"; // light amber
+                                textColor = "#856404";
                             }
 
                             $(td).css({
                                 "background-color": bgColor,
-                                "color": "#fff",
+                                "color": textColor,
                                 "font-weight": "500",
                                 "text-align": "center"
                             });
