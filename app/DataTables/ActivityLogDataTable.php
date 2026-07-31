@@ -32,6 +32,23 @@ class ActivityLogDataTable extends DataTable
             ->editColumn('action', function($row) {
                 return $row->action;
             })
+            ->editColumn('module', function($row) {
+                return ucwords(str_replace('_', ' ', $row->module));
+            })
+            ->addColumn('old_data_display', function($row) {
+                if ($row->old_data) {
+                    $count = is_array($row->old_data) ? count($row->old_data) : count((array)$row->old_data);
+                    return $count . ' fields';
+                }
+                return '-';
+            })
+            ->addColumn('new_data_display', function($row) {
+                if ($row->new_data) {
+                    $count = is_array($row->new_data) ? count($row->new_data) : count((array)$row->new_data);
+                    return $count . ' fields';
+                }
+                return '-';
+            })
             ->addColumn('action_buttons', 'activity_logs.datatables_actions')
             ->rawColumns(['action_buttons']);
     }
@@ -152,38 +169,96 @@ class ActivityLogDataTable extends DataTable
                     ],
                     [
                         'targets' => 4,
+                        'width' => '120px',
+                        'className' => 'text-center',
+                    ],
+                    [
+                        'targets' => 5,
+                        'width' => '90px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type, row){
+                            if (type === "export" || type === "filter") return data;
+                            if (data && data !== "-") {
+                                var content = row.old_data ? JSON.stringify(row.old_data, null, 2) : "";
+                                var safeContent = String(content)
+                                    .replace(/&/g, "&amp;")
+                                    .replace(/"/g, "&quot;")
+                                    .replace(/\'/g, "&#39;")
+                                    .replace(/</g, "&lt;")
+                                    .replace(/>/g, "&gt;");
+                                return "<span class=\'data-hover-popover\' data-toggle=\'popover\' data-content=\'<pre style=&quot;white-space:pre-wrap;margin:0;font-size:11px;&quot;>" + safeContent + "</pre>\' style=\'cursor:pointer;\'><span class=\'badge badge-warning\'>" + data + "</span></span>";
+                            }
+                            return "-";
+                        }'
+                    ],
+                    [
+                        'targets' => 6,
+                        'width' => '90px',
+                        'className' => 'text-center',
+                        'render' => 'function(data, type, row){
+                            if (type === "export" || type === "filter") return data;
+                            if (data && data !== "-") {
+                                var content = row.new_data ? JSON.stringify(row.new_data, null, 2) : "";
+                                var safeContent = String(content)
+                                    .replace(/&/g, "&amp;")
+                                    .replace(/"/g, "&quot;")
+                                    .replace(/\'/g, "&#39;")
+                                    .replace(/</g, "&lt;")
+                                    .replace(/>/g, "&gt;");
+                                return "<span class=\'data-hover-popover\' data-toggle=\'popover\' data-content=\'<pre style=&quot;white-space:pre-wrap;margin:0;font-size:11px;&quot;>" + safeContent + "</pre>\' style=\'cursor:pointer;\'><span class=\'badge badge-success\'>" + data + "</span></span>";
+                            }
+                            return "-";
+                        }'
+                    ],
+                    [
+                        'targets' => 7,
                         'width' => '100px',
                         'orderable' => false,
                         'searchable' => false,
                         'className' => 'text-center'
                     ]
                 ],
-                
+
+                'drawCallback' => 'function(settings) {
+                    if(typeof $.fn.popover !== "undefined") {
+                        $(".data-hover-popover").popover("dispose");
+                        $(".data-hover-popover").popover({
+                            html: true,
+                            trigger: "hover focus",
+                            placement: "top",
+                            container: "body",
+                            content: function() {
+                                return $(this).attr("data-content");
+                            }
+                        });
+                    }
+                }',
+
                 'initComplete' => 'function(){
                     var api = this.api();
-                    
+
                     // Add individual column filters
                     api.columns().every(function(index) {
                         var column = this;
                         var columnIndex = index;
                         var $header = $(column.header());
                         var title = $header.text().trim();
-                        
-                        // Skip checkbox and actions columns
-                        if(title === "" || title === "Actions") {
+
+                        // Skip checkbox, actions, module, and old/new data columns - no filter needed
+                        if(title === "" || title === "Actions" || title === "Module" || title === "Old Data" || title === "New Data") {
                             return;
                         }
-                        
+
                         // Create filter input based on column type
                         var $filterInput;
-                        
+
                         if(title === "Action") {
                             $filterInput = $(\'<select class="form-control form-control-sm"><option value="">All</option><option value="create">Create</option><option value="update">Update</option><option value="delete">Delete</option></select>\');
                         }
                         else {
                             $filterInput = $(\'<input type="text" class="form-control form-control-sm" placeholder="Search \' + title + \'">\');
                         }
-                        
+
                         // Append to footer
                         $filterInput.appendTo($(column.footer()).empty());
                         
@@ -239,7 +314,31 @@ class ActivityLogDataTable extends DataTable
                 'searchable' => true,
                 'orderable' => true
             ],
-            
+
+            'module' => [
+                'title' => 'Module',
+                'data' => 'module',
+                'name' => 'module',
+                'searchable' => false,
+                'orderable' => true
+            ],
+
+            'old_data' => [
+                'title' => 'Old Data',
+                'data' => 'old_data_display',
+                'name' => 'old_data',
+                'searchable' => false,
+                'orderable' => false
+            ],
+
+            'new_data' => [
+                'title' => 'New Data',
+                'data' => 'new_data_display',
+                'name' => 'new_data',
+                'searchable' => false,
+                'orderable' => false
+            ],
+
             'action_buttons' => new \Yajra\DataTables\Html\Column([
                 'title' => 'Actions',
                 'data' => 'action_buttons',
