@@ -54,7 +54,9 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('lorryItems', $lorryItems);
         });
         View::composer(['inventory_transfers.fields'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['inventory_transfers.fields'], function ($view) {
@@ -74,7 +76,9 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('lorryItems', $lorryItems);
         });
         View::composer(['inventory_transactions.fields'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['inventory_transactions.fields'], function ($view) {
@@ -82,7 +86,9 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('lorryItems', $lorryItems);
         });
         View::composer(['inventory_balances.index'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['inventory_balances.index'], function ($view) {
@@ -91,7 +97,9 @@ class ViewServiceProvider extends ServiceProvider
         });
 
         View::composer(['inventory_balances.fields'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['inventory_balances.fields'], function ($view) {
@@ -132,7 +140,9 @@ class ViewServiceProvider extends ServiceProvider
         });
      
         View::composer(['invoice_details.fields','invoices.detail'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['invoice_details.fields','invoices.detail'], function ($view) {
@@ -183,7 +193,9 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('groups', $groups);
         });
         View::composer(['focs.fields'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['focs.fields'], function ($view) {
@@ -191,7 +203,9 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('customerItems', $customerItems);
         });
         View::composer(['focs.fields'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['special_prices.fields'], function ($view) {
@@ -200,7 +214,7 @@ class ViewServiceProvider extends ServiceProvider
         });
         View::composer(['special_prices.fields'], function ($view) {
             $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
-                return [$product->id => $product->name . ' (' . $product->unit_code . ')'];
+                return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
             })->toArray();
             $view->with('productItems', $productItems);
         });

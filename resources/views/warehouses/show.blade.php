@@ -86,8 +86,11 @@
                                                 <tr>
                                                     <td>{{ $index + 1 }}</td>
                                                     <td>
-                                                        {{ $inventory->product->name ?? 'Unknown' }}
-                                                        <br><small class="text-muted">{{ $inventory->product->code ?? '' }}</small>
+                                                        @if($inventory->product)
+                                                            {{ $inventory->product->unit_code }} ({{ $inventory->product->name }})
+                                                        @else
+                                                            Unknown
+                                                        @endif
                                                     </td>
                                                     <td>
                                                         <strong>{{ $inventory->batch->batch_code ?? 'Unknown' }}</strong>

@@ -61,7 +61,7 @@ class WarehouseDataTable extends DataTable
                     $nonZeroBalances->each(function($item) use (&$summary) {
                         $expiringClass = ($item->batch && $item->batch->isExpiringSoon()) ? 'expiring-soon' : '';
                         $summary .= '<tr>';
-                        $summary .= '<td>' . ($item->product ? $item->product->name : 'Unknown') . '</td>';
+                        $summary .= '<td>' . ($item->product ? e($item->product->unit_code . ' (' . $item->product->name . ')') : 'Unknown') . '</td>';
                         $summary .= '<td class="' . $expiringClass . '">' . ($item->batch ? $item->batch->batch_code : 'Unknown') . '</td>';
                         $summary .= '<td class="text-center">' . $item->quantity . '</td>';
                         $summary .= '</tr>';

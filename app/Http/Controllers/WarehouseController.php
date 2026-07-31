@@ -21,7 +21,9 @@ class WarehouseController extends Controller
      */
     public function index(WarehouseDataTable $warehouseDataTable)
     {
-        $products = Product::orderBy('name')->pluck('name', 'id');
+        $products = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+            return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+        });
         $warehouses = Warehouse::where('status', 'active')->get();
         $batches = ProductBatch::with('product')
             ->where('quantity', '>', 0)
@@ -190,7 +192,9 @@ class WarehouseController extends Controller
     public function showAddInventoryForm($warehouseId)
     {
         $warehouse = Warehouse::findOrFail($warehouseId);
-        $products = Product::orderBy('name')->pluck('name', 'id');
+        $products = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+            return [$product->id => $product->unit_code . ' (' . $product->name . ')'];
+        });
         $batches = ProductBatch::with('product')
             ->where('quantity', '>', 0)
             ->orderBy('expiry_date')
