@@ -83,7 +83,7 @@ class ActivityLog extends Model
     private function formatDataForDisplay($data)
     {
         if (!$data) return null;
-        
+
         // Remove sensitive fields
         $sensitiveFields = ['password', 'remember_token', 'api_token'];
         foreach ($sensitiveFields as $field) {
@@ -91,7 +91,55 @@ class ActivityLog extends Model
                 $data[$field] = '********';
             }
         }
-        
+
         return $data;
+    }
+
+    /**
+     * Turn a raw old_data/new_data payload into a friendlier associative
+     * array for display: drops the internal id, resolves product_id into
+     * a product name, and turns status into an Active/Inactive label.
+     */
+    public static function formatDataForCompare($data): array
+    {
+        if (empty($data)) {
+            return [];
+        }
+
+        $data = (array) $data;
+        unset($data['id']);
+
+        if (array_key_exists('product_id', $data)) {
+            $productId = $data['product_id'];
+            unset($data['product_id']);
+            $product = $productId ? \App\Models\Product::find($productId) : null;
+            $data['product_name'] = $product->name ?? 'Unknown';
+        }
+
+        if (array_key_exists('status', $data)) {
+            $data['status'] = ((int) $data['status'] === 1) ? 'Active' : 'Inactive';
+        }
+
+        return $data;
+    }
+
+    /**
+     * Order a list of field keys neatly: alphabetical, with timestamp
+     * fields always pushed to the end.
+     */
+    public static function orderFieldKeys(array $fields): array
+    {
+        $timestampKeys = ['created_at', 'updated_at', 'deleted_at'];
+        $mainKeys = array_values(array_diff($fields, $timestampKeys));
+        sort($mainKeys);
+
+        $ordered = $mainKeys;
+        foreach ($timestampKeys as $key) {
+            if (in_array($key, $fields, true)) {
+                $ordered[] = $key;
+            }
+        }
+
+        return $ordered;
     }
 }

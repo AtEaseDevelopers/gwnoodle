@@ -79,10 +79,9 @@
                                     <!-- Compare View Tab -->
                                     <div class="tab-pane fade show active" id="compare" role="tabpanel">
                                         @php
-                                            $oldData = (array) ($log->old_data ?? []);
-                                            $newData = (array) ($log->new_data ?? []);
-                                            $allFields = array_unique(array_merge(array_keys($oldData), array_keys($newData)));
-                                            sort($allFields);
+                                            $oldData = \App\Models\ActivityLog::formatDataForCompare($log->old_data ?? []);
+                                            $newData = \App\Models\ActivityLog::formatDataForCompare($log->new_data ?? []);
+                                            $allFields = \App\Models\ActivityLog::orderFieldKeys(array_unique(array_merge(array_keys($oldData), array_keys($newData))));
                                         @endphp
                                         <table class="table table-striped table-bordered">
                                             <thead>

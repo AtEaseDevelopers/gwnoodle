@@ -49,8 +49,46 @@ class ActivityLogDataTable extends DataTable
                 }
                 return '-';
             })
+            ->addColumn('old_data_content', function($row) {
+                return $this->buildDataPointForm($row->old_data);
+            })
+            ->addColumn('new_data_content', function($row) {
+                return $this->buildDataPointForm($row->new_data);
+            })
             ->addColumn('action_buttons', 'activity_logs.datatables_actions')
-            ->rawColumns(['action_buttons']);
+            ->rawColumns(['action_buttons', 'old_data_content', 'new_data_content']);
+    }
+
+    /**
+     * Build the hover-popover content as a point-form list instead of
+     * raw JSON, reusing the same field cleanup as the compare view
+     * (drops id, resolves product_id to a product name, status label).
+     */
+    private function buildDataPointForm($data): string
+    {
+        $formatted = ActivityLog::formatDataForCompare($data);
+
+        if (empty($formatted)) {
+            return '<em>No data</em>';
+        }
+
+        $orderedKeys = ActivityLog::orderFieldKeys(array_keys($formatted));
+
+        $html = '<ul style="padding-left:15px;margin:0;text-align:left;">';
+        foreach ($orderedKeys as $key) {
+            $label = e(ucwords(str_replace('_', ' ', $key)));
+            $value = $formatted[$key];
+
+            if (is_array($value) || is_object($value)) {
+                $value = json_encode($value);
+            }
+
+            $value = e($value ?? 'null');
+            $html .= "<li><strong>{$label}:</strong> {$value}</li>";
+        }
+        $html .= '</ul>';
+
+        return $html;
     }
 
     /**
@@ -179,14 +217,8 @@ class ActivityLogDataTable extends DataTable
                         'render' => 'function(data, type, row){
                             if (type === "export" || type === "filter") return data;
                             if (data && data !== "-") {
-                                var content = row.old_data ? JSON.stringify(row.old_data, null, 2) : "";
-                                var safeContent = String(content)
-                                    .replace(/&/g, "&amp;")
-                                    .replace(/"/g, "&quot;")
-                                    .replace(/\'/g, "&#39;")
-                                    .replace(/</g, "&lt;")
-                                    .replace(/>/g, "&gt;");
-                                return "<span class=\'data-hover-popover\' data-toggle=\'popover\' data-content=\'<pre style=&quot;white-space:pre-wrap;margin:0;font-size:11px;&quot;>" + safeContent + "</pre>\' style=\'cursor:pointer;\'><span class=\'badge badge-warning\'>" + data + "</span></span>";
+                                var content = row.old_data_content || "<em>No data</em>";
+                                return "<span class=\'data-hover-popover\' data-toggle=\'popover\' data-content=\'" + content + "\' style=\'cursor:pointer;\'><span class=\'badge badge-warning\'>" + data + "</span></span>";
                             }
                             return "-";
                         }'
@@ -198,14 +230,8 @@ class ActivityLogDataTable extends DataTable
                         'render' => 'function(data, type, row){
                             if (type === "export" || type === "filter") return data;
                             if (data && data !== "-") {
-                                var content = row.new_data ? JSON.stringify(row.new_data, null, 2) : "";
-                                var safeContent = String(content)
-                                    .replace(/&/g, "&amp;")
-                                    .replace(/"/g, "&quot;")
-                                    .replace(/\'/g, "&#39;")
-                                    .replace(/</g, "&lt;")
-                                    .replace(/>/g, "&gt;");
-                                return "<span class=\'data-hover-popover\' data-toggle=\'popover\' data-content=\'<pre style=&quot;white-space:pre-wrap;margin:0;font-size:11px;&quot;>" + safeContent + "</pre>\' style=\'cursor:pointer;\'><span class=\'badge badge-success\'>" + data + "</span></span>";
+                                var content = row.new_data_content || "<em>No data</em>";
+                                return "<span class=\'data-hover-popover\' data-toggle=\'popover\' data-content=\'" + content + "\' style=\'cursor:pointer;\'><span class=\'badge badge-success\'>" + data + "</span></span>";
                             }
                             return "-";
                         }'
