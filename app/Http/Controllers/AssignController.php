@@ -13,6 +13,7 @@ use Response;
 use Illuminate\Support\Facades\Crypt;
 use App\Models\Assign;
 use App\Models\Customer;
+use App\Models\Driver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -150,7 +151,30 @@ class AssignController extends AppBaseController
             return redirect(route('assigns.index'));
         }
 
-        return view('assigns.edit')->with('assign', $assign);
+        // The customer/driver dropdowns only list active records by default,
+        // so make sure the currently assigned customer/driver still appear
+        // as options here even if they've since been deactivated - otherwise
+        // the select shows nothing selected despite the assign having a value.
+        $customerItems = Customer::where('status', 1)->orderBy('company')->pluck('company', 'id')->toArray();
+        if (!array_key_exists($assign->customer_id, $customerItems)) {
+            $currentCustomer = Customer::find($assign->customer_id);
+            if ($currentCustomer) {
+                $customerItems[$currentCustomer->id] = $currentCustomer->company . ' (inactive)';
+            }
+        }
+
+        $driverItems = Driver::where('status', '!=', Driver::STATUS_DELETED)->orderBy('name')->pluck('name', 'id')->toArray();
+        if (!array_key_exists($assign->driver_id, $driverItems)) {
+            $currentDriver = Driver::find($assign->driver_id);
+            if ($currentDriver) {
+                $driverItems[$currentDriver->id] = $currentDriver->name;
+            }
+        }
+
+        return view('assigns.edit')
+            ->with('assign', $assign)
+            ->with('customerItems', $customerItems)
+            ->with('driverItems', $driverItems);
     }
 
     /**
