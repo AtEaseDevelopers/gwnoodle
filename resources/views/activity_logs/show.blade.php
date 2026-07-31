@@ -78,60 +78,58 @@
                                 <div class="tab-content" id="dataTabsContent">
                                     <!-- Compare View Tab -->
                                     <div class="tab-pane fade show active" id="compare" role="tabpanel">
-                                        @if($log->old_data && $log->new_data)
-                                            <table class="table table-striped table-bordered">
-                                                <thead>
-                                                    <tr>
-                                                        <th width="25%">Field</th>
-                                                        <th width="37.5%">Old Value</th>
-                                                        <th width="37.5%">New Value</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
+                                        @php
+                                            $oldData = (array) ($log->old_data ?? []);
+                                            $newData = (array) ($log->new_data ?? []);
+                                            $allFields = array_unique(array_merge(array_keys($oldData), array_keys($newData)));
+                                            sort($allFields);
+                                        @endphp
+                                        <table class="table table-striped table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th width="25%">Field</th>
+                                                    <th width="37.5%">Old Value</th>
+                                                    <th width="37.5%">New Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($allFields as $field)
                                                     @php
-                                                        $allFields = array_unique(array_merge(
-                                                            array_keys((array)$log->old_data), 
-                                                            array_keys((array)$log->new_data)
-                                                        ));
-                                                        sort($allFields);
+                                                        $hasOld = array_key_exists($field, $oldData);
+                                                        $hasNew = array_key_exists($field, $newData);
+                                                        $oldValue = $oldData[$field] ?? null;
+                                                        $newValue = $newData[$field] ?? null;
+                                                        $hasChanged = $hasOld && $hasNew && ($oldValue != $newValue);
                                                     @endphp
-                                                    
-                                                    @foreach($allFields as $field)
-                                                        @php
-                                                            $oldValue = $log->old_data[$field] ?? null;
-                                                            $newValue = $log->new_data[$field] ?? null;
-                                                            $hasChanged = ($oldValue != $newValue);
-                                                        @endphp
-                                                        
-                                                        <tr class="{{ $hasChanged ? 'table-warning' : '' }}">
-                                                            <td><strong>{{ ucwords(str_replace('_', ' ', $field)) }}</strong></td>
-                                                            <td>
-                                                                @if(is_array($oldValue) || is_object($oldValue))
-                                                                    <pre class="mb-0"><code>{{ json_encode($oldValue, JSON_PRETTY_PRINT) }}</code></pre>
-                                                                @elseif($oldValue === null)
-                                                                    <em class="text-muted">null</em>
-                                                                @else
-                                                                    {{ $oldValue }}
-                                                                @endif
-                                                            </td>
-                                                            <td>
-                                                                @if(is_array($newValue) || is_object($newValue))
-                                                                    <pre class="mb-0"><code>{{ json_encode($newValue, JSON_PRETTY_PRINT) }}</code></pre>
-                                                                @elseif($newValue === null)
-                                                                    <em class="text-muted">null</em>
-                                                                @else
-                                                                    {{ $newValue }}
-                                                                @endif
-                                                            </td>
-                                                        </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        @else
-                                            <div class="alert alert-info">
-                                                Cannot display compare view - both old and new data are required.
-                                            </div>
-                                        @endif
+
+                                                    <tr class="{{ $hasChanged ? 'table-warning' : '' }}">
+                                                        <td><strong>{{ ucwords(str_replace('_', ' ', $field)) }}</strong></td>
+                                                        <td>
+                                                            @if(!$hasOld)
+                                                                <em class="text-muted">N/A</em>
+                                                            @elseif(is_array($oldValue) || is_object($oldValue))
+                                                                <pre class="mb-0"><code>{{ json_encode($oldValue, JSON_PRETTY_PRINT) }}</code></pre>
+                                                            @elseif($oldValue === null)
+                                                                <em class="text-muted">null</em>
+                                                            @else
+                                                                {{ $oldValue }}
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if(!$hasNew)
+                                                                <em class="text-muted">N/A</em>
+                                                            @elseif(is_array($newValue) || is_object($newValue))
+                                                                <pre class="mb-0"><code>{{ json_encode($newValue, JSON_PRETTY_PRINT) }}</code></pre>
+                                                            @elseif($newValue === null)
+                                                                <em class="text-muted">null</em>
+                                                            @else
+                                                                {{ $newValue }}
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>

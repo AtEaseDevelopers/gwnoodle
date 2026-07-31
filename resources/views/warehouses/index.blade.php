@@ -13,7 +13,9 @@
                         <div class="card-header">
                             <i class="fa fa-align-justify"></i>
                             {{ __('Warehouses') }}
+                            @if(auth()->user()->hasRole('admin'))
                             <button class="border-0 bg-transparent pull-right text-danger" data-toggle="modal" data-target="#stockadjustment" title="{{ __('Stock Adjustment') }}"><i class="fa fa-cart-arrow-down fa-lg"></i></button>
+                            @endif
                             <button class="border-0 bg-transparent pull-right text-warning" data-toggle="modal" data-target="#stockout" title="{{ __('Stock Out') }}"><i class="fa fa-minus-square fa-lg"></i></button>
                             <button class="border-0 bg-transparent pull-right text-info" data-toggle="modal" data-target="#transferStock"><i class="fa fa-exchange fa-lg"></i></button>
                             <a href="{{ route('warehouses.create') }}" class="pull-right text-success pr-2"><i class="fa fa-plus-square fa-lg"></i></a>

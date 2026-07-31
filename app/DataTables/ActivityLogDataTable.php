@@ -32,23 +32,6 @@ class ActivityLogDataTable extends DataTable
             ->editColumn('action', function($row) {
                 return $row->action;
             })
-            ->editColumn('module', function($row) {
-                return ucwords(str_replace('_', ' ', $row->module));
-            })
-            ->editColumn('old_data', function($row) {
-                if ($row->old_data) {
-                    $count = is_array($row->old_data) ? count($row->old_data) : count((array)$row->old_data);
-                    return $count . ' fields';
-                }
-                return '-';
-            })
-            ->editColumn('new_data', function($row) {
-                if ($row->new_data) {
-                    $count = is_array($row->new_data) ? count($row->new_data) : count((array)$row->new_data);
-                    return $count . ' fields';
-                }
-                return '-';
-            })
             ->addColumn('action_buttons', 'activity_logs.datatables_actions')
             ->rawColumns(['action_buttons']);
     }
@@ -169,35 +152,6 @@ class ActivityLogDataTable extends DataTable
                     ],
                     [
                         'targets' => 4,
-                        'width' => '120px',
-                        'className' => 'text-center',
-                    ],
-                    [
-                        'targets' => 5,
-                        'width' => '90px',
-                        'className' => 'text-center',
-                        'render' => 'function(data, type){
-                            if (type === "export" || type === "filter") return data;
-                            if (data && data !== "-") {
-                                return "<span class=\'badge badge-warning\'>" + data + "</span>";
-                            }
-                            return "-";
-                        }'
-                    ],
-                    [
-                        'targets' => 6,
-                        'width' => '90px',
-                        'className' => 'text-center',
-                        'render' => 'function(data, type){
-                            if (type === "export" || type === "filter") return data;
-                            if (data && data !== "-") {
-                                return "<span class=\'badge badge-success\'>" + data + "</span>";
-                            }
-                            return "-";
-                        }'
-                    ],
-                    [
-                        'targets' => 7,
                         'width' => '100px',
                         'orderable' => false,
                         'searchable' => false,
@@ -225,24 +179,6 @@ class ActivityLogDataTable extends DataTable
                         
                         if(title === "Action") {
                             $filterInput = $(\'<select class="form-control form-control-sm"><option value="">All</option><option value="create">Create</option><option value="update">Update</option><option value="delete">Delete</option></select>\');
-                        } 
-                        else if(title === "Module") {
-                            // Get unique modules from the data
-                            var modules = [];
-                            api.rows().data().each(function(row) {
-                                var module = row.module;
-                                if(module && modules.indexOf(module) === -1) {
-                                    modules.push(module);
-                                }
-                            });
-                            
-                            var selectHtml = \'<select class="form-control form-control-sm"><option value="">All</option>\';
-                            modules.sort().forEach(function(module) {
-                                selectHtml += \'<option value="\' + module + \'">\' + 
-                                              module.charAt(0).toUpperCase() + module.slice(1) + \'</option>\';
-                            });
-                            selectHtml += \'</select>\';
-                            $filterInput = $(selectHtml);
                         }
                         else {
                             $filterInput = $(\'<input type="text" class="form-control form-control-sm" placeholder="Search \' + title + \'">\');
@@ -302,30 +238,6 @@ class ActivityLogDataTable extends DataTable
                 'name' => 'action',
                 'searchable' => true,
                 'orderable' => true
-            ],
-            
-            'module' => [
-                'title' => 'Module',
-                'data' => 'module',
-                'name' => 'module',
-                'searchable' => true,
-                'orderable' => true
-            ],
-            
-            'old_data' => [
-                'title' => 'Old Data',
-                'data' => 'old_data',
-                'name' => 'old_data',
-                'searchable' => true, // Changed to true to allow searching by field count
-                'orderable' => false
-            ],
-            
-            'new_data' => [
-                'title' => 'New Data',
-                'data' => 'new_data',
-                'name' => 'new_data',
-                'searchable' => true, // Changed to true to allow searching by field count
-                'orderable' => false
             ],
             
             'action_buttons' => new \Yajra\DataTables\Html\Column([
