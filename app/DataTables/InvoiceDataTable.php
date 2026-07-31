@@ -167,10 +167,23 @@ class InvoiceDataTable extends DataTable
                         'targets' => 7,
                         'visible' => true,
                         'render' => 'function(data, type, row){
-                            if (type === "display" && row.autocount_message) {
+                            if (type !== "display" || !data) {
+                                return data ? data : "";
+                            }
+
+                            var statusColor = "#6c757d"; // default/other - gray
+                            if (data === "success") {
+                                statusColor = "#28a745"; // green
+                            } else if (data === "failed") {
+                                statusColor = "#dc3545"; // red
+                            } else if (data === "pending") {
+                                statusColor = "#e0a800"; // amber
+                            }
+
+                            if (row.autocount_message) {
                                 var rawMsg = row.autocount_message;
                                 var formattedMsg = rawMsg;
-                                
+
                                 // Try to format JSON or Array beautifully
                                 try {
                                     if (typeof rawMsg === "string" && (rawMsg.trim().startsWith("{") || rawMsg.trim().startsWith("["))) {
@@ -181,7 +194,7 @@ class InvoiceDataTable extends DataTable
                                 } catch (e) {
                                     // If it fails, it is just a normal string. Keep it as is.
                                 }
-                                
+
                                 // Safely escape HTML characters so it does not break the span attribute
                                 var safeMsg = String(formattedMsg)
                                     .replace(/&/g, "&amp;")
@@ -189,10 +202,11 @@ class InvoiceDataTable extends DataTable
                                     .replace(/\'/g, "&#39;")
                                     .replace(/</g, "&lt;")
                                     .replace(/>/g, "&gt;");
-                                
-                                return "<span class=\'autocount-error-popover\' data-msg=\'" + safeMsg + "\' style=\'cursor:pointer; border-bottom: 2px dotted #dc3545; color: #dc3545; font-weight: 500;\'>" + data + "</span>";
+
+                                return "<span class=\'autocount-error-popover\' data-msg=\'" + safeMsg + "\' style=\'cursor:pointer; border-bottom: 2px dotted " + statusColor + "; color: " + statusColor + "; font-weight: 500;\'>" + data + "</span>";
                             }
-                            return data ? data : "";
+
+                            return "<span style=\'color: " + statusColor + "; font-weight: 500;\'>" + data + "</span>";
                         }'
                     ],
                   
