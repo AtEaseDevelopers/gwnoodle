@@ -79,7 +79,7 @@ class InvoiceController extends AppBaseController
         $input = $request->all();
 
         $input['date'] = date_create($input['date']);
-        $input['status'] = 0; // Set default status to 0 (New)
+        $input['status'] = $input['status'] ?? 1; // Respect the form's selection; default to New only if not provided
 
         $requestedInvoiceNo = (!empty($input['invoiceno']) && $input['invoiceno'] !== 'SYSTEM GENERATED IF BLANK')
             ? $input['invoiceno']
