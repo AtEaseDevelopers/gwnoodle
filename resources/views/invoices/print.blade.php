@@ -301,7 +301,16 @@ p{
             </tr>
         </table>
 
+        @if(!empty($invoice['remark']))
         <div class="divider"></div>
+
+        <table class="payment-section">
+            <tr>
+                <td class="ta-l" colspan="2" style="font-size: 14px;">Remark : {{ $invoice['remark'] }}</td>
+            </tr>
+        </table>
+        @endif
+
     </div>
 </body>
 </html>

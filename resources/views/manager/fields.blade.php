@@ -16,6 +16,13 @@
     {!! Form::email('email', null, ['class' => 'form-control']) !!}
 </div>
 
+<!-- Invoice Code Field -->
+<div class="form-group col-sm-6">
+    {!! Form::label('invoice_code', __('Invoice Code')) !!}
+    {!! Form::text('invoice_code', null, ['class' => 'form-control']) !!}
+    <small class="form-text text-muted">{{ __('If set, this manager will be able to access Invoices in the sidebar.') }}</small>
+</div>
+
 @if(Route::currentRouteName() == 'Managerusers.edit' || Route::currentRouteName() == 'Managerusers.update')
     <!-- EDIT MODE: Show checkbox to update password -->
     

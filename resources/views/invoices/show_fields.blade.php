@@ -60,6 +60,12 @@
     <p>{{ $invoice->remark ?: '-' }}</p>
 </div>
 
+<!-- PO Number Remark Field -->
+<div class="form-group">
+    {!! Form::label('po_number_remark', 'PO Number Remark') !!}:
+    <p>{{ $invoice->po_number_remark ?: '-' }}</p>
+</div>
+
 @push('scripts')
     <script>
         $(document).keyup(function(e) {

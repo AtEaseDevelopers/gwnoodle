@@ -485,6 +485,79 @@ class WarehouseController extends Controller
     }
 
     /**
+     * Process stock out (deduct quantity from warehouse)
+     */
+    public function stockOut(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'product_id' => 'required|exists:products,id',
+            'batch_id' => 'required|exists:product_batches,id',
+            'quantity' => 'required|integer|min:1',
+            'remarks' => 'required|string|min:3|max:500'
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $warehouseId = $request->warehouse_id;
+            $batchId = $request->batch_id;
+            $quantity = $request->quantity;
+            $remarks = $request->remarks;
+
+            // Get current inventory
+            $inventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+                ->where('batch_id', $batchId)
+                ->first();
+
+            if (!$inventory) {
+                throw new \Exception('Inventory record not found for this batch in the selected warehouse');
+            }
+
+            if ($inventory->quantity < $quantity) {
+                throw new \Exception('Insufficient stock. Available: ' . $inventory->quantity . ', Requested: ' . $quantity);
+            }
+
+            // Deduct from warehouse inventory
+            $inventory->decreaseQuantity($quantity);
+
+            // Deduct from product batch master quantity
+            $productBatch = ProductBatch::find($batchId);
+            if ($productBatch) {
+                $productBatch->decreaseQuantity($quantity, "Stock out from warehouse: {$remarks}");
+            }
+
+            // Create inventory transaction
+            InventoryTransaction::create([
+                'warehouse_id' => $warehouseId,
+                'product_id' => $request->product_id,
+                'batch_id' => $batchId,
+                'quantity' => -$quantity,
+                'type' => InventoryTransaction::TYPE_STOCK_OUT,
+                'remark' => $remarks,
+                'date' => now(),
+                'user' => Auth::user()->name ?? 'System',
+            ]);
+
+            DB::commit();
+
+            Flash::success("Stock successfully deducted by {$quantity} units.");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error processing stock out: ' . $e->getMessage());
+        }
+
+        return redirect()->route('warehouses.index');
+    }
+
+    /**
      * Get warehouse inventory (AJAX) - corresponds to warehouses.get-inventory
      */
     public function getWarehouseInventory($warehouseId)

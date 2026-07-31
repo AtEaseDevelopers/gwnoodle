@@ -602,6 +602,7 @@ Route::group(['middleware' => ['auth']], function() {
         Route::get('warehouses/{warehouseId}/all-batches', [App\Http\Controllers\WarehouseController::class, 'getAllBatches'])->name('warehouses.get-all-batches');
 
         Route::post('warehouses/stock-adjustment', [App\Http\Controllers\WarehouseController::class, 'stockAdjustment'])->name('warehouses.stock-adjustment');
+        Route::post('warehouses/stock-out', [App\Http\Controllers\WarehouseController::class, 'stockOut'])->name('warehouses.stock-out');
         Route::get('warehouses/get-warehouse-products/{warehouseId}', [App\Http\Controllers\WarehouseController::class, 'getWarehouseProducts'])->name('warehouses.get-warehouse-products');
         
         // AJAX routes for getting batches/inventory

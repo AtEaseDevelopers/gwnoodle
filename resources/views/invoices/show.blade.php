@@ -48,6 +48,7 @@
                                             <th>{{ __('invoices.quantity') }}</th>
                                             <th>{{ __('invoices.price') }}</th>
                                             <th>{{ __('invoices.total_price') }}</th>
+                                            <th>{{ __('Remark') }}</th>
                                             <th>{{ __('invoices.action') }}</th>
                                          </tr>
                                     </thead>
@@ -65,6 +66,7 @@
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
                                                     <td>{{ number_format($invoicedetail['price'], 2) }}</td>
                                                     <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
+                                                    <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
                                                     {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                         <div class='btn-group'>
@@ -84,6 +86,7 @@
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
                                                     <td>{{ number_format($invoicedetail['price'], 2) }}</td>
                                                     <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
+                                                    <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
                                                     {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                         <div class='btn-group'>

@@ -199,7 +199,9 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('customerItems', $customerItems);
         });
         View::composer(['special_prices.fields'], function ($view) {
-            $productItems = Product::pluck('name','id')->toArray();
+            $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
+                return [$product->id => $product->name . ' (' . $product->unit_code . ')'];
+            })->toArray();
             $view->with('productItems', $productItems);
         });
         View::composer(['customers.fields'], function ($view) {

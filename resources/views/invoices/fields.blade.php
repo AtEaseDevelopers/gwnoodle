@@ -79,6 +79,12 @@
     {!! Form::text('remark', null, ['class' => 'form-control','maxlength' => 255,'maxlength' => 255]) !!}
 </div>
 
+<!-- PO Number Remark Field -->
+<div class="form-group col-sm-6">
+    {!! Form::label('po_number_remark', 'PO Number Remark') !!}
+    {!! Form::text('po_number_remark', null, ['class' => 'form-control', 'maxlength' => 255]) !!}
+</div>
+
 <input type="text" class="d-none" name="method" id="method" value="2">
 
 <!-- Submit Field -->

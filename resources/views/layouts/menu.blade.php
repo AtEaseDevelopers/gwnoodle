@@ -97,35 +97,45 @@
 </li>
 @endcanany --}}
 
-@canany(['invoice'])
+@php
+    // The "Inventory Admin" role has the 'invoice' permission at the role
+    // level (so can('invoice') is true for every manager regardless of
+    // invoice_code) - so managers must be gated by role + invoice_code
+    // instead of the permission check, which only governs real admins.
+    $isInventoryManager = auth()->check() && auth()->user()->hasRole('Inventory Admin');
+    $hasInvoiceCode = auth()->check() && !empty(auth()->user()->invoice_code);
+    $hasInvoicePermission = auth()->check() && !$isInventoryManager && auth()->user()->can('invoice');
+@endphp
+@if($hasInvoicePermission || ($isInventoryManager && $hasInvoiceCode))
 <li class="nav-item nav-dropdown {{ Request::is('invoices*','invoiceDetails*','invoicePayments') ? 'open' : '' }}">
     <a class="nav-link nav-dropdown-toggle" href="#">
         <i class="nav-icon icon-notebook"></i>
         <span>{{ trans('side_menu.invoices') }}</span>
     </a>
 
-    @can('invoice')
-        <ul class="nav-dropdown-items">
-            <li class="nav-item {{ Request::is('invoices*') ? 'active' : '' }}">
-                <a class="nav-link {{ Request::is('invoices*') ? 'active' : '' }}" href="{{ route('invoices.index') }}">
-                    <span>{{ trans('side_menu.invoices') }}</span>
-                </a>
-            </li>
-        </ul>
-        <ul class="nav-dropdown-items">
-            <li class="nav-item {{ Request::is('invoiceDetails*') ? 'active' : '' }}">
-                <a class="nav-link {{ Request::is('invoiceDetails*') ? 'active' : '' }}" href="{{ route('invoiceDetails.index') }}">
-                    <span>{{ trans('side_menu.invoice_details') }}</span>
-                </a>
-            </li>
-        </ul>
-        <ul class="nav-dropdown-items">
-            <li class="nav-item {{ Request::is('invoicePayments*') ? 'active' : '' }}">
-                <a class="nav-link {{ Request::is('invoicePayments*') ? 'active' : '' }}" href="{{ route('invoicePayments.index') }}">
-                    <span>{{ trans('side_menu.payments') }}</span>
-                </a>
-            </li>
-        </ul>
+    <ul class="nav-dropdown-items">
+        <li class="nav-item {{ Request::is('invoices*') ? 'active' : '' }}">
+            <a class="nav-link {{ Request::is('invoices*') ? 'active' : '' }}" href="{{ route('invoices.index') }}">
+                <span>{{ trans('side_menu.invoices') }}</span>
+            </a>
+        </li>
+    </ul>
+    <ul class="nav-dropdown-items">
+        <li class="nav-item {{ Request::is('invoiceDetails*') ? 'active' : '' }}">
+            <a class="nav-link {{ Request::is('invoiceDetails*') ? 'active' : '' }}" href="{{ route('invoiceDetails.index') }}">
+                <span>{{ trans('side_menu.invoice_details') }}</span>
+            </a>
+        </li>
+    </ul>
+    <ul class="nav-dropdown-items">
+        <li class="nav-item {{ Request::is('invoicePayments*') ? 'active' : '' }}">
+            <a class="nav-link {{ Request::is('invoicePayments*') ? 'active' : '' }}" href="{{ route('invoicePayments.index') }}">
+                <span>{{ trans('side_menu.payments') }}</span>
+            </a>
+        </li>
+    </ul>
+
+    @if($hasInvoicePermission)
         @einvoice
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('einvoices*') ? 'active' : '' }}">
@@ -154,11 +164,10 @@
             </li>
         </ul>
         @endeinvoice
-
-    @endcan
+    @endif
 
 </li>
-@endcanany
+@endif
 
 @canany(['task'])
 <li class="nav-item {{ Request::is('tasks*','taskTransfers*') ? 'open' : '' }}">

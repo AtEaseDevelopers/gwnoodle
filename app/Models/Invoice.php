@@ -43,6 +43,7 @@ class Invoice extends Model
         'paymentterm',
         'status',
         'remark',
+        'po_number_remark',
         'chequeno',
         'trip_uuid',
     ];
@@ -64,7 +65,8 @@ class Invoice extends Model
         'supervisor_id' => 'integer',
         'paymentterm' => 'integer',
         'status' => 'integer',
-        'remark' => 'string'
+        'remark' => 'string',
+        'po_number_remark' => 'string'
     ];
 
     /**
@@ -81,6 +83,7 @@ class Invoice extends Model
         'default_driver_id' => 'nullable|integer|exists:drivers,id',
         'status' => 'nullable',
         'remark' => 'nullable|string|max:255|string|max:255',
+        'po_number_remark' => 'nullable|string|max:255',
         'created_at' => 'nullable|nullable',
         'updated_at' => 'nullable|nullable'
     ];

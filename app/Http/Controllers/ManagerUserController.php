@@ -72,6 +72,10 @@ class ManagerUserController extends AppBaseController
 
         $userHasRole = $this->userHasRoleRepository->create($userRole);
 
+        if (!empty($input['invoice_code'])) {
+            $user->givePermissionTo('invoice');
+        }
+
         Flash::success('User saved successfully.');
 
         return redirect(route('Managerusers.index'));
@@ -199,7 +203,13 @@ class ManagerUserController extends AppBaseController
             
             $userHasRole = $this->userHasRoleRepository->create($userRole);
         }
-        
+
+        if (!empty($input['invoice_code'])) {
+            $user->givePermissionTo('invoice');
+        } else {
+            $user->revokePermissionTo('invoice');
+        }
+
         Flash::success('User updated successfully.');
         
         return redirect(route('Managerusers.index'));

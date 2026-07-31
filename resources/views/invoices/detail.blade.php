@@ -68,7 +68,7 @@
                                     <!-- Price Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('price', __('invoice_details.price')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::text('price', null, ['class' => 'form-control', 'min' => 0, 'step' => 0.01, 'id' => 'price', 'readonly']) !!}
+                                        {!! Form::text('price', null, ['class' => 'form-control', 'min' => 0, 'step' => 0.01, 'id' => 'price']) !!}
                                     </div>
 
                                     <!-- Remark Field -->

@@ -13,7 +13,8 @@
                         <div class="card-header">
                             <i class="fa fa-align-justify"></i>
                             {{ __('Warehouses') }}
-                            <button class="border-0 bg-transparent pull-right text-danger" data-toggle="modal" data-target="#stockadjustment"><i class="fa fa-cart-arrow-down fa-lg"></i></button>
+                            <button class="border-0 bg-transparent pull-right text-danger" data-toggle="modal" data-target="#stockadjustment" title="{{ __('Stock Adjustment') }}"><i class="fa fa-cart-arrow-down fa-lg"></i></button>
+                            <button class="border-0 bg-transparent pull-right text-warning" data-toggle="modal" data-target="#stockout" title="{{ __('Stock Out') }}"><i class="fa fa-minus-square fa-lg"></i></button>
                             <button class="border-0 bg-transparent pull-right text-info" data-toggle="modal" data-target="#transferStock"><i class="fa fa-exchange fa-lg"></i></button>
                             <a href="{{ route('warehouses.create') }}" class="pull-right text-success pr-2"><i class="fa fa-plus-square fa-lg"></i></a>
                         </div>
@@ -260,6 +261,74 @@
         </div>
     </div>
 
+    <!-- Stock Out Modal -->
+    <div id="stockout" class="modal fade">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-white">
+                    <h4 class="modal-title h6">{{ __('Stock Out') }}</h4>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">×</button>
+                </div>
+                <div class="modal-body">
+                    {!! Form::open(['route' => 'warehouses.stock-out', 'id' => 'stockOutForm']) !!}
+
+                    <!-- Warehouse Selection -->
+                    <div class="form-group">
+                        <label for="stockout_warehouse_id" class="col-form-label">{{ __('Select Warehouse') }} <span class="text-danger">*</span>:</label>
+                        <select name="warehouse_id" id="stockout_warehouse_id" class="form-control select2" required>
+                            <option value="">{{ __('Select Warehouse') }}</option>
+                            @foreach($warehouses as $warehouse)
+                                <option value="{{ $warehouse->id }}">{{ $warehouse->name }} ({{ $warehouse->location }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Product Selection -->
+                    <div class="form-group">
+                        <label for="stockout_product_id" class="col-form-label">{{ __('Select Product') }} <span class="text-danger">*</span>:</label>
+                        <select name="product_id" id="stockout_product_id" class="form-control select2" required disabled>
+                            <option value="">{{ __('First select warehouse') }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Batch Selection -->
+                    <div class="form-group">
+                        <label for="stockout_batch_id" class="col-form-label">{{ __('Select Batch') }} <span class="text-danger">*</span>:</label>
+                        <select name="batch_id" id="stockout_batch_id" class="form-control select2" required disabled>
+                            <option value="">{{ __('First select product') }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Current Stock Display -->
+                    <div class="alert alert-info" id="stockoutCurrentStockInfo" style="display: none;">
+                        <strong>{{ __('Current Stock:') }}</strong>
+                        <span id="stockoutCurrentStockValue">0</span> {{ __('units') }}
+                    </div>
+
+                    <!-- Quantity to Deduct -->
+                    <div class="form-group">
+                        <label for="stockout_quantity" class="col-form-label">{{ __('Quantity to Deduct') }} <span class="text-danger">*</span>:</label>
+                        <input type="number" min="1" class="form-control" id="stockout_quantity" name="quantity" placeholder="Enter quantity to deduct" disabled required>
+                        <small class="text-danger" id="stockoutQuantityError" style="display: none;">{{ __('Quantity cannot exceed current stock') }}</small>
+                    </div>
+
+                    <!-- Remarks -->
+                    <div class="form-group">
+                        <label for="stockout_remarks" class="col-form-label">{{ __('Remarks') }} <span class="text-danger">*</span>:</label>
+                        <textarea class="form-control" name="remarks" id="stockout_remarks" rows="3" placeholder="Reason for stock out..." required></textarea>
+                        <small class="text-muted">{{ __('Please provide a reason for this stock out') }}</small>
+                    </div>
+
+                    <div class="form-group text-right mt-3">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('Cancel') }}</button>
+                        <button type="submit" name="button" class="btn btn-warning" id="stockoutSubmitBtn" disabled>{{ __('Apply Stock Out') }}</button>
+                    </div>
+                    {!! Form::close() !!}
+                </div>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
@@ -451,6 +520,24 @@
             $('#adjustment_batch_id').select2({
                 width: '100%',
                 dropdownParent: $('#stockadjustment')
+            });
+
+            // Initialize select2 for stock out modal
+            let stockoutCurrentBatchStock = 0;
+
+            $('#stockout_warehouse_id').select2({
+                width: '100%',
+                dropdownParent: $('#stockout')
+            });
+
+            $('#stockout_product_id').select2({
+                width: '100%',
+                dropdownParent: $('#stockout')
+            });
+
+            $('#stockout_batch_id').select2({
+                width: '100%',
+                dropdownParent: $('#stockout')
             });
 
             // ========== STOCK TRANSFER MODAL FUNCTIONS (Mirroring stockin modal pattern) ==========
@@ -1109,6 +1196,180 @@
                 }
                 
                 var submitBtn = $('#adjustmentSubmitBtn');
+                submitBtn.html('<i class="fa fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
+            });
+
+            // ========== STOCK OUT MODAL FUNCTIONS ==========
+
+            $('#stockout_warehouse_id').on('change', function() {
+                var warehouseId = $(this).val();
+                var productSelect = $('#stockout_product_id');
+                var batchSelect = $('#stockout_batch_id');
+
+                productSelect.val('').trigger('change');
+                batchSelect.val('').trigger('change');
+                batchSelect.prop('disabled', true);
+                $('#stockout_quantity').prop('disabled', true).val('');
+                $('#stockoutCurrentStockInfo').hide();
+                $('#stockoutQuantityError').hide();
+
+                if (warehouseId) {
+                    $.ajax({
+                        url: '{{ route("warehouses.get-warehouse-products", "") }}/' + warehouseId,
+                        type: 'GET',
+                        success: function(response) {
+                            productSelect.empty().append('<option value="">{{ __("Select Product") }}</option>');
+
+                            if (response.products && response.products.length > 0) {
+                                $.each(response.products, function(index, product) {
+                                    productSelect.append('<option value="' + product.product_id + '">' + product.product_name + ' (Total: ' + product.total_quantity + ' units)</option>');
+                                });
+                                productSelect.prop('disabled', false);
+                            } else {
+                                productSelect.append('<option value="">{{ __("No products found in this warehouse") }}</option>');
+                                productSelect.prop('disabled', true);
+                            }
+                        },
+                        error: function(xhr) {
+                            console.error('Error loading products:', xhr);
+                            productSelect.empty().append('<option value="">{{ __("Error loading products") }}</option>');
+                            productSelect.prop('disabled', true);
+                        }
+                    });
+                } else {
+                    productSelect.empty().append('<option value="">{{ __("Select Warehouse First") }}</option>');
+                    productSelect.prop('disabled', true);
+                }
+
+                validateStockOutForm();
+            });
+
+            $('#stockout_product_id').on('change', function() {
+                var warehouseId = $('#stockout_warehouse_id').val();
+                var productId = $(this).val();
+                var batchSelect = $('#stockout_batch_id');
+
+                batchSelect.val('').trigger('change');
+                $('#stockout_quantity').prop('disabled', true).val('');
+                $('#stockoutCurrentStockInfo').hide();
+                $('#stockoutQuantityError').hide();
+
+                if (warehouseId && productId) {
+                    var url = '/warehouses/' + warehouseId + '/products/' + productId + '/batches';
+
+                    $.ajax({
+                        url: url,
+                        type: 'GET',
+                        success: function(response) {
+                            batchSelect.empty().append('<option value="">{{ __("Select Batch") }}</option>');
+
+                            if (response.success && response.batches && response.batches.length > 0) {
+                                $.each(response.batches, function(index, batch) {
+                                    batchSelect.append('<option value="' + batch.batch_id + '" data-quantity="' + batch.quantity + '" data-expiry="' + batch.expiry_date + '">' +
+                                        batch.batch_code + ' (Stock: ' + batch.quantity + ' units | Exp: ' + batch.expiry_date + ')' +
+                                        '</option>');
+                                });
+                                batchSelect.prop('disabled', false);
+                            } else {
+                                batchSelect.append('<option value="">{{ __("No batches found for this product in warehouse") }}</option>');
+                                batchSelect.prop('disabled', true);
+                            }
+                        },
+                        error: function(xhr) {
+                            console.error('Error loading batches:', xhr);
+                            batchSelect.empty().append('<option value="">{{ __("Error loading batches") }}</option>');
+                            batchSelect.prop('disabled', true);
+                        }
+                    });
+                } else {
+                    batchSelect.empty().append('<option value="">{{ __("Select Product First") }}</option>');
+                    batchSelect.prop('disabled', true);
+                }
+
+                validateStockOutForm();
+            });
+
+            $('#stockout_batch_id').on('change', function() {
+                var selected = $(this).find('option:selected');
+                var quantity = selected.data('quantity') || 0;
+                var batchId = $(this).val();
+
+                stockoutCurrentBatchStock = quantity;
+
+                if (batchId) {
+                    $('#stockoutCurrentStockValue').text(quantity);
+                    $('#stockoutCurrentStockInfo').show();
+                    $('#stockout_quantity').prop('disabled', false).attr('max', quantity).val('');
+                } else {
+                    $('#stockoutCurrentStockInfo').hide();
+                    $('#stockout_quantity').prop('disabled', true).val('');
+                }
+
+                $('#stockoutQuantityError').hide();
+                validateStockOutForm();
+            });
+
+            $('#stockout_quantity').on('input', function() {
+                var quantity = parseInt($(this).val(), 10) || 0;
+
+                if (quantity > stockoutCurrentBatchStock) {
+                    $('#stockoutQuantityError').show();
+                } else {
+                    $('#stockoutQuantityError').hide();
+                }
+
+                validateStockOutForm();
+            });
+
+            $('#stockout_remarks').on('input', function() {
+                validateStockOutForm();
+            });
+
+            function validateStockOutForm() {
+                var warehouseSelected = $('#stockout_warehouse_id').val() !== '';
+                var productSelected = $('#stockout_product_id').val() !== '';
+                var batchSelected = $('#stockout_batch_id').val() !== '';
+                var quantity = parseInt($('#stockout_quantity').val(), 10);
+                var remarks = $('#stockout_remarks').val().trim();
+
+                var isValid = warehouseSelected && productSelected && batchSelected &&
+                            !isNaN(quantity) && quantity > 0 && quantity <= stockoutCurrentBatchStock &&
+                            remarks !== '';
+
+                $('#stockoutSubmitBtn').prop('disabled', !isValid);
+            }
+
+            $('#stockout').on('hidden.bs.modal', function() {
+                $(this).find('select').val('').trigger('change');
+                $(this).find('input[type="number"]').val('');
+                $(this).find('textarea').val('');
+                $('#stockoutCurrentStockInfo').hide();
+                $('#stockoutQuantityError').hide();
+                $('#stockoutSubmitBtn').prop('disabled', true);
+                stockoutCurrentBatchStock = 0;
+            });
+
+            $('#stockOutForm').on('submit', function(e) {
+                var quantity = parseInt($('#stockout_quantity').val(), 10);
+
+                if (quantity > stockoutCurrentBatchStock) {
+                    alert('Quantity to deduct cannot exceed current stock of ' + stockoutCurrentBatchStock + ' units.');
+                    e.preventDefault();
+                    return false;
+                }
+
+                var confirmMessage = 'You are DEDUCTING ' + quantity + ' units from stock.\n' +
+                                    'Current: ' + stockoutCurrentBatchStock + ' units\n' +
+                                    'Remaining after: ' + (stockoutCurrentBatchStock - quantity) + ' units\n\n' +
+                                    'Reason: ' + $('#stockout_remarks').val() + '\n\n' +
+                                    'Are you sure you want to proceed?';
+
+                if (!confirm(confirmMessage)) {
+                    e.preventDefault();
+                    return false;
+                }
+
+                var submitBtn = $('#stockoutSubmitBtn');
                 submitBtn.html('<i class="fa fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
             });
 

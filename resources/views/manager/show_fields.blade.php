@@ -16,6 +16,12 @@
     <p>{!! $user->email !!}</p>
 </div>
 
+<!-- Invoice Code Field -->
+<div class="form-group">
+    {!! Form::label('invoice_code', __('Invoice Code')) !!}
+    <p>{!! $user->invoice_code ?: '-' !!}</p>
+</div>
+
 <!-- Role Id Field -->
 <div class="form-group">
     {!! Form::label('role_id', __('user.role')) !!}

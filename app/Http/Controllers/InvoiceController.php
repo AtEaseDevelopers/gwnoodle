@@ -1462,12 +1462,6 @@ class InvoiceController extends AppBaseController
             'msic_code' => '10799'
         ];
 
-        // Calculate dynamic page height based purely on item count.
-        // 45pt per item covers 1 row at 9px font including text wrapping in description column.
-        // 600pt base covers header, company info, customer section, totals, and footer.
-        $itemCount = count($invoice->invoicedetail);
-        $height = ($itemCount * 45) + 600;
-
         // Convert amount to words
         $totalAmountText = $this->convertNumberToWords($totalAmount);
 
@@ -1498,10 +1492,10 @@ class InvoiceController extends AppBaseController
             }
 
             if ($function == 'download') {
-                return $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
+                return $pdf->setPaper('a4', 'portrait')
                     ->download('invoice_' . $invoice->invoiceno . '.pdf');
             } elseif ($function == 'view') {
-                return $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
+                return $pdf->setPaper('a4', 'portrait')
                     ->stream('invoice_' . $invoice->invoiceno . '.pdf');
             }
         } catch (Exception $e) {

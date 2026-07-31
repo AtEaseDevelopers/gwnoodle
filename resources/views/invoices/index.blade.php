@@ -20,6 +20,7 @@
                              <a class="pull-right text-success pr-2" id="massactive" href="#" alt="Mass active"><i class="fa fa-check fa-lg"></i></a>
                              <!--<a class="pull-right pr-2" id="masssyncxero" href="#" alt="Mass Sync to Xero"><i class="fa fa-refresh fa-lg"></i></a>-->
                             @einvoice
+                            @if(!auth()->user()->hasRole('Inventory Admin'))
                              <button type="button" class="btn btn-primary btn-sm pull-right mr-2" onclick="submitEinvoice()" title="Submit E-Invoice">
                                 <i class="fa fa-file-text-o"></i> Submit E-Invoice
                             </button>
@@ -29,6 +30,7 @@
                             <button type="button" class="btn btn-info btn-sm pull-right mr-2" onclick="submitAutocountInvoice()" title="Submit Autocount Invoice">
                                 <i class="fa fa-files-o"></i> Submit Autocount Invoice
                             </button>
+                            @endif
                             @endeinvoice
                          </div>
                          <div class="card-body">
