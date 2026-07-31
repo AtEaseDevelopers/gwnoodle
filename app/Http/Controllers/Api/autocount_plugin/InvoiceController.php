@@ -63,7 +63,7 @@ class InvoiceController extends Controller
             $paymentMap = [
                 1 => 'Cash',
                 2 => 'Bankin',
-                3 => 'Credit Note',
+                3 => 'Credit',
                 4 => 'Touch & Go',
             ];
 
