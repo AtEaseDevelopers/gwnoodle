@@ -77,7 +77,11 @@
             var dateArray = '';
                 
             while (currentDate <= endDate) {
-                dateArray=dateArray+moment(currentDate).format("YYYY-MM-DD")+'|';
+                // Invoice.date is cast to 'd-m-Y H:i:s' (DD-MM-YYYY), and this
+                // table has no serverSide processing, so DataTables searches
+                // against that cast/JSON value in the browser - the search
+                // tokens must match that format, not ISO YYYY-MM-DD.
+                dateArray=dateArray+moment(currentDate).format("DD-MM-YYYY")+'|';
                 currentDate.setUTCDate(currentDate.getUTCDate() + steps);
             }
 

@@ -127,6 +127,7 @@ class WarehouseDataTable extends DataTable
                                 'body' => $this->inventorySummaryExportFormatter()
                             ]
                         ],
+                        'customizeData' => $this->excelRowExpansionCustomizer(),
                         'className' => 'btn btn-default btn-sm no-corner',
                         'filename' => 'warehouses_' . date('YmdHis')
                     ],
@@ -141,20 +142,7 @@ class WarehouseDataTable extends DataTable
                                 'body' => $this->inventorySummaryExportFormatter()
                             ]
                         ],
-                        'customize' => 'function(doc) {
-                            var tableIndex = doc.content.findIndex(function(item) { return item.table; });
-                            if (tableIndex === -1) { return; }
-                            doc.content[tableIndex].layout = {
-                                hLineWidth: function() { return 0.5; },
-                                vLineWidth: function() { return 0.5; },
-                                hLineColor: function() { return "#999"; },
-                                vLineColor: function() { return "#999"; },
-                                paddingLeft: function() { return 4; },
-                                paddingRight: function() { return 4; },
-                                paddingTop: function() { return 2; },
-                                paddingBottom: function() { return 2; }
-                            };
-                        }',
+                        'customize' => $this->pdfNestedTableCustomizer(),
                         'className' => 'btn btn-default btn-sm no-corner',
                         'filename' => 'warehouses_' . date('YmdHis')
                     ],
@@ -207,9 +195,10 @@ class WarehouseDataTable extends DataTable
     /**
      * JS callback (as a string) used by the Excel/PDF export buttons for the
      * "Inventory Summary" column. That column's cell is a nested HTML table;
-     * the default export would just strip the tags and dump the raw text
-     * concatenated together. This rebuilds it as one "Product | Batch | Qty"
-     * line per row, matching what's shown on screen.
+     * this extracts its rows into a JSON array (marker-prefixed so it can be
+     * told apart from a plain string) so the PDF and Excel customize hooks
+     * below can rebuild it as a real nested table / real separate rows,
+     * matching what's shown on screen instead of flattening it to text.
      *
      * @return string
      */
@@ -217,20 +206,17 @@ class WarehouseDataTable extends DataTable
     {
         return 'function(data, row, column, node) {
             if (column === 7) {
-                var lines = [];
+                var items = [];
                 $(node).find("tbody tr").each(function() {
                     var cells = $(this).find("td");
                     var product = $(cells[0]).text().trim();
                     var batch = $(cells[1]).text().trim();
                     var qty = $(cells[2]).text().trim();
                     if (product || batch || qty) {
-                        lines.push(product + " | " + batch + " | " + qty);
+                        items.push({ p: product, b: batch, q: qty });
                     }
                 });
-                if (lines.length === 0) {
-                    return $(node).text().trim();
-                }
-                return lines.join("\\n");
+                return "__INV_SUMMARY__" + JSON.stringify(items);
             }
             // Every other column: strip HTML tags (badges, <strong>, etc.)
             // and use the plain visible text instead of the raw markup,
@@ -238,6 +224,132 @@ class WarehouseDataTable extends DataTable
             // export button\'s own default tag-stripping for ALL columns.
             return $(node).text().trim();
         }';
+    }
+
+    /**
+     * JS callback (as a string) for the PDF button\'s `customize(doc)` hook.
+     * Parses the marker-prefixed JSON built by inventorySummaryExportFormatter()
+     * and replaces that cell in the generated pdfmake document with a real
+     * nested table (Product/Batch/Qty, bordered), instead of flattened text.
+     *
+     * @return string
+     */
+    private function pdfNestedTableCustomizer(): string
+    {
+        return <<<'JS'
+function(doc) {
+    var MARKER = "__INV_SUMMARY__";
+    var tableIndex = doc.content.findIndex(function(item) { return item.table; });
+    if (tableIndex === -1) { return; }
+
+    var body = doc.content[tableIndex].table.body;
+    for (var r = 1; r < body.length; r++) {
+        var row = body[r];
+        for (var c = 0; c < row.length; c++) {
+            var cell = row[c];
+            var cellText = typeof cell === 'string' ? cell : (cell && cell.text ? cell.text : '');
+            if (cellText.indexOf(MARKER) !== 0) { continue; }
+
+            var items = [];
+            try { items = JSON.parse(cellText.substring(MARKER.length)); } catch (e) { items = []; }
+
+            if (items.length === 0) {
+                row[c] = { text: 'No inventory', italics: true, color: '#888888', fontSize: 8 };
+                break;
+            }
+
+            var nestedBody = [[
+                { text: 'Product', bold: true, fontSize: 8 },
+                { text: 'Batch', bold: true, fontSize: 8 },
+                { text: 'Qty', bold: true, fontSize: 8 }
+            ]];
+            items.forEach(function(item) {
+                nestedBody.push([
+                    { text: item.p, fontSize: 8 },
+                    { text: item.b, fontSize: 8 },
+                    { text: item.q, fontSize: 8, alignment: 'center' }
+                ]);
+            });
+
+            row[c] = {
+                table: {
+                    headerRows: 1,
+                    widths: ['*', '*', 'auto'],
+                    body: nestedBody
+                },
+                layout: {
+                    hLineWidth: function() { return 0.5; },
+                    vLineWidth: function() { return 0.5; },
+                    hLineColor: function() { return '#cccccc'; },
+                    vLineColor: function() { return '#cccccc'; },
+                    paddingLeft: function() { return 3; },
+                    paddingRight: function() { return 3; },
+                    paddingTop: function() { return 1; },
+                    paddingBottom: function() { return 1; }
+                },
+                margin: [0, 0, 0, 0]
+            };
+            break;
+        }
+    }
+
+    doc.content[tableIndex].layout = {
+        hLineWidth: function() { return 0.5; },
+        vLineWidth: function() { return 0.5; },
+        hLineColor: function() { return '#999999'; },
+        vLineColor: function() { return '#999999'; },
+        paddingLeft: function() { return 4; },
+        paddingRight: function() { return 4; },
+        paddingTop: function() { return 2; },
+        paddingBottom: function() { return 2; }
+    };
+}
+JS;
+    }
+
+    /**
+     * JS callback (as a string) for the Excel button\'s `customizeData(data)`
+     * hook. Parses the marker-prefixed JSON built by
+     * inventorySummaryExportFormatter() and expands the single "Inventory
+     * Summary" column into real Product/Batch/Qty columns, exploding each
+     * warehouse row into one exported row per inventory item - matching the
+     * row-by-row layout shown in the on-screen DataTable, instead of
+     * cramming everything into one cell.
+     *
+     * @return string
+     */
+    private function excelRowExpansionCustomizer(): string
+    {
+        return <<<'JS'
+function(data) {
+    var MARKER = "__INV_SUMMARY__";
+    var invIdx = data.header.indexOf('Inventory Summary');
+    if (invIdx === -1) { return; }
+
+    data.header.splice(invIdx, 1, 'Product', 'Batch', 'Qty');
+
+    var newBody = [];
+    data.body.forEach(function(row) {
+        var raw = row[invIdx];
+        var items = [];
+        if (typeof raw === 'string' && raw.indexOf(MARKER) === 0) {
+            try { items = JSON.parse(raw.substring(MARKER.length)); } catch (e) { items = []; }
+        }
+
+        var before = row.slice(0, invIdx);
+        var after = row.slice(invIdx + 1);
+
+        if (items.length === 0) {
+            newBody.push(before.concat(['No inventory', '', ''], after));
+        } else {
+            items.forEach(function(item) {
+                newBody.push(before.concat([item.p, item.b, item.q], after));
+            });
+        }
+    });
+    data.body = newBody;
+}
+JS;
     }
 
     /**

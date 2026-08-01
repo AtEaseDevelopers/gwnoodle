@@ -1934,7 +1934,7 @@ class DriverController extends Controller
             // Validate trip
             $trip = Trip::where('driver_id', $driver->id)->orderby('date', 'desc')->first();
             if (!empty($trip)) {
-                if ($trip->type == 2) {
+                if ($trip->type == 0) {
                     return response()->json([
                         'result' => false,
                         'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
@@ -3320,7 +3320,7 @@ class DriverController extends Controller
             //validation
             $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
             if(!empty($trip)){
-                if($trip->type == 2){
+                if($trip->type == 0){
                     return response()->json([
                         'result' => false,
                         'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -3378,7 +3378,7 @@ class DriverController extends Controller
         //validation
         $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
         if(!empty($trip)){
-            if($trip->type == 2){
+            if($trip->type == 0){
                 return response()->json([
                     'result' => false,
                     'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -3485,7 +3485,7 @@ class DriverController extends Controller
             //validation
             $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
             if(!empty($trip)){
-                if($trip->type == 2){
+                if($trip->type == 0){
                     return response()->json([
                         'result' => false,
                         'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -3547,7 +3547,7 @@ class DriverController extends Controller
         //validation
         $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
         if(!empty($trip)){
-            if($trip->type == 2){
+            if($trip->type == 0){
                 return response()->json([
                     'result' => false,
                     'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -3662,7 +3662,7 @@ class DriverController extends Controller
             //validation
             $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
             if(!empty($trip)){
-                if($trip->type == 2){
+                if($trip->type == 0){
                     return response()->json([
                         'result' => false,
                         'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -3751,7 +3751,7 @@ class DriverController extends Controller
             //validation
             $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
             if(!empty($trip)){
-                if($trip->type == 2){
+                if($trip->type == 0){
                     return response()->json([
                         'result' => false,
                         'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -3801,7 +3801,7 @@ class DriverController extends Controller
         //validation
         $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
         if(!empty($trip)){
-            if($trip->type == 2){
+            if($trip->type == 0){
                 return response()->json(['result' => false, 'message' => 'Trip had not started', 'data' => null], 400);
             }
         }else{
@@ -3889,7 +3889,7 @@ class DriverController extends Controller
         //validation
         $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
         if(!empty($trip)){
-            if($trip->type == 2){
+            if($trip->type == 0){
                 return response()->json(['result' => false, 'message' => 'Trip had not started', 'data' => null], 400);
             }
         }else{
@@ -4060,7 +4060,7 @@ class DriverController extends Controller
         //validation
         $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
         if(!empty($trip)){
-            if($trip->type == 2){
+            if($trip->type == 0){
                 return response()->json([
                     'result' => false,
                     'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -4175,7 +4175,7 @@ class DriverController extends Controller
         //validation
         $trip = Trip::where('driver_id', $driver->id)->orderby('date','desc')->first();
         if(!empty($trip)){
-            if($trip->type == 2){
+            if($trip->type == 0){
                 return response()->json([
                     'result' => false,
                     'message' => __LINE__.$this->message_separator.'api.message.trip_had_not_started',
@@ -8471,7 +8471,7 @@ class DriverController extends Controller
         }
 
         $trip = Trip::where('driver_id', $driver->id)->orderby('date', 'desc')->first();
-        if (empty($trip) || $trip->type == 2) {
+        if (empty($trip) || $trip->type == 0) {
             return response()->json([
                 'result'  => false,
                 'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',

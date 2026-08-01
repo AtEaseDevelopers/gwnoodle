@@ -202,7 +202,9 @@ class InventoryTransactionDataTable extends DataTable
                                 var input = \'<input type="text" class="form-control-sm" placeholder="Search">\';
                             }
                             $(input).appendTo($(column.footer()).empty()).on(\'keyup change\', function(){
-                                column.search($(this).val(),false,true).draw();
+                                var __searchVal = $(this).val();
+                                var __isDateList = /^\d{4}-\d{2}-\d{2}(\|\d{4}-\d{2}-\d{2})*$/.test(__searchVal);
+                                column.search(__searchVal, __isDateList, !__isDateList).draw();
                                 ShowLoad();
                             });
                         }
