@@ -48,6 +48,7 @@ class Invoice extends Model
         'po_number_remark',
         'chequeno',
         'trip_uuid',
+        'created_by',
     ];
 
     /**
@@ -67,6 +68,7 @@ class Invoice extends Model
         'supervisor_id' => 'integer',
         'paymentterm' => 'integer',
         'status' => 'integer',
+        'created_by' => 'integer',
         'remark' => 'string',
         'po_number_remark' => 'string'
     ];
@@ -103,6 +105,11 @@ class Invoice extends Model
     public function driver()
     {
         return $this->belongsTo(\App\Models\Driver::class, 'driver_id', 'id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'created_by', 'id');
     }
 
     public function defaultDriver()

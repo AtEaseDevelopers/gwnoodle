@@ -39,7 +39,7 @@ class InvoiceDataTable extends DataTable
                 return $invoice->driver->name ?? 'Driver';
             }
 
-            return 'Admin';
+            return $invoice->creator->name ?? 'Admin';
         });
 
         // 'created_by' isn't a real column (see addColumn() above - it's
@@ -77,6 +77,7 @@ class InvoiceDataTable extends DataTable
         return $model->newQuery()
         ->with('customer')
         ->with('driver:id,name')
+        ->with('creator:id,name')
         ->with('kelindan:id,name')
         ->with('agent:id,name')
         ->with('supervisor:id,name')
