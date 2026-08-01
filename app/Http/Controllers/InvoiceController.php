@@ -209,7 +209,8 @@ class InvoiceController extends AppBaseController
         }
 
         $old_payment = $invoice['paymentterm'];
-        
+        $oldStatus = (int) $invoice->status;
+
         $input = $request->all();
 
         $input['date'] = date_create($input['date']);
@@ -218,7 +219,31 @@ class InvoiceController extends AppBaseController
             $input['invoiceno'] = 'INV'.sprintf('%07d',Code::where('code','invoicerunningnumber')->first()->value);
         }
 
-        $invoice = $this->invoiceRepository->update($input, $id);
+        $newStatus = isset($input['status']) ? (int) $input['status'] : $oldStatus;
+        $statusChangeNeedsStockAdjustment = $newStatus !== $oldStatus
+            && in_array(Invoice::STATUS_CANCELLED, [$newStatus, $oldStatus], true);
+
+        if ($statusChangeNeedsStockAdjustment) {
+            DB::beginTransaction();
+            try {
+                if ($newStatus === Invoice::STATUS_CANCELLED) {
+                    $this->returnInvoiceStock($invoice);
+                } else {
+                    $this->deductInvoiceStock($invoice);
+                }
+
+                $invoice = $this->invoiceRepository->update($input, $id);
+
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Flash::error('Could not update invoice status: ' . $e->getMessage());
+
+                return redirect()->back()->withInput();
+            }
+        } else {
+            $invoice = $this->invoiceRepository->update($input, $id);
+        }
 
          if($old_payment != $input['paymentterm'])
         {

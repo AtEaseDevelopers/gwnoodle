@@ -67,6 +67,17 @@
     {!! Form::text('chequeno', null, ['class' => 'form-control','maxlength' => 20,'maxlength' => 20]) !!}
 </div>
 
+@if(isset($invoice) && $invoice->exists)
+<!-- Status Field (edit only - new invoices always start Completed) -->
+<div class="form-group col-sm-6">
+    {!! Form::label('status', __('invoices.status')) !!}<span class="asterisk"> *</span>
+    {{ Form::select('status', [
+        \App\Models\Invoice::STATUS_COMPLETED => 'Completed',
+        \App\Models\Invoice::STATUS_CANCELLED => 'Cancelled',
+    ], null, ['class' => 'form-control', 'id' => 'status']) }}
+</div>
+@endif
+
 <!-- Remark Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('remark',  __('invoices.remark'))  !!}
@@ -129,13 +140,48 @@
             
             HideLoad();
         });
+        // Changing status affects real inventory (cancelling returns stock,
+        // un-cancelling deducts it again), so confirm that impact explicitly
+        // before letting the form submit. originalStatus is empty on create
+        // (no status field rendered at all), so this never fires there.
+        var originalStatus = "{{ isset($invoice) && $invoice->exists ? $invoice->status : '' }}";
+        var stockDestination = "{{ isset($invoice) && $invoice->exists && $invoice->trip_uuid ? 'the driver\'s lorry' : 'the warehouse' }}";
+
+        function submitInvoiceForm(methodVal){
+            var newStatus = $('#status').val();
+            var statusChangedInvolvesCancel = originalStatus !== '' && newStatus && newStatus != originalStatus
+                && (newStatus == {{ \App\Models\Invoice::STATUS_CANCELLED }} || originalStatus == {{ \App\Models\Invoice::STATUS_CANCELLED }});
+
+            if (!statusChangedInvolvesCancel) {
+                $('#method').val(methodVal);
+                $('form').submit();
+                return;
+            }
+
+            var warning = newStatus == {{ \App\Models\Invoice::STATUS_CANCELLED }}
+                ? 'Cancelling this invoice will return its product quantities back to ' + stockDestination + '. Continue?'
+                : 'Marking this invoice as Completed will deduct product quantities from ' + stockDestination + ' again. Continue?';
+
+            $.confirm({
+                title: 'Confirm Stock Impact',
+                content: warning,
+                buttons: {
+                    Yes: function(){
+                        $('#method').val(methodVal);
+                        $('form').submit();
+                    },
+                    No: function(){
+                        return;
+                    }
+                }
+            });
+        }
+
         $("#save_exit").click(function(){
-            $('#method').val(1);
-            $('form').submit();
+            submitInvoiceForm(1);
         });
         $("#save_continue").click(function(){
-            $('#method').val(2);
-            $('form').submit();
+            submitInvoiceForm(2);
         });
         
         $('#paymentterm').change(function(){
