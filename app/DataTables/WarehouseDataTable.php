@@ -141,6 +141,20 @@ class WarehouseDataTable extends DataTable
                                 'body' => $this->inventorySummaryExportFormatter()
                             ]
                         ],
+                        'customize' => 'function(doc) {
+                            var tableIndex = doc.content.findIndex(function(item) { return item.table; });
+                            if (tableIndex === -1) { return; }
+                            doc.content[tableIndex].layout = {
+                                hLineWidth: function() { return 0.5; },
+                                vLineWidth: function() { return 0.5; },
+                                hLineColor: function() { return "#999"; },
+                                vLineColor: function() { return "#999"; },
+                                paddingLeft: function() { return 4; },
+                                paddingRight: function() { return 4; },
+                                paddingTop: function() { return 2; },
+                                paddingBottom: function() { return 2; }
+                            };
+                        }',
                         'className' => 'btn btn-default btn-sm no-corner',
                         'filename' => 'warehouses_' . date('YmdHis')
                     ],
@@ -218,7 +232,11 @@ class WarehouseDataTable extends DataTable
                 }
                 return lines.join("\\n");
             }
-            return data;
+            // Every other column: strip HTML tags (badges, <strong>, etc.)
+            // and use the plain visible text instead of the raw markup,
+            // since providing a custom format.body callback replaces the
+            // export button\'s own default tag-stripping for ALL columns.
+            return $(node).text().trim();
         }';
     }
 
