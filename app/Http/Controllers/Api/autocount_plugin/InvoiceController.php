@@ -62,9 +62,10 @@ class InvoiceController extends Controller
             // Step 4: Payment mapping
             $paymentMap = [
                 1 => 'Cash',
-                2 => 'Bankin',
-                3 => 'Credit',
+                2 => 'Credit',
+                3 => 'Online',
                 4 => 'Touch & Go',
+                5 => 'Cheque',
             ];
 
             // Step 5: Transform
