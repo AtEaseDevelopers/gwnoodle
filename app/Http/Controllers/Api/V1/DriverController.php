@@ -8662,7 +8662,7 @@ class DriverController extends Controller
             ])->values();
 
             // Predicted next invoice number for this driver, split into its
-            // code/running-number parts (format: INV{yy}{mm}/{code}/{running})
+            // code/running-number parts (format: I{yy}{mm}/{code}/{running})
             // so the offline app can construct invoice numbers locally
             // without re-parsing the combined string. This is only a
             // prediction - if it's since been taken by the time the driver
