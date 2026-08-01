@@ -548,16 +548,29 @@ class InvoiceController extends AppBaseController
 
     /**
      * Cancelling an invoice: return stock for every line item that's
-     * currently holding inventory (deducted_from_inventory is true, or null
-     * for legacy rows created before that flag existed - treated the same
-     * as true since everything was always deducted before then). Items
-     * explicitly flagged false (e.g. bulkCreateInvoice's itemsToIgnore, which
-     * never had stock taken) are left untouched - there's nothing to return.
+     * currently holding inventory.
+     *
+     * Warehouse-sourced items (warehouse_id set) are ALWAYS treated as
+     * deducted, regardless of deducted_from_inventory - that column is
+     * tinyint NOT NULL DEFAULT 0 and InvoiceDetailController::upsertDetail()
+     * (the normal admin create/edit path for these) never sets it, so it
+     * reads false for essentially every warehouse-sourced row even though
+     * stock genuinely was taken (insufficient warehouse stock always throws
+     * there rather than silently skipping - there's no "not deducted" state
+     * to represent for this path).
+     *
+     * Driver/lorry-sourced items (warehouse_id null) DO rely on the flag,
+     * since bulkCreateInvoice's itemsToIgnore is a real "never deducted"
+     * case that must not be returned.
      */
     private function returnInvoiceStock(Invoice $invoice): void
     {
         foreach ($invoice->invoicedetail as $detail) {
-            if ($detail->deducted_from_inventory === false || $detail->quantity <= 0) {
+            if ($detail->quantity <= 0) {
+                continue;
+            }
+
+            if (!$detail->warehouse_id && $detail->deducted_from_inventory === false) {
                 continue;
             }
 
@@ -570,13 +583,18 @@ class InvoiceController extends AppBaseController
 
     /**
      * Un-cancelling an invoice (back to Completed): re-deduct stock for
-     * every line item currently marked as not holding inventory
-     * (deducted_from_inventory === false). Mirrors returnInvoiceStock().
+     * every line item that isn't currently holding inventory. Mirrors
+     * returnInvoiceStock() - warehouse items always re-deducted, lorry items
+     * gated by deducted_from_inventory.
      */
     private function deductInvoiceStock(Invoice $invoice): void
     {
         foreach ($invoice->invoicedetail as $detail) {
-            if ($detail->deducted_from_inventory !== false || $detail->quantity <= 0) {
+            if ($detail->quantity <= 0) {
+                continue;
+            }
+
+            if (!$detail->warehouse_id && $detail->deducted_from_inventory !== false) {
                 continue;
             }
 
