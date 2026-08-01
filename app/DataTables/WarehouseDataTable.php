@@ -121,7 +121,12 @@ class WarehouseDataTable extends DataTable
                     [
                         'extend' => 'excelHtml5',
                         'text' => '<i class="fa fa-file-excel-o"></i> Excel',
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => [
+                            'columns' => ':visible:not(:last-child)',
+                            'format' => [
+                                'body' => $this->inventorySummaryExportFormatter()
+                            ]
+                        ],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'filename' => 'warehouses_' . date('YmdHis')
                     ],
@@ -130,7 +135,12 @@ class WarehouseDataTable extends DataTable
                         'orientation' => 'landscape',
                         'pageSize' => 'LEGAL',
                         'text' => '<i class="fa fa-file-pdf-o"></i> PDF',
-                        'exportOptions' => ['columns' => ':visible:not(:last-child)'],
+                        'exportOptions' => [
+                            'columns' => ':visible:not(:last-child)',
+                            'format' => [
+                                'body' => $this->inventorySummaryExportFormatter()
+                            ]
+                        ],
                         'className' => 'btn btn-default btn-sm no-corner',
                         'filename' => 'warehouses_' . date('YmdHis')
                     ],
@@ -178,6 +188,38 @@ class WarehouseDataTable extends DataTable
                     });
                 }'
             ]);
+    }
+
+    /**
+     * JS callback (as a string) used by the Excel/PDF export buttons for the
+     * "Inventory Summary" column. That column's cell is a nested HTML table;
+     * the default export would just strip the tags and dump the raw text
+     * concatenated together. This rebuilds it as one "Product | Batch | Qty"
+     * line per row, matching what's shown on screen.
+     *
+     * @return string
+     */
+    private function inventorySummaryExportFormatter(): string
+    {
+        return 'function(data, row, column, node) {
+            if (column === 7) {
+                var lines = [];
+                $(node).find("tbody tr").each(function() {
+                    var cells = $(this).find("td");
+                    var product = $(cells[0]).text().trim();
+                    var batch = $(cells[1]).text().trim();
+                    var qty = $(cells[2]).text().trim();
+                    if (product || batch || qty) {
+                        lines.push(product + " | " + batch + " | " + qty);
+                    }
+                });
+                if (lines.length === 0) {
+                    return $(node).text().trim();
+                }
+                return lines.join("\\n");
+            }
+            return data;
+        }';
     }
 
     /**

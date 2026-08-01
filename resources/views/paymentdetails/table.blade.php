@@ -45,6 +45,11 @@
             $('#dateModel').modal('show')
         }
 
+        function parseDMY(str) {
+            var parts = str.split("-");
+            return new Date(+parts[2], parts[1] - 1, +parts[0]);
+        }
+
         function dateRange(steps = 1) {
             if($('#datefrommodel').val() == ''){
                 noti('i','Date From cannot be empty','Please select the Date From');
@@ -54,15 +59,13 @@
                 noti('i','Date To cannot be empty','Please select the Date To');
                 return;
             }
-            if($('#datetomodel').val() < $('#datefrommodel').val()){
+            var currentDate = parseDMY($('#datefrommodel').val());
+            var endDate = parseDMY($('#datetomodel').val());
+            if(endDate < currentDate){
                 noti('i','Date From cannot greater than Date To','Please select the Date again');
                 return;
             }
             var dateArray = '';
-            var currentDateParts = $('#datefrommodel').val().split("-");
-            var endDateParts = $('#datetomodel').val().split("-");
-            var currentDate = new Date(+currentDateParts[2], currentDateParts[1] - 1, +currentDateParts[0]);
-            var endDate = new Date(+endDateParts[2], endDateParts[1] - 1, +endDateParts[0]);
                 
             while (currentDate <= endDate) {
                 dateArray=dateArray+moment(currentDate).format("YYYY-MM-DD")+'|';
