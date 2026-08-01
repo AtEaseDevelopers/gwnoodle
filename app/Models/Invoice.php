@@ -174,8 +174,13 @@ class Invoice extends Model
         $prefix = "I{$year}{$month}/{$userCode}/";
 
         // Find the latest invoice matching this exact prefix (not just the globally
-        // latest invoice, which may belong to a different driver/month/prefix)
+        // latest invoice, which may belong to a different driver/month/prefix).
+        // Excludes offline-marked running numbers (prefix + "A" + digits, e.g.
+        // I2608/AH1/A001 - see getOfflineCustomerList()), since those aren't
+        // numeric and would otherwise reset this online sequence back to 1
+        // (casting "A001" to int yields 0).
         $latestInvoice = self::where('invoiceno', 'like', $prefix . '%')
+            ->where('invoiceno', 'not like', $prefix . 'A%')
             ->orderBy('id', 'desc')
             ->lockForUpdate()
             ->first();

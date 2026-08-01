@@ -8661,15 +8661,33 @@ class DriverController extends Controller
                 'special_prices'   => $specialPricesByCustomer->get($customer->id, collect()),
             ])->values();
 
-            // Predicted next invoice number for this driver, split into its
-            // code/running-number parts (format: I{yy}{mm}/{code}/{running})
-            // so the offline app can construct invoice numbers locally
-            // without re-parsing the combined string. This is only a
-            // prediction - if it's since been taken by the time the driver
-            // syncs, invoice creation already retries with a fresh number
-            // (see the duplicate-invoiceno retry loop in addinvoice()).
-            $nextInvoiceNo = Invoice::generateInvoiceNumber($driver->id);
-            $nextInvoiceNoParts = explode('/', $nextInvoiceNo);
+            // Predicted next OFFLINE running number for this driver's current
+            // month, so the offline app can construct invoice numbers locally
+            // without hitting the server for every invoice while offline.
+            // Offline-created invoicenos are marked with an "A" + 3-digit
+            // running number (e.g. I2608/AH1/A001) so they're visibly
+            // distinct from normally (online) generated ones and never
+            // collide with them. Only the plain 3-digit number is returned -
+            // the app itself prepends the "A" when building the full
+            // invoiceno. This is only a prediction - if it's since been
+            // taken by the time the driver syncs, invoice creation already
+            // retries with a fresh number (see the duplicate-invoiceno retry
+            // loop in addinvoice()/bulkCreateInvoice()).
+            $userCode = $driver->invoice_code ?? '';
+            $prefix = 'I' . date('y') . date('m') . '/' . $userCode . '/';
+
+            $lastOfflineInvoice = Invoice::where('invoiceno', 'like', $prefix . 'A%')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if ($lastOfflineInvoice) {
+                $lastOfflineNumber = (int) substr($lastOfflineInvoice->invoiceno, strlen($prefix) + 1);
+                $nextOfflineNumber = $lastOfflineNumber + 1;
+            } else {
+                $nextOfflineNumber = 1;
+            }
+
+            $runningNumber = str_pad($nextOfflineNumber, 3, '0', STR_PAD_LEFT);
 
             return response()->json([
                 'result'  => true,
@@ -8679,8 +8697,8 @@ class DriverController extends Controller
                     'products'            => $products->values(),
                     'customers'           => $customerList,
                     'invoice_html'        => $this->getinvoiceHtml(),
-                    'invoice_code'           => $nextInvoiceNoParts[1] ?? '',
-                    'running_number' => $nextInvoiceNoParts[2] ?? '',
+                    'invoice_code'        => $userCode,
+                    'running_number'      => $runningNumber,
                 ]
             ], 200);
 
