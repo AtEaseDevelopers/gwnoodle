@@ -188,7 +188,13 @@ class InvoiceDataTable extends DataTable
                     ],
                     [
                         'targets' => 6,
-                        'render' => 'function(data, type){return data == 2 ? "Cancelled" : "Completed";}'
+                        'render' => 'function(data, type){
+                            if (type !== "display") { return data; }
+                            var isCancelled = data == 2;
+                            var label = isCancelled ? "Cancelled" : "Completed";
+                            var badgeClass = isCancelled ? "badge-danger" : "badge-success";
+                            return "<span class=\'badge " + badgeClass + "\'>" + label + "</span>";
+                        }'
                     ],
                     [
                         'targets' => 7,

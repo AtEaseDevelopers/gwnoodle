@@ -151,15 +151,18 @@ class InvoicePaymentDataTable extends DataTable
                     [
                         'targets' => 7,
                          'render' => 'function(data, type){
+                            if (type !== "display") { return data; }
+                            var label, badgeClass;
                             if (data == 0) {
-                                return "New";
+                                label = "New"; badgeClass = "badge-warning";
                             } else if (data == 1) {
-                                return "Completed";
+                                label = "Completed"; badgeClass = "badge-success";
                             } else if (data == 2) {
-                                return "Cancelled";
+                                label = "Cancelled"; badgeClass = "badge-danger";
                             } else {
-                                return "Unknown";
+                                label = "Unknown"; badgeClass = "badge-secondary";
                             }
+                            return "<span class=\'badge " + badgeClass + "\'>" + label + "</span>";
                         }'
                     ],
                     // [
