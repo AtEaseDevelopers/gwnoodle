@@ -77,11 +77,14 @@
             var dateArray = '';
                 
             while (currentDate <= endDate) {
-                // Invoice.date is cast to 'd-m-Y H:i:s' (DD-MM-YYYY), and this
-                // table has no serverSide processing, so DataTables searches
-                // against that cast/JSON value in the browser - the search
-                // tokens must match that format, not ISO YYYY-MM-DD.
-                dateArray=dateArray+moment(currentDate).format("DD-MM-YYYY")+'|';
+                // This table uses serverSide processing, so the search value
+                // is sent to Yajra which runs a raw SQL "date REGEXP ?"
+                // against the actual MySQL datetime column - that column's
+                // string form is ISO Y-m-d (H:i:s), NOT the DD-MM-YYYY that
+                // Invoice.date's getDateAttribute() accessor returns to PHP/
+                // JS. The tokens must match the raw DB format, not the
+                // accessor's display format.
+                dateArray=dateArray+moment(currentDate).format("YYYY-MM-DD")+'|';
                 currentDate.setUTCDate(currentDate.getUTCDate() + steps);
             }
 

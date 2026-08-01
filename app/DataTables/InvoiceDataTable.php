@@ -42,6 +42,14 @@ class InvoiceDataTable extends DataTable
             return 'Admin';
         });
 
+        // The 'date' column sorts by id (see getColumns()) rather than its
+        // own value, so the most recently created invoice always shows
+        // first. Yajra resolves search AND sort against the same column
+        // key though, so without this override, searching the Date column
+        // would silently run its WHERE/REGEXP against `id` instead of
+        // `date` - which is exactly what was happening.
+        $dataTable->orderColumn('date', 'id $1');
+
         return $dataTable->addColumn('action', 'invoices.datatables_actions');
     }
 
@@ -300,7 +308,7 @@ class InvoiceDataTable extends DataTable
                             }
                             $(input).appendTo($(column.footer()).empty()).on(\'change\', function(){
                                 var __searchVal = $(this).val();
-                                var __isDateList = /^\d{2}-\d{2}-\d{4}(\|\d{2}-\d{2}-\d{4})*$/.test(__searchVal);
+                                var __isDateList = /^\d{4}-\d{2}-\d{2}(\|\d{4}-\d{2}-\d{2})*$/.test(__searchVal);
                                 column.search(__searchVal, __isDateList, !__isDateList).draw();
                                 ShowLoad();
                             })
@@ -335,9 +343,13 @@ class InvoiceDataTable extends DataTable
             'date' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('invoices.date'),
                 'data' => 'date',
-                // Sort by id (true creation order) rather than the business-entered
-                // date value, so the most recently created invoice always shows first
-                'name' => 'id'
+                // Deliberately no 'name' override here: Yajra resolves both
+                // search AND sort against a column's 'name' (falling back to
+                // 'data' only if 'name' is unset). Sorting by creation order
+                // instead of the date value is handled separately via
+                // orderColumn('date', 'id $1') in dataTable() below, so this
+                // column's search still runs against the actual date data.
+                'name' => 'date'
             ]),
 
             'customer_id' => new \Yajra\DataTables\Html\Column([

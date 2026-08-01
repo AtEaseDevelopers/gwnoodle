@@ -128,6 +128,13 @@ class WarehouseDataTable extends DataTable
                             ]
                         ],
                         'customizeData' => $this->excelRowExpansionCustomizer(),
+                        'customize' => $this->excelBorderCustomizer(),
+                        // Without this, the html5 export writer silently
+                        // omits <c> elements for empty-string cells (our
+                        // blanked-out continuation-row columns) entirely,
+                        // leaving nothing there for the border customizer
+                        // above to attach a style to.
+                        'createEmptyCells' => true,
                         'className' => 'btn btn-default btn-sm no-corner',
                         'filename' => 'warehouses_' . date('YmdHis')
                     ],
@@ -322,32 +329,138 @@ JS;
     {
         return <<<'JS'
 function(data) {
-    var MARKER = "__INV_SUMMARY__";
-    var invIdx = data.header.indexOf('Inventory Summary');
-    if (invIdx === -1) { return; }
+    try {
+        var MARKER = "__INV_SUMMARY__";
+        var invIdx = -1;
+        for (var i = 0; i < data.header.length; i++) {
+            if (data.header[i] === 'Inventory Summary') { invIdx = i; break; }
+        }
+        if (invIdx === -1) { return; }
 
-    data.header.splice(invIdx, 1, 'Product', 'Batch', 'Qty');
+        var headerLen = data.header.length;
 
-    var newBody = [];
-    data.body.forEach(function(row) {
-        var raw = row[invIdx];
-        var items = [];
-        if (typeof raw === 'string' && raw.indexOf(MARKER) === 0) {
-            try { items = JSON.parse(raw.substring(MARKER.length)); } catch (e) { items = []; }
+        // The table's <tfoot> (per-column filter inputs) makes exportData()
+        // always populate data.footer, sized to the ORIGINAL column count,
+        // even though this button never sets footer:true so it's never
+        // actually written to the sheet. Once we expand the header from 8
+        // to 10 columns below, the XLSX column-width calculator still reads
+        // data.footer[b] for every b up to the new header length - indexes
+        // 8/9 don't exist in the stale 8-element footer array, so it throws
+        // "Cannot read properties of undefined (reading 'length')". Since
+        // it's never rendered anyway, just drop it instead of resizing it.
+        data.footer = null;
+
+        // Mutate header in place (rather than reassigning data.header to a
+        // new array) since some DataTables Buttons internals read this
+        // array by the reference captured before this callback runs.
+        var newHeaderVals = ['Product', 'Batch', 'Qty'];
+        data.header.splice.apply(data.header, [invIdx, 1].concat(newHeaderVals));
+        // Guard against any hole ending up in the header array (the XLSX
+        // column-width calculator indexes every slot up to header.length
+        // with no undefined-check, so a single gap throws there).
+        for (var hi = 0; hi < data.header.length; hi++) {
+            if (data.header[hi] === undefined || data.header[hi] === null) {
+                data.header[hi] = '';
+            }
         }
 
-        var before = row.slice(0, invIdx);
-        var after = row.slice(invIdx + 1);
+        var newBody = [];
+        for (var r = 0; r < data.body.length; r++) {
+            var row = data.body[r];
+            // Defend against a row that's shorter than the header (would
+            // otherwise silently misalign columns after the splice below).
+            while (row.length < headerLen) { row.push(''); }
 
-        if (items.length === 0) {
-            newBody.push(before.concat(['No inventory', '', ''], after));
-        } else {
-            items.forEach(function(item) {
-                newBody.push(before.concat([item.p, item.b, item.q], after));
+            var raw = row[invIdx];
+            var items = [];
+            if (typeof raw === 'string' && raw.indexOf(MARKER) === 0) {
+                try {
+                    var parsed = JSON.parse(raw.substring(MARKER.length));
+                    if (Array.isArray(parsed)) { items = parsed; }
+                } catch (e) { items = []; }
+            }
+
+            var before = row.slice(0, invIdx);
+            var after = row.slice(invIdx + 1);
+            var blankBefore = before.map(function () { return ''; });
+            var blankAfter = after.map(function () { return ''; });
+
+            if (items.length === 0) {
+                newBody.push(before.concat(['No inventory', '', ''], after));
+            } else {
+                for (var ii = 0; ii < items.length; ii++) {
+                    var item = items[ii] || {};
+                    var rowBefore = ii === 0 ? before : blankBefore;
+                    var rowAfter = ii === 0 ? after : blankAfter;
+                    newBody.push(rowBefore.concat([item.p || '', item.b || '', item.q || ''], rowAfter));
+                }
+            }
+        }
+
+        data.body.splice.apply(data.body, [0, data.body.length].concat(newBody));
+    } catch (e) {
+        // If anything here goes wrong, leave data untouched rather than
+        // letting the export crash outright - worst case the Inventory
+        // Summary column falls back to its flattened marker text.
+    }
+}
+JS;
+    }
+
+    /**
+     * JS callback (as a string) for the Excel button\'s `customize(xlsx)`
+     * hook. Runs after customizeData/the sheet XML is built, and gives
+     * every data cell (header row onward) a thin border so the exported
+     * rows read like the on-screen bordered table, and warehouse groups
+     * (marked by a filled-in Warehouse Name cell followed by blank
+     * continuation rows) are visually easy to tell apart.
+     *
+     * @return string
+     */
+    private function excelBorderCustomizer(): string
+    {
+        return <<<'JS'
+function(xlsx) {
+    try {
+        var sheet = xlsx.xl.worksheets["sheet1.xml"];
+        var styles = xlsx.xl["styles.xml"];
+        var cellXfs = $("cellXfs", styles);
+
+        // borderId 1 is the "thin line on all 4 sides" border definition
+        // DataTables Buttons already ships in every generated workbook -
+        // reuse it instead of declaring a new <border>.
+        var BORDER_ID = 1;
+        var styleCache = {};
+
+        function borderedStyleFor(existingIndex) {
+            if (styleCache[existingIndex] !== undefined) { return styleCache[existingIndex]; }
+            var xfs = cellXfs.children();
+            var base = xfs.eq(existingIndex);
+            var clone = base.length ? base.clone() : $("<xf/>");
+            clone.attr("borderId", BORDER_ID);
+            clone.attr("applyBorder", "1");
+            cellXfs.append(clone);
+            var newIndex = cellXfs.children().length - 1;
+            cellXfs.attr("count", cellXfs.children().length);
+            styleCache[existingIndex] = newIndex;
+            return newIndex;
+        }
+
+        // Border every cell from row 2 (the column header row) onward -
+        // row 1 is the merged "GW-NOODLE" title cell and is left as-is.
+        $("row", sheet).each(function() {
+            var rowNum = parseInt($(this).attr("r"), 10);
+            if (!rowNum || rowNum < 2) { return; }
+            $(this).find("c").each(function() {
+                var existing = $(this).attr("s");
+                var existingIndex = existing ? parseInt(existing, 10) : 0;
+                $(this).attr("s", borderedStyleFor(existingIndex));
             });
-        }
-    });
-    data.body = newBody;
+        });
+    } catch (e) {
+        // Leave the file unbordered rather than let a styling error break
+        // the export outright.
+    }
 }
 JS;
     }
