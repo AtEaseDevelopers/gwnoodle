@@ -8644,6 +8644,11 @@ class DriverController extends Controller
                     $invoiceDetail->price            = $item['price'];
                     $invoiceDetail->totalprice       = $item['quantity'] * $item['price'];
                     $invoiceDetail->remark           = $item['remark'] ?? null;
+                    // Stock is deducted from the lorry below - without this
+                    // flag, a later editInvoice() call has no way to know
+                    // this item's stock was ever taken and would silently
+                    // skip restoring it.
+                    $invoiceDetail->deducted_from_inventory = true;
                     $invoiceDetail->save();
 
                     $totalprice += $invoiceDetail->totalprice;
@@ -8675,6 +8680,7 @@ class DriverController extends Controller
                     $invoiceDetail->price            = $item['price'];
                     $invoiceDetail->totalprice       = $item['quantity'] * $item['price'];
                     $invoiceDetail->remark           = $item['remark'] ?? null;
+                    $invoiceDetail->deducted_from_inventory = false;
                     $invoiceDetail->save();
 
                     $totalprice += $invoiceDetail->totalprice;

@@ -994,6 +994,11 @@ class InvoiceController extends AppBaseController
                 $existingDetail->price = $input['price'];
                 $existingDetail->totalprice = $input['quantity'] * $input['price'];
                 $existingDetail->remark = $input['remark'] ?? null;
+                // This function always deducts from the lorry above (line 986) -
+                // without this flag, editInvoice()'s later restoration step
+                // (API side) has no way to know this item's stock was ever
+                // taken from the lorry, and would silently skip returning it.
+                $existingDetail->deducted_from_inventory = true;
                 $existingDetail->save();
 
                 $invoicedetail = $existingDetail;
@@ -1007,6 +1012,7 @@ class InvoiceController extends AppBaseController
                 $invoicedetail->price = $input['price'];
                 $invoicedetail->totalprice = $input['quantity'] * $input['price'];
                 $invoicedetail->remark = $input['remark'] ?? null;
+                $invoicedetail->deducted_from_inventory = true;
                 $invoicedetail->save();
             }
 
