@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Models;
+use App\Traits\LogsActivity;
 
 use Eloquent as Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -13,6 +14,7 @@ class Invoice extends Model
     // use SoftDeletes;
 
     use HasFactory;
+    use LogsActivity;
 
     public $table = 'invoices';
 
@@ -146,6 +148,11 @@ class Invoice extends Model
     public function getDateAttribute($value)
     {
         return Carbon::parse($value)->format('d-m-Y');
+    }
+
+    public function getLogIdentifier()
+    {
+        return $this->invoiceno ?? "ID: {$this->getKey()}";
     }
 
 

@@ -16,8 +16,13 @@ class ActivityLog extends Model
         'user_name',
         'action',
         'module',
+        'description',
+        'table_name',
+        'record_id',
         'old_data',
         'new_data',
+        'ip_address',
+        'user_agent',
     ];
 
     protected $casts = [

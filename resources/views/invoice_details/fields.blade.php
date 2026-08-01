@@ -20,6 +20,29 @@
                             <div class="card-body">
                                 @php
                                     $readonly = isset($invoiceDetail) && $invoiceDetail->exists && empty($invoiceDetail->warehouse_id);
+                                    // Editing an existing warehouse-sourced record: let quantity/price be
+                                    // edited directly against the same warehouse/batch, instead of forcing
+                                    // the full warehouse->product->batch reselection cascade the create
+                                    // flow below needs. The controller already handles this case (adjusts
+                                    // stock by the quantity delta) - see InvoiceDetailController::upsertDetail().
+                                    $isEditableRecord = isset($invoiceDetail) && $invoiceDetail->exists && !$readonly;
+
+                                    $quantityAttrs = ['class' => 'form-control', 'min' => 1, 'step' => 1, 'id' => 'quantity'];
+                                    if ($readonly) {
+                                        $quantityAttrs['readonly'] = 'readonly';
+                                    } elseif (!$isEditableRecord) {
+                                        $quantityAttrs['disabled'] = 'disabled';
+                                    }
+
+                                    $priceAttrs = ['class' => 'form-control', 'min' => 0, 'step' => 0.01, 'id' => 'price'];
+                                    if ($readonly) {
+                                        $priceAttrs['readonly'] = 'readonly';
+                                    }
+
+                                    $submitAttrs = ['class' => 'btn btn-primary', 'id' => 'submitBtn'];
+                                    if (!$isEditableRecord) {
+                                        $submitAttrs['disabled'] = 'disabled';
+                                    }
                                 @endphp
                                 {!! Form::model($invoiceDetail, ['route' => ['invoiceDetails.update', Crypt::encrypt($invoiceDetail->id)], 'method' => 'patch']) !!}
                                 @csrf
@@ -66,13 +89,13 @@
                                     <!-- Quantity Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('quantity', __('invoice_details.quantity')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::number('quantity', $invoiceDetail->quantity, ['class' => 'form-control', 'min' => 1, 'step' => 1, 'id' => 'quantity', (!empty($readonly) && $readonly) ? 'readonly' : 'disabled']) !!}
+                                        {!! Form::number('quantity', $invoiceDetail->quantity, $quantityAttrs) !!}
                                     </div>
 
                                     <!-- Price Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('price', __('invoice_details.price')) !!}<span class="asterisk"> *</span>
-                                        {!! Form::text('price', $invoiceDetail->price, ['class' => 'form-control', 'min' => 0, 'step' => 0.01, 'id' => 'price', 'readonly']) !!}
+                                        {!! Form::text('price', $invoiceDetail->price, $priceAttrs) !!}
                                     </div>
 
                                     <!-- Remark Field -->
@@ -92,7 +115,7 @@
                                     <!-- Submit Field -->
                                     <div class="form-group col-sm-12">
                                         @if(empty($readonly) || !$readonly)
-                                            {!! Form::submit(__('invoice_details.save'), ['class' => 'btn btn-primary', 'id' => 'submitBtn', 'disabled']) !!}
+                                            {!! Form::submit(__('invoice_details.save'), $submitAttrs) !!}
                                         @endif
                                         <a href="{{ route('invoiceDetails.index') }}" class="btn btn-secondary">{{ __('invoice_details.cancel') }}</a>
                                     </div>
@@ -113,7 +136,13 @@
     <script>
         $(document).ready(function () {
             HideLoad();
-            
+
+            // When editing an existing warehouse-sourced record, quantity/price
+            // are directly editable from page load (see the @php block above) -
+            // skip the create-flow's warehouse->product->batch cascade validation
+            // entirely so it doesn't fight the server-rendered enabled state.
+            var isEditableExisting = {{ $isEditableRecord ? 'true' : 'false' }};
+
             // Initialize Select2
             $('.select2').select2({
                 width: '100%'
@@ -353,6 +382,10 @@
             
             // Validate form before submission
             function validateForm() {
+                if (isEditableExisting) {
+                    return;
+                }
+
                 var warehouseSelected = $('#warehouse_id').val() !== '';
                 var productSelected = $('#product_id').val() !== '';
                 var batchSelected = $('#product_batch_id').val() !== '';

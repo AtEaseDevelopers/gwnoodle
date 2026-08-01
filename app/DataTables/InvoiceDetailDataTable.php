@@ -18,6 +18,14 @@ class InvoiceDetailDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
+        $dataTable->editColumn('price', function ($invoiceDetail) {
+            return number_format($invoiceDetail->price, 2);
+        });
+
+        $dataTable->editColumn('totalprice', function ($invoiceDetail) {
+            return number_format($invoiceDetail->totalprice, 2);
+        });
+
         return $dataTable->addColumn('action', 'invoice_details.datatables_actions');
     }
 

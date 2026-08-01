@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Models;
+use App\Traits\LogsActivity;
 
 use Eloquent as Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -10,6 +11,7 @@ use Illuminate\Support\Carbon;
 class InvoiceDetail extends Model
 {
     use HasFactory;
+    use LogsActivity;
 
     public $table = 'invoice_details';
     
@@ -77,6 +79,18 @@ class InvoiceDetail extends Model
     public function warehouse()
     {
         return $this->belongsTo(\App\Models\Warehouse::class, 'warehouse_id', 'id');
+    }
+
+    public function getLogIdentifier()
+    {
+        $invoiceno = $this->invoice->invoiceno ?? null;
+        $productName = $this->product->name ?? null;
+
+        if ($invoiceno && $productName) {
+            return "{$invoiceno} - {$productName}";
+        }
+
+        return $invoiceno ?? "ID: {$this->getKey()}";
     }
 
     public function batch()
