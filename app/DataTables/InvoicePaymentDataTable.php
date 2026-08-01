@@ -182,7 +182,7 @@ class InvoicePaymentDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == \'Status\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Completed</option><option value="0">New</option><option value="2">Cancelled   </option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="1">Completed</option><option value="2">Cancelled</option></select>\';
                             }else if(columns[index].title == \'Type\'){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="1">Cash</option><option value="2">Credit</option><option value="3">Online BankIn</option><option value="4">E-wallet</option><option value="5">Cheque</option></select>\';
                             }else if(columns[index].title == \'Approve At\'){

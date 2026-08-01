@@ -278,7 +278,7 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
-                    $invoicepayment_new->status = $invoice->status;
+                    $invoicepayment_new->status = 1; // Cash payment - always created as Completed
                     $invoicepayment_new->driver_id = $invoice->driver_id;
                     $invoicepayment_new->approve_by = Auth::user()->email;
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
@@ -301,7 +301,7 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
-                    $invoicepayment_new->status = $invoice->status;
+                    $invoicepayment_new->status = 1; // Cash payment - always created as Completed
                     $invoicepayment_new->driver_id = $invoice->driver_id;
                     $invoicepayment_new->approve_by = Auth::user()->email;
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
@@ -421,6 +421,14 @@ class InvoiceController extends AppBaseController
             Flash::success('Invoice updated successfully.');
         }
 
+        // Runs last, after the legacy payment-term sync logic above (which
+        // unconditionally sets a cash invoice's payment back to status 1)
+        // so a Cancelled/un-Cancelled status change always has the final say
+        // on the payment's status.
+        if ($statusChangeNeedsStockAdjustment) {
+            $this->syncInvoicePaymentStatus($invoice, $newStatus);
+        }
+
         if($input['method'] == 1){
             return redirect(route('invoices.index'));
         }else{
@@ -532,6 +540,8 @@ class InvoiceController extends AppBaseController
                 $invoice->status = $newStatus;
                 $invoice->save();
 
+                $this->syncInvoicePaymentStatus($invoice, $newStatus);
+
                 DB::commit();
                 $updatedCount++;
             } catch (\Exception $e) {
@@ -544,6 +554,38 @@ class InvoiceController extends AppBaseController
             'updated_count' => $updatedCount,
             'errors' => $errors,
         ]);
+    }
+
+    /**
+     * Keep the invoice's InvoicePayment record in sync with a status change.
+     * Cancelling marks the payment Cancelled (status 2) and clears its
+     * approval, mirroring the existing "Cancel Invoice Payment" behavior in
+     * update() when payment term changes away from cash. Un-cancelling only
+     * has a well-defined restore target for cash payments (back to
+     * Completed, status 1) - there's no more "New"/pending status to fall
+     * back to for non-cash payments, and no record of what it was before
+     * cancellation, so those are left untouched.
+     */
+    private function syncInvoicePaymentStatus(Invoice $invoice, int $newInvoiceStatus): void
+    {
+        $invoicePayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
+        if (!$invoicePayment) {
+            return;
+        }
+
+        if ($newInvoiceStatus === Invoice::STATUS_CANCELLED) {
+            $invoicePayment->status = 2;
+            $invoicePayment->approve_by = null;
+            $invoicePayment->approve_at = null;
+        } elseif ((int) $invoice->paymentterm === Invoice::PAYMENT_TERM_CASH) {
+            $invoicePayment->status = 1;
+            $invoicePayment->approve_by = Auth::user()->email;
+            $invoicePayment->approve_at = now();
+        } else {
+            return;
+        }
+
+        $invoicePayment->save();
     }
 
     /**
@@ -897,7 +939,7 @@ class InvoiceController extends AppBaseController
                     $invoicePayment->type = 1;
                     $invoicePayment->customer_id = $invoice->customer_id;
                     $invoicePayment->driver_id = $invoice->driver_id;
-                    $invoicePayment->status = $invoice->status;
+                    $invoicePayment->status = 1; // Cash payment - always created as Completed
                     $invoicePayment->approve_by = Auth::user()->email;
                     $invoicePayment->approve_at = now();
                     $invoicePayment->amount = $existingTotal;
@@ -1093,7 +1135,7 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
-                    $invoicepayment_new->status = $invoice->status;
+                    $invoicepayment_new->status = 1; // Cash payment - always created as Completed
                     $invoicepayment_new->driver_id = $invoice->driver_id;
                     $invoicepayment_new->approve_by = Auth::user()->email;
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
@@ -1253,7 +1295,7 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
-                    $invoicepayment_new->status = $invoice->status;
+                    $invoicepayment_new->status = 1; // Cash payment - always created as Completed
                     $invoicepayment_new->driver_id = $invoice->driver_id;
                     $invoicepayment_new->approve_by = Auth::user()->email;
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
@@ -1606,7 +1648,6 @@ class InvoiceController extends AppBaseController
             ];
             
         } catch (\Exception $e) {
-            Log::error('Credit calculation failed: ' . $e->getMessage());
             return [
                 'totalprice' => 0,
                 'paid' => 0,

@@ -60,7 +60,7 @@
 <!-- Status Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('status', 'Status:') !!}
-    {{ Form::select('status', array(0 => 'New', 1 => 'Completed', 2 => 'Cancelled'), null, ['class' => 'form-control']) }}
+    {{ Form::select('status', array(1 => 'Completed', 2 => 'Cancelled'), null, ['class' => 'form-control', 'id' => 'payment_status']) }}
 </div>
 @endif
 @endcan
@@ -248,6 +248,36 @@
             else
             {
                 $('#cheque-container').hide();
+            }
+        });
+
+        // Confirm before cancelling a payment - this only touches the
+        // payment's own status, it does not cancel the linked invoice.
+        var originalPaymentStatus = "{{ isset($invoicePayment) ? $invoicePayment->status : '' }}";
+
+        $('form').on('submit', function(e){
+            if (originalPaymentStatus === '' || $('form').data('cancelConfirmed')) {
+                return true;
+            }
+
+            var newStatus = $('#payment_status').val();
+            if (newStatus && newStatus == 2 && newStatus != originalPaymentStatus) {
+                e.preventDefault();
+
+                $.confirm({
+                    title: 'Confirm Cancel Payment',
+                    content: 'This will mark the payment as Cancelled. It will not change the status of the linked invoice. Continue?',
+                    buttons: {
+                        Yes: function(){
+                            $('form').data('cancelConfirmed', true).submit();
+                        },
+                        No: function(){
+                            return;
+                        }
+                    }
+                });
+
+                return false;
             }
         });
     </script>
