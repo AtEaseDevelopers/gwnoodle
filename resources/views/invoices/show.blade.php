@@ -68,15 +68,22 @@
                                                     <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
-                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                         <div class='btn-group'>
+                                                            <button type="button" class="btn btn-ghost-warning edit-price-btn"
+                                                                data-url="{{ route('invoices.updatedetail', Crypt::encrypt($invoicedetail['id'])) }}"
+                                                                data-price="{{ $invoicedetail['price'] }}"
+                                                                data-quantity="{{ $invoicedetail['quantity'] }}"
+                                                                title="Edit price / quantity">
+                                                                <i class="fa fa-pencil"></i>
+                                                            </button>
+                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                             {!! Form::button('<i class="fa fa-trash"></i>', [
                                                                 'type' => 'submit',
                                                                 'class' => 'btn btn-ghost-danger',
                                                                 'data-needs-warehouse-return' => ($invoicedetail['warehouse_id'] === null && $needsReturnWarehouseSelection) ? '1' : '0',
                                                             ]) !!}
-                                                        </div>
                                                     {!! Form::close() !!}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             @else
@@ -88,15 +95,22 @@
                                                     <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
-                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                         <div class='btn-group'>
+                                                            <button type="button" class="btn btn-ghost-warning edit-price-btn"
+                                                                data-url="{{ route('invoices.updatedetail', Crypt::encrypt($invoicedetail['id'])) }}"
+                                                                data-price="{{ $invoicedetail['price'] }}"
+                                                                data-quantity="{{ $invoicedetail['quantity'] }}"
+                                                                title="Edit price / quantity">
+                                                                <i class="fa fa-pencil"></i>
+                                                            </button>
+                                                    {!! Form::open(['route' => ['invoices.deletedetail', Crypt::encrypt($invoicedetail['id'])], 'method' => 'delete', 'class' => 'invoice-detail-delete-form']) !!}
                                                             {!! Form::button('<i class="fa fa-trash"></i>', [
                                                                 'type' => 'submit',
                                                                 'class' => 'btn btn-ghost-danger',
                                                                 'data-needs-warehouse-return' => ($invoicedetail['warehouse_id'] === null && $needsReturnWarehouseSelection) ? '1' : '0',
                                                             ]) !!}
-                                                        </div>
                                                     {!! Form::close() !!}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             @endif
@@ -304,6 +318,35 @@
             </div>
         </div>
     </div>
+
+    <!-- Edit Invoice Detail Price Modal -->
+    <div id="editPriceModal" class="modal fade">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                {!! Form::open(['method' => 'patch', 'id' => 'editPriceForm']) !!}
+                <div class="modal-header bg-info text-white">
+                    <h4 class="modal-title h6">Edit Price</h4>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-hidden="true">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        {!! Form::label('edit_quantity_input', 'Quantity') !!}<span class="asterisk"> *</span>
+                        {!! Form::number('quantity', null, ['class' => 'form-control', 'id' => 'edit_quantity_input', 'step' => '1', 'min' => '1', 'required' => 'required']) !!}
+                        <small class="form-text text-muted">Increasing this deducts the difference from stock; decreasing it returns the difference.</small>
+                    </div>
+                    <div class="form-group">
+                        {!! Form::label('edit_price_input', 'Price') !!}<span class="asterisk"> *</span>
+                        {!! Form::number('price', null, ['class' => 'form-control', 'id' => 'edit_price_input', 'step' => '0.01', 'min' => '0', 'required' => 'required']) !!}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+                {!! Form::close() !!}
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -453,6 +496,14 @@
                     $('#returnWarehouseModal').modal('hide');
                     pendingDeleteForm.submit();
                 }
+            });
+
+            // Edit invoice detail price / quantity
+            $('.edit-price-btn').on('click', function() {
+                $('#editPriceForm').attr('action', $(this).data('url'));
+                $('#edit_price_input').val($(this).data('price'));
+                $('#edit_quantity_input').val($(this).data('quantity'));
+                $('#editPriceModal').modal('show');
             });
 
             // Warehouse selection change

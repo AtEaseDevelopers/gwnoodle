@@ -42,6 +42,19 @@ class InvoiceDataTable extends DataTable
             return 'Admin';
         });
 
+        // 'created_by' isn't a real column (see addColumn() above - it's
+        // derived from trip_uuid + driver name), so Yajra can't build a
+        // WHERE clause against it on its own; this tells it how to. The
+        // filter dropdown (see html()'s initComplete) submits "admin" or a
+        // driver id, matching the two branches below.
+        $dataTable->filterColumn('created_by', function ($query, $keyword) {
+            if ($keyword === 'admin') {
+                $query->whereNull('invoices.trip_uuid');
+            } elseif (is_numeric($keyword)) {
+                $query->whereNotNull('invoices.trip_uuid')->where('invoices.driver_id', $keyword);
+            }
+        });
+
         // The 'date' column sorts by id (see getColumns()) rather than its
         // own value, so the most recently created invoice always shows
         // first. Yajra resolves search AND sort against the same column
@@ -78,6 +91,11 @@ class InvoiceDataTable extends DataTable
      */
     public function html()
     {
+        $driverOptions = '<option value=""></option><option value="admin">Admin</option>';
+        foreach (\App\Models\Driver::where('status', '!=', \App\Models\Driver::STATUS_DELETED)->orderBy('name')->pluck('name', 'id') as $driverId => $driverName) {
+            $driverOptions .= '<option value="' . $driverId . '">' . e($driverName) . '</option>';
+        }
+
         return $this->builder()
             ->columns($this->getColumns())
             ->minifiedAjax()
@@ -303,6 +321,8 @@ class InvoiceDataTable extends DataTable
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
                             }else if(columns[index].title == \'Group\'){
                                 var input = \'<select id="group" class="border-0" style="width: 100%;"><option value=""></option></select>\';
+                            }else if(columns[index].title == \'Created By\'){
+                                var input = \'<select class="border-0" style="width: 100%;">' . $driverOptions . '</select>\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }
@@ -413,7 +433,7 @@ class InvoiceDataTable extends DataTable
                 'data' => 'created_by',
                 'name' => 'created_by',
                 'orderable' => false,
-                'searchable' => false
+                'searchable' => true
             ]),
         ];
 

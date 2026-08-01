@@ -1212,6 +1212,150 @@ class InvoiceController extends AppBaseController
         return redirect(route('invoices.show', encrypt($invoicedetail->invoice_id)));
     }
 
+    /**
+     * Update the price and/or quantity of a single invoice detail line
+     * item. A quantity change adjusts the source inventory by the delta
+     * (increase = deduct more, decrease = return the difference) and logs
+     * an InventoryTransaction for it, mirroring the driver-lorry vs
+     * warehouse handling already used by adddetail()/deletedetail().
+     */
+    public function updatedetail($id, Request $request)
+    {
+        $id = Crypt::decrypt($id);
+        $invoicedetail = InvoiceDetail::with('invoice.driver')->where('id', $id)->first();
+
+        if (empty($invoicedetail)) {
+            Flash::error('Invoice Detail not found');
+            return redirect()->back();
+        }
+
+        $invoice = $invoicedetail->invoice;
+
+        if (strtolower($invoice->autocount_status ?? '') === 'completed') {
+            Flash::error('This invoice has been submitted to Autocount and can no longer be edited.');
+            return redirect()->back();
+        }
+
+        $request->validate([
+            'price' => 'required|numeric|min:0',
+            'quantity' => 'required|numeric|min:1',
+        ]);
+
+        $oldQuantity = $invoicedetail->quantity;
+        $newQuantity = (float) $request->input('quantity');
+        // Positive = quantity went up (deduct the difference from stock),
+        // negative = quantity went down (return the difference to stock).
+        $delta = $newQuantity - $oldQuantity;
+
+        DB::beginTransaction();
+
+        try {
+            if ($delta != 0) {
+                $productBatch = ProductBatch::find($invoicedetail->product_batch_id);
+
+                if ($invoicedetail->warehouse_id) {
+                    // Warehouse-sourced item
+                    $warehouseBalance = \App\Models\WarehouseInventoryBalance::where('warehouse_id', $invoicedetail->warehouse_id)
+                        ->where('batch_id', $invoicedetail->product_batch_id)
+                        ->first();
+
+                    if ($delta > 0) {
+                        $availableQty = $warehouseBalance->quantity ?? 0;
+                        if ($availableQty < $delta) {
+                            throw new \Exception('Insufficient warehouse stock. Available: ' . $availableQty . ', additional needed: ' . $delta);
+                        }
+                    }
+
+                    if ($warehouseBalance) {
+                        $warehouseBalance->quantity -= $delta;
+                        $warehouseBalance->save();
+                    } elseif ($delta < 0) {
+                        // No existing balance row but we're returning stock - create one
+                        \App\Models\WarehouseInventoryBalance::create([
+                            'warehouse_id' => $invoicedetail->warehouse_id,
+                            'product_id'   => $invoicedetail->product_id,
+                            'batch_id'     => $invoicedetail->product_batch_id,
+                            'quantity'     => -$delta,
+                        ]);
+                    }
+
+                    if ($productBatch) {
+                        $productBatch->quantity -= $delta;
+                        $productBatch->save();
+                    }
+
+                    $inventoryTransaction = new InventoryTransaction();
+                    $inventoryTransaction->warehouse_id = $invoicedetail->warehouse_id;
+                } else {
+                    // Driver (lorry) sourced item - needs an active trip to know which lorry to adjust
+                    $driver = $invoice->driver;
+
+                    if (!$driver || empty($driver->trip_id)) {
+                        throw new \Exception('Driver is not currently on an active trip. Cannot adjust quantity for this driver-sourced item.');
+                    }
+
+                    $trip = Trip::where('uuid', $driver->trip_id)->first();
+                    $lorryId = $trip->lorry_id ?? null;
+                    $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
+
+                    if ($delta > 0) {
+                        $availableQty = $inventoryBalance ? $inventoryBalance->getBatchQuantity($invoicedetail->product_batch_id) : 0;
+                        if ($availableQty < $delta) {
+                            throw new \Exception('Insufficient stock in driver\'s lorry. Available: ' . $availableQty . ', additional needed: ' . $delta);
+                        }
+                    }
+
+                    if ($inventoryBalance) {
+                        $inventoryBalance->updateBatchQuantity(
+                            $invoicedetail->product_batch_id,
+                            abs($delta),
+                            $delta > 0 ? 'subtract' : 'add'
+                        );
+                    }
+
+                    $inventoryTransaction = new InventoryTransaction();
+                    $inventoryTransaction->lorry_id = $lorryId;
+                }
+
+                $inventoryTransaction->type = $delta > 0 ? InventoryTransaction::TYPE_STOCK_OUT : InventoryTransaction::TYPE_STOCK_IN;
+                $inventoryTransaction->product_id = $invoicedetail->product_id;
+                $inventoryTransaction->batch_id = $invoicedetail->product_batch_id;
+                $inventoryTransaction->quantity = -$delta;
+                $inventoryTransaction->date = now();
+                $inventoryTransaction->user = Auth::user()->name;
+                $inventoryTransaction->remark = 'Invoice # [' . $invoice->invoiceno . '] - Quantity '
+                    . ($delta > 0 ? 'increased' : 'decreased') . ' on edit ('
+                    . abs($delta) . ' units ' . ($delta > 0 ? 'deducted' : 'returned') . ')';
+                $inventoryTransaction->save();
+            }
+
+            $invoicedetail->quantity = $newQuantity;
+            $invoicedetail->price = $request->input('price');
+            $invoicedetail->totalprice = $newQuantity * $invoicedetail->price;
+            $invoicedetail->save();
+
+            // Keep the cash-payment amount in sync with the new line total
+            if ($invoice->paymentterm == 1) {
+                $totalAmount = InvoiceDetail::where('invoice_id', $invoice->id)->sum('totalprice');
+                $invoicePayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
+                if ($invoicePayment) {
+                    $invoicePayment->amount = $totalAmount;
+                    $invoicePayment->save();
+                }
+            }
+
+            DB::commit();
+
+            Flash::success('Invoice Detail updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Flash::error('Error updating invoice detail: ' . $e->getMessage());
+            return redirect()->back();
+        }
+
+        return redirect(route('invoices.show', encrypt($invoicedetail->invoice_id)));
+    }
+
     public function print()
     {
         return view('invoices.print');
