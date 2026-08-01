@@ -8800,14 +8800,26 @@ class DriverController extends Controller
                 'special_prices'   => $specialPricesByCustomer->get($customer->id, collect()),
             ])->values();
 
+            // Predicted next invoice number for this driver, split into its
+            // code/running-number parts (format: INV{yy}{mm}/{code}/{running})
+            // so the offline app can construct invoice numbers locally
+            // without re-parsing the combined string. This is only a
+            // prediction - if it's since been taken by the time the driver
+            // syncs, invoice creation already retries with a fresh number
+            // (see the duplicate-invoiceno retry loop in addinvoice()).
+            $nextInvoiceNo = Invoice::generateInvoiceNumber($driver->id);
+            $nextInvoiceNoParts = explode('/', $nextInvoiceNo);
+
             return response()->json([
                 'result'  => true,
                 'message' => __LINE__ . $this->message_separator . 'Offline customer list retrieved successfully',
                 'data'    => [
-                    'total_customers' => $customerList->count(),
-                    'products'        => $products->values(),
-                    'customers'       => $customerList,
-                    'invoice_html'     => $this->getinvoiceHtml(),
+                    'total_customers'     => $customerList->count(),
+                    'products'            => $products->values(),
+                    'customers'           => $customerList,
+                    'invoice_html'        => $this->getinvoiceHtml(),
+                    'invoice_code'           => $nextInvoiceNoParts[1] ?? '',
+                    'running_number' => $nextInvoiceNoParts[2] ?? '',
                 ]
             ], 200);
 
