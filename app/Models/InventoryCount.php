@@ -227,4 +227,41 @@ class InventoryCount extends Model
     {
         return $this->hasMany(Notification::class);
     }
+
+    /**
+     * End the driver's current trip. Called when this stock count gets
+     * approved - approval is now what ends the trip, rather than the
+     * driver separately calling the end-trip API afterward (see
+     * DriverController::tripEnd(), which now just returns success since
+     * this handles the actual work).
+     */
+    public function endDriverTrip()
+    {
+        $driver = $this->driver;
+        if (!$driver || empty($driver->trip_id)) {
+            return; // No active trip to end - nothing to do
+        }
+
+        $startTrip = \App\Models\Trip::find($this->trip_id);
+        $lorryId = $startTrip->lorry_id ?? $this->lorry_id;
+        $uuid = $startTrip->uuid ?? $driver->trip_id;
+
+        \App\Models\Trip::create([
+            'uuid' => $uuid,
+            'lorry_id' => $lorryId,
+            'date' => now(),
+            'driver_id' => $driver->id,
+            'type' => \App\Models\Trip::END_TRIP,
+        ]);
+
+        $lorry = \App\Models\Lorry::find($lorryId);
+        if ($lorry) {
+            $lorry->status = 1;
+            $lorry->driver_id = null;
+            $lorry->save();
+        }
+
+        $driver->trip_id = null;
+        $driver->save();
+    }
 }

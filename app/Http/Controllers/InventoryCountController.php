@@ -832,7 +832,10 @@ class InventoryCountController extends Controller
                 $inventoryBalance = InventoryBalance::where('lorry_id', $inventoryCount->lorry_id)->first();
                 if ($inventoryBalance) {
                     $inventoryBalance->delete();
-                }                
+                }
+
+                // Approval is what ends the trip now - see endDriverTrip()
+                $inventoryCount->endDriverTrip();
 
                 \DB::commit();
                 

@@ -437,88 +437,17 @@ class DriverController extends Controller
 
     public function tripEnd(Request $request)
     {
-        // Validate session
-        $driver = Driver::where('session', $request->header('session'))->first();
-        if(empty($driver)){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'api.message.invalid_session',
-                'data' => null
-            ], 401);
-        }
-        if($driver->trip_id == NULL ){
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'Driver have to start trip before end trip.',
-                'data' => null
-            ], 200);
-        }
-
-        $latestTrip = Trip::where('driver_id', $driver->id)
-                ->where('uuid', $driver->trip_id)
-                ->where('type', Trip::START_TRIP)
-                ->first();
-
-        if (empty($latestTrip)) {
-            return response()->json([
-                'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'Start trip record not found.',
-                'data' => null
-            ], 200);
-        }
-
-    	 $inventoryBalances = InventoryBalance::where('lorry_id', $latestTrip->lorry_id)
-                ->whereNotNull('batches')
-                ->where('batches', '!=', '[]')
-                ->where('batches', '!=', '{}')
-                ->get();
-
-            if (!$inventoryBalances->isEmpty()) {
- 					$inventoryCount = InventoryCount::where('driver_id', $driver->id)->where('trip_id',$latestTrip->id)->where('status', InventoryCount::STATUS_APPROVED)->first();
-
-        			if(!$inventoryCount ){
-           			 return response()->json([
-                'result' => false,
-                'message' => __LINE__ . $this->message_separator . 'Driver have to complete Stock Out before end trip.',
-                'data' => null
-            ], 200);
-        }
-            }
-    
-       
-
-        try {
-
-            $trip = Trip::create([
-                'uuid'=> $driver->trip_id,
-                'lorry_id'=> $latestTrip->lorry_id,
-                'date'=> now(),
-                'driver_id' => $driver->id,
-                'type' => Trip::END_TRIP,
-            ]); 
-            $lorry = Lorry::where('id', $latestTrip->lorry_id)->first();
-            //store lorry status to 0 when in use
-            $lorry->status = 1;
-            $lorry->driver_id = NULL;
-            $lorry->save();
-
-            $driver->trip_id = NULL;
-            $driver->save();
-            //return stock to warehouse
-            
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Driver End Trip successfully.',
-                'data' => ''
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to end trip: ' . $e->getMessage()
-            ], 500);
-        }
+        // The trip now actually ends when a manager/admin approves the
+        // driver's stock count (see InventoryCount::endDriverTrip(),
+        // called from DriverController::approveStockCount() and
+        // InventoryCountController::approve()). This endpoint is kept
+        // around purely so the driver app's existing "end trip" call still
+        // gets a success response, without doing anything itself anymore.
+        return response()->json([
+            'success' => true,
+            'message' => 'Driver End Trip successfully.',
+            'data' => ''
+        ]);
     }
 
 
@@ -1931,24 +1860,24 @@ class DriverController extends Controller
                 ], 401);
             }
             
-            // Validate trip
-            $trip = Trip::where('driver_id', $driver->id)->orderby('date', 'desc')->first();
-            if (!empty($trip)) {
-                if ($trip->type == 0) {
-                    return response()->json([
-                        'result' => false,
-                        'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
-                        'data' => null
-                    ], 401);
-                }
-            } else {
+            if (empty($driver->trip_id)) {
                 return response()->json([
                     'result' => false,
                     'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
                     'data' => null
                 ], 401);
             }
-            
+
+            // $trip is still needed below for lorry_id (inventory balance lookup)
+            $trip = Trip::where('uuid', $driver->trip_id)->where('type', Trip::START_TRIP)->first();
+            if (empty($trip)) {
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
+                    'data' => null
+                ], 401);
+            }
+
             $inventoryCountRecord = InventoryCount::where('driver_id', $driver->id)
                 ->where('trip_id', $driver->trip_id)
                 ->where('status', InventoryCount::STATUS_APPROVED)
@@ -6358,7 +6287,10 @@ class DriverController extends Controller
                 if ($inventoryBalance) {
                     $inventoryBalance->delete();
                 }
-                
+
+                // Approval is what ends the trip now - see endDriverTrip()
+                $inventoryCount->endDriverTrip();
+
                 \DB::commit();
                 
                 // Load relationships for response
