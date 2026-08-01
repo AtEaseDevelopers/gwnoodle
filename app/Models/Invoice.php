@@ -31,7 +31,7 @@ class Invoice extends Model
     const PAYMENT_TERM_CHEQUE = 5;
 
     const STATUS_COMPLETED = 1;
-    const STATUS_NEW = 2;
+    const STATUS_CANCELLED = 2;
 
     public $fillable = [
         'invoiceno',
@@ -94,7 +94,7 @@ class Invoice extends Model
 
     public function getStatusTextAttribute()
     {
-        return $this->status = 1 ? 'Completed' : 'New';
+        return (int) $this->status === self::STATUS_CANCELLED ? 'Cancelled' : 'Completed';
     }
     
     public function customer()

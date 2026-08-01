@@ -139,20 +139,42 @@
                 content: m,
                 buttons: {
                     Completed: function() {
-                        massupdatestatus(window.checkboxid,1);
+                        confirmStockImpactThenUpdate(window.checkboxid, 1);
                     },
-                    New: function() {
-                        massupdatestatus(window.checkboxid,0);
+                    Cancelled: function() {
+                        confirmStockImpactThenUpdate(window.checkboxid, 2);
                     },
                     somethingElse: {
-                        text: 'Cancel',
+                        text: 'Close',
                         btnClass: 'btn-gray',
                         keys: ['enter', 'shift']
                     }
                 }
             });
-            
+
         });
+
+        // Changing status affects real inventory (cancelling returns stock,
+        // un-cancelling deducts it again) - make sure the admin explicitly
+        // confirms that impact before it actually fires.
+        function confirmStockImpactThenUpdate(ids, status) {
+            var warning = status == 2
+                ? 'Cancelling ' + ids.length + ' invoice(s) will return their product quantities back to inventory. Continue?'
+                : 'Marking ' + ids.length + ' invoice(s) as Completed will deduct product quantities from inventory again for any that are currently Cancelled. Continue?';
+
+            $.confirm({
+                title: 'Confirm Stock Impact',
+                content: warning,
+                buttons: {
+                    Yes: function() {
+                        massupdatestatus(ids, status);
+                    },
+                    No: function() {
+                        return;
+                    }
+                }
+            });
+        }
         function massdelete(ids){
             ShowLoad();
             $.ajax({
@@ -186,7 +208,11 @@
                 success:function(response){
                     window.checkboxid = [];
                     $('.buttons-reload').click();
-                    noti('s','Update Successfully',response+' row(s) had been updated.')
+                    if(response.errors && response.errors.length > 0){
+                        noti('e','Some rows failed', response.updated_count + ' row(s) updated. Errors: ' + response.errors.join(' | '));
+                    }else{
+                        noti('s','Update Successfully',response.updated_count+' row(s) had been updated.')
+                    }
                 },
                 error: function(error) {
                     noti('e','Please contact your administrator',error.responseJSON.message)

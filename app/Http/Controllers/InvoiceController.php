@@ -79,7 +79,9 @@ class InvoiceController extends AppBaseController
         $input = $request->all();
 
         $input['date'] = date_create($input['date']);
-        $input['status'] = $input['status'] ?? 1; // Respect the form's selection; default to New only if not provided
+        // Invoices are always created as Completed - Cancelled is only ever
+        // reached afterward via massupdatestatus(), never at creation time.
+        $input['status'] = Invoice::STATUS_COMPLETED;
         $input['created_by'] = Auth::id();
 
         $requestedInvoiceNo = (!empty($input['invoiceno']) && $input['invoiceno'] !== 'SYSTEM GENERATED IF BLANK')
@@ -469,11 +471,177 @@ class InvoiceController extends AppBaseController
     {
         $data = $request->all();
         $ids = $data['ids'];
-        $status = $data['status'];
+        $newStatus = (int) $data['status'];
 
-        $count = invoice::whereIn('id',$ids)->update(['status'=>$status]);
+        if (!in_array($newStatus, [Invoice::STATUS_COMPLETED, Invoice::STATUS_CANCELLED], true)) {
+            return response()->json(['message' => 'Invalid status'], 422);
+        }
 
-        return $count;
+        $invoices = Invoice::whereIn('id', $ids)
+            ->with(['invoicedetail.product', 'driver'])
+            ->get();
+
+        $updatedCount = 0;
+        $errors = [];
+
+        foreach ($invoices as $invoice) {
+            $oldStatus = (int) $invoice->status;
+
+            if ($oldStatus === $newStatus) {
+                continue; // already in the target status - nothing to do
+            }
+
+            if (strtolower($invoice->autocount_status ?? '') === 'completed') {
+                $errors[] = "Invoice {$invoice->invoiceno} already submitted to Autocount, skipped";
+                continue;
+            }
+
+            DB::beginTransaction();
+            try {
+                if ($newStatus === Invoice::STATUS_CANCELLED) {
+                    $this->returnInvoiceStock($invoice);
+                } else {
+                    $this->deductInvoiceStock($invoice);
+                }
+
+                $invoice->status = $newStatus;
+                $invoice->save();
+
+                DB::commit();
+                $updatedCount++;
+            } catch (\Exception $e) {
+                DB::rollBack();
+                $errors[] = "Invoice {$invoice->invoiceno}: " . $e->getMessage();
+            }
+        }
+
+        return response()->json([
+            'updated_count' => $updatedCount,
+            'errors' => $errors,
+        ]);
+    }
+
+    /**
+     * Cancelling an invoice: return stock for every line item that's
+     * currently holding inventory (deducted_from_inventory is true, or null
+     * for legacy rows created before that flag existed - treated the same
+     * as true since everything was always deducted before then). Items
+     * explicitly flagged false (e.g. bulkCreateInvoice's itemsToIgnore, which
+     * never had stock taken) are left untouched - there's nothing to return.
+     */
+    private function returnInvoiceStock(Invoice $invoice): void
+    {
+        foreach ($invoice->invoicedetail as $detail) {
+            if ($detail->deducted_from_inventory === false || $detail->quantity <= 0) {
+                continue;
+            }
+
+            $this->adjustInvoiceDetailStock($invoice, $detail, 'return');
+
+            $detail->deducted_from_inventory = false;
+            $detail->save();
+        }
+    }
+
+    /**
+     * Un-cancelling an invoice (back to Completed): re-deduct stock for
+     * every line item currently marked as not holding inventory
+     * (deducted_from_inventory === false). Mirrors returnInvoiceStock().
+     */
+    private function deductInvoiceStock(Invoice $invoice): void
+    {
+        foreach ($invoice->invoicedetail as $detail) {
+            if ($detail->deducted_from_inventory !== false || $detail->quantity <= 0) {
+                continue;
+            }
+
+            $this->adjustInvoiceDetailStock($invoice, $detail, 'deduct');
+
+            $detail->deducted_from_inventory = true;
+            $detail->save();
+        }
+    }
+
+    /**
+     * Shared warehouse/lorry stock adjustment for a single invoice detail
+     * line, used by both directions of the cancel/un-cancel status flow.
+     * Mirrors the same warehouse-vs-lorry branching as updatedetail().
+     */
+    private function adjustInvoiceDetailStock(Invoice $invoice, InvoiceDetail $detail, string $direction): void
+    {
+        $qty = $detail->quantity;
+        $productName = $detail->product->name ?? $detail->product_id;
+        $productBatch = ProductBatch::find($detail->product_batch_id);
+
+        if ($detail->warehouse_id) {
+            $warehouseBalance = WarehouseInventoryBalance::where('warehouse_id', $detail->warehouse_id)
+                ->where('batch_id', $detail->product_batch_id)
+                ->first();
+
+            if ($direction === 'deduct') {
+                $available = $warehouseBalance->quantity ?? 0;
+                if ($available < $qty) {
+                    throw new \Exception("Insufficient warehouse stock for {$productName} (available {$available}, need {$qty})");
+                }
+            }
+
+            $delta = $direction === 'deduct' ? $qty : -$qty; // positive = remove from stock
+
+            if ($warehouseBalance) {
+                $warehouseBalance->quantity -= $delta;
+                $warehouseBalance->save();
+            } elseif ($direction === 'return') {
+                WarehouseInventoryBalance::create([
+                    'warehouse_id' => $detail->warehouse_id,
+                    'product_id' => $detail->product_id,
+                    'batch_id' => $detail->product_batch_id,
+                    'quantity' => $qty,
+                ]);
+            }
+
+            if ($productBatch) {
+                $productBatch->quantity -= $delta;
+                $productBatch->save();
+            }
+
+            $inventoryTransaction = new InventoryTransaction();
+            $inventoryTransaction->warehouse_id = $detail->warehouse_id;
+        } else {
+            $driver = $invoice->driver;
+            if (!$driver || empty($driver->trip_id)) {
+                throw new \Exception("Driver is not currently on an active trip - cannot adjust lorry stock for {$productName}");
+            }
+
+            $trip = Trip::where('uuid', $driver->trip_id)->first();
+            $lorryId = $trip->lorry_id ?? null;
+            $inventoryBalance = InventoryBalance::where('lorry_id', $lorryId)->first();
+
+            if ($direction === 'deduct') {
+                $available = $inventoryBalance ? $inventoryBalance->getBatchQuantity($detail->product_batch_id) : 0;
+                if ($available < $qty) {
+                    throw new \Exception("Insufficient lorry stock for {$productName} (available {$available}, need {$qty})");
+                }
+            }
+
+            if ($inventoryBalance) {
+                $inventoryBalance->updateBatchQuantity($detail->product_batch_id, $qty, $direction === 'deduct' ? 'subtract' : 'add');
+            } elseif ($direction === 'return') {
+                throw new \Exception("No inventory balance record found for driver's lorry - cannot return stock for {$productName}");
+            }
+
+            $inventoryTransaction = new InventoryTransaction();
+            $inventoryTransaction->lorry_id = $lorryId;
+        }
+
+        $inventoryTransaction->type = $direction === 'deduct' ? InventoryTransaction::TYPE_STOCK_OUT : InventoryTransaction::TYPE_STOCK_IN;
+        $inventoryTransaction->product_id = $detail->product_id;
+        $inventoryTransaction->batch_id = $detail->product_batch_id;
+        $inventoryTransaction->quantity = $direction === 'deduct' ? -$qty : $qty;
+        $inventoryTransaction->date = now();
+        $inventoryTransaction->user = Auth::user()->name;
+        $inventoryTransaction->remark = 'Invoice #' . $invoice->invoiceno . ' - '
+            . ($direction === 'return' ? 'Cancelled, stock returned' : 'Un-cancelled, stock re-deducted');
+        $inventoryTransaction->save();
     }
 
     public function massupdateautocountinvoice(Request $request)

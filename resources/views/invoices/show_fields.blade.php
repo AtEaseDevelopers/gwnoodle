@@ -51,7 +51,7 @@
 <!-- Status Field -->
 <div class="form-group">
     {!! Form::label('status', __('invoices.status')) !!}:
-    <p>{{ $invoice->status == 1 ? "Completed" : "New" }}</p>
+    <p>{{ $invoice->status_text }}</p>
 </div>
 
 <!-- Remark Field -->
