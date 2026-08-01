@@ -2285,7 +2285,11 @@ class DriverController extends Controller
                 'paymentterm' => 'required|numeric|gt:0|lt:6',
                 'remark' => 'present|nullable|string',
                 'cheque_no' => 'nullable|string',
-                'invoicedetail' => 'required|array|min:1',
+                // Allowed empty on purpose: driver can save an invoice with
+                // zero items (returning all stock to the lorry) as an
+                // intermediate step before adding the corrected items back
+                // in a follow-up edit.
+                'invoicedetail' => 'present|array',
                 'invoicedetail.*.product_id' => 'required|numeric',
                 'invoicedetail.*.product_batch_id' => 'required|numeric',
                 'invoicedetail.*.quantity' => 'required|numeric|min:1',
@@ -2430,16 +2434,13 @@ class DriverController extends Controller
                 ], 400);
             }
             
-            // Ensure there are some valid items
-            if (empty($itemsToProcess) && empty($itemsToIgnore)) {
-                DB::rollBack();
-                return response()->json([
-                    'result' => false,
-                    'message' => __LINE__ . $this->message_separator . 'No valid invoice items found',
-                    'data' => null
-                ], 400);
-            }
-            
+            // Note: itemsToProcess and itemsToIgnore both being empty here is
+            // allowed - it means invoicedetail was submitted as [] on purpose
+            // (STEP 1 above already restored the old items' stock to the
+            // lorry). Any submitted-but-invalid batch would already have
+            // triggered the invalidBatches return above instead of reaching
+            // this point empty-handed.
+
             // ============================================
             // STEP 3: UPDATE INVOICE HEADER
             // ============================================
