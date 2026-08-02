@@ -8358,6 +8358,15 @@ class DriverController extends Controller
             ], 200);
         }
 
+        $trip = Trip::where('uuid', $driver->trip_id)->where('type', Trip::START_TRIP)->first();
+        if (empty($trip)) {
+            return response()->json([
+                'result'  => false,
+                'message' => __LINE__ . $this->message_separator . 'api.message.trip_had_not_started',
+                'data'    => null
+            ], 200);
+        }
+
         $inventoryBalance = InventoryBalance::where('lorry_id', $trip->lorry_id)->first();
 
         $results = [];
