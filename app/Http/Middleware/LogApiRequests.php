@@ -41,12 +41,18 @@ class LogApiRequests
             $encodedResponseBody = json_encode($responseBody, JSON_INVALID_UTF8_IGNORE);
             $responseLength = strlen($encodedResponseBody);
 
-            // Skip response_body if it exceeds the safe length (e.g., 65535 for TEXT)
-            $maxLength = 65535; // Adjust based on your column type
-            $storeResponseBody = $responseLength <= $maxLength ? $encodedResponseBody : null;
+            // response_body is a TEXT column (65535 byte limit). Rather than
+            // discarding the whole thing when it's too long (e.g. a full
+            // debug-mode stack trace on a 500), keep a truncated prefix -
+            // that still preserves the exception message and the start of
+            // the trace, which is what's actually useful for debugging.
+            $maxLength = 65535;
+            $storeResponseBody = $responseLength <= $maxLength
+                ? $encodedResponseBody
+                : substr($encodedResponseBody, 0, $maxLength - 20) . '...[TRUNCATED]';
 
             if ($responseLength > $maxLength) {
-                Log::warning('Skipped storing response_body due to excessive length', [
+                Log::warning('Truncated response_body due to excessive length', [
                     'url' => $request->fullUrl(),
                     'response_length' => $responseLength,
                     'max_length' => $maxLength,

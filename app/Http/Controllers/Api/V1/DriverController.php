@@ -8350,11 +8350,25 @@ class DriverController extends Controller
 
         $invoicesInput = $request->input('invoices', []);
 
-        if (empty($invoicesInput) || !is_array($invoicesInput)) {
+        if (!is_array($invoicesInput)) {
             return response()->json([
                 'result'  => false,
-                'message' => __LINE__ . $this->message_separator . 'invoices field is required and must be an array',
+                'message' => __LINE__ . $this->message_separator . 'invoices field must be an array',
                 'data'    => null
+            ], 200);
+        }
+
+        // Nothing to sync this round - not an error, just a no-op.
+        if (empty($invoicesInput)) {
+            return response()->json([
+                'result'  => true,
+                'message' => __LINE__ . $this->message_separator . 'No invoices to process',
+                'data'    => [
+                    'total_submitted' => 0,
+                    'success_count'   => 0,
+                    'fail_count'      => 0,
+                    'results'         => [],
+                ]
             ], 200);
         }
 
