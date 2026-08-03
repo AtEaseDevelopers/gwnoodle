@@ -1344,6 +1344,13 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
+
+            // Attribute any InvoicePayment activity log entries below to
+            // this driver instead of the "System" fallback (Auth::user() is
+            // never set for driver API requests) - cleared automatically by
+            // LogApiRequests after this request finishes.
+            \App\Models\ActivityLog::actingAs($driver->name);
+
             //validation
             if (empty($driver->trip_id)) {
                 return response()->json([
@@ -1806,7 +1813,7 @@ class DriverController extends Controller
     {
         try {
             $data = $request->all();
-            
+
             // Check driver session
             $driver = Driver::where('session', $request->header('session'))->first();
             if (empty($driver)) {
@@ -1816,7 +1823,13 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
-            
+
+            // Attribute any Invoice/InvoiceDetail activity log entries below
+            // to this driver instead of the "System" fallback (Auth::user()
+            // is never set for driver API requests) - cleared automatically
+            // by LogApiRequests after this request finishes.
+            \App\Models\ActivityLog::actingAs($driver->name);
+
             if (empty($driver->trip_id)) {
                 return response()->json([
                     'result' => false,
@@ -2139,7 +2152,7 @@ class DriverController extends Controller
     {
         try {
             $data = $request->all();
-            
+
             // Check driver session
             $driver = Driver::where('session', $request->header('session'))->first();
             if (empty($driver)) {
@@ -2149,7 +2162,13 @@ class DriverController extends Controller
                     'data' => null
                 ], 401);
             }
-            
+
+            // Attribute any Invoice/InvoiceDetail activity log entries below
+            // to this driver instead of the "System" fallback (Auth::user()
+            // is never set for driver API requests) - cleared automatically
+            // by LogApiRequests after this request finishes.
+            \App\Models\ActivityLog::actingAs($driver->name);
+
             // Find existing invoice
             $invoice = Invoice::where('id', $id)
                 ->where('driver_id', $driver->id)
@@ -2895,7 +2914,13 @@ class DriverController extends Controller
                     'color_code' => ''
                 ], 401);
             }
-            
+
+            // Attribute any Invoice/InvoicePayment activity log entries below
+            // to this driver instead of the "System" fallback (Auth::user()
+            // is never set for driver API requests) - cleared automatically
+            // by LogApiRequests after this request finishes.
+            \App\Models\ActivityLog::actingAs($driver->name);
+
             //validation
             $validator = Validator::make($request->all(), [
                 'date' => 'date_format:Y-m-d H:i:s',
@@ -8326,6 +8351,12 @@ class DriverController extends Controller
                 'data'    => null
             ], 401);
         }
+
+        // Attribute any Invoice/InvoiceDetail activity log entries below to
+        // this driver instead of the "System" fallback (Auth::user() is
+        // never set for driver API requests) - cleared automatically by
+        // LogApiRequests after this request finishes.
+        \App\Models\ActivityLog::actingAs($driver->name);
 
         if (empty($driver->trip_id)) {
             return response()->json([

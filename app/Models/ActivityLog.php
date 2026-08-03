@@ -33,6 +33,35 @@ class ActivityLog extends Model
     ];
 
     /**
+     * Overrides the actor LogsActivity attributes changes to, for contexts
+     * where there's no Auth::user() (e.g. driver API requests, which
+     * authenticate via a session header against the drivers table, not
+     * Laravel's web Auth). Set via actingAs() at the top of a driver-facing
+     * controller action; LogApiRequests middleware clears it after every
+     * api-group request completes, so it can never leak into an unrelated
+     * request handled by the same worker.
+     */
+    protected static $actorId = null;
+    protected static $actorName = null;
+
+    public static function actingAs(?string $name, $id = null): void
+    {
+        static::$actorName = $name;
+        static::$actorId = $id;
+    }
+
+    public static function clearActingAs(): void
+    {
+        static::$actorName = null;
+        static::$actorId = null;
+    }
+
+    public static function currentActor(): array
+    {
+        return ['id' => static::$actorId, 'name' => static::$actorName];
+    }
+
+    /**
      * Get the user that performed the action
      */
     public function user()

@@ -48,10 +48,11 @@ trait LogsActivity
     public function logActivity($action, $description = null, $oldData = null, $newData = null)
     {
         $user = Auth::user();
-        
+        $actor = ActivityLog::currentActor();
+
         ActivityLog::create([
-            'user_id' => $user?->id,
-            'user_name' => $user?->name ?? 'System',
+            'user_id' => $actor['id'] ?? $user?->id,
+            'user_name' => $actor['name'] ?? $user?->name ?? 'System',
             'action' => $action,
             'module' => $this->getModuleName(),
             'table_name' => $this->getTable(),

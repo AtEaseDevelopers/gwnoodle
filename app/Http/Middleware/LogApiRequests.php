@@ -9,6 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Driver;
+use App\Models\ActivityLog;
 
 class LogApiRequests
 {
@@ -16,6 +17,13 @@ class LogApiRequests
     {
         $response = $next($request);
         $this->logRequest($request, $response);
+
+        // Guaranteed reset of ActivityLog::actingAs() regardless of what the
+        // controller did (early return, exception, success) - so a driver
+        // actor set in this request can never leak into the next request
+        // handled by the same worker.
+        ActivityLog::clearActingAs();
+
         return $response;
     }
 
