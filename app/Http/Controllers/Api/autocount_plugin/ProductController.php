@@ -17,6 +17,11 @@ class ProductController extends Controller
     // Define allowed prefixes
     const ALLOWED_PREFIXES = ['N', 'OEM', 'GW', 'BK', 'S', 'TD', 'AD'];
 
+    // Define excluded formats: [prefix, suffix]. e.g. starts with 'S' AND ends with 'SM'
+    const EXCLUDED_FORMATS = [
+        ['S', 'SM'],
+    ];
+
     public function update(Request $request)
     {
         $data = $request->all(); 
@@ -103,11 +108,18 @@ class ProductController extends Controller
     /**
      * Check if ItemCode starts with an allowed prefix AND contains a dash.
      * e.g. OEM123-2wqeq-112 ✅ | OEM123 ❌ | RANDOM-123 ❌
+     * Excluded formats (e.g. starts with 'S' AND ends with 'SM') are rejected.
      */
     protected function isAllowedItemCode(string $itemCode): bool
     {
         if (empty($itemCode) || !str_contains($itemCode, '-')) {
             return false;
+        }
+
+        foreach (self::EXCLUDED_FORMATS as [$prefix, $suffix]) {
+            if (str_starts_with($itemCode, $prefix) && str_ends_with($itemCode, $suffix)) {
+                return false;
+            }
         }
 
         foreach (self::ALLOWED_PREFIXES as $prefix) {
