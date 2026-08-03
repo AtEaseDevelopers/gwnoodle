@@ -63,6 +63,13 @@ class InvoiceDataTable extends DataTable
         // `date` - which is exactly what was happening.
         $dataTable->orderColumn('date', 'id $1');
 
+        // The Total Price column's data/name is 'invoicedetail' - a hasMany
+        // relation, not a real column - so sorting it produced
+        // "order by invoicedetail" and a 1054 Unknown column error, which
+        // stateSave then replayed on every page load. Point it at the
+        // withSum() alias added in query() instead.
+        $dataTable->orderColumn('invoicedetail', 'invoicedetail_sum_totalprice $1');
+
         return $dataTable->addColumn('action', 'invoices.datatables_actions');
     }
 
@@ -82,7 +89,11 @@ class InvoiceDataTable extends DataTable
         ->with('agent:id,name')
         ->with('supervisor:id,name')
         ->with('invoicedetail')
-        ->select('invoices.*');
+        // withSum() MUST come after select('invoices.*'): select() replaces the
+        // column list outright, so calling it last would discard the aggregate
+        // subquery this alias depends on.
+        ->select('invoices.*')
+        ->withSum('invoicedetail', 'totalprice');
     }
 
     /**
