@@ -177,12 +177,12 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('driverItems', $driverItems);
         });
         View::composer(['invoices.fields'], function ($view) {
-            $customerItems = Customer::orderBy("company")->pluck('company','id')->toArray();
-            $view->with('customerItems', $customerItems);
+            $selectedId = optional($view->getData()['invoice'] ?? null)->customer_id;
+            $view->with('customerItems', Customer::activeSelectOptions($selectedId));
         });
         View::composer(['assigns.fields','drivers.assign'], function ($view) {
-            $customerItems = Customer::where('status',1)->orderBy("company")->pluck('company','id')->toArray();
-            $view->with('customerItems', $customerItems);
+            $selectedId = optional($view->getData()['assign'] ?? null)->customer_id;
+            $view->with('customerItems', Customer::activeSelectOptions($selectedId));
         });
         View::composer(['assigns.fields','drivers.assign','assigns.massfields'], function ($view) {
             $driverItems = Driver::where('status', '!=',Driver::STATUS_DELETED)->orderBy("name")->pluck('name','id')->toArray();

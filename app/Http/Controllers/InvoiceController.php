@@ -735,7 +735,12 @@ class InvoiceController extends AppBaseController
         $ids = $data['ids'];
         $autocount_status = 'pending'; // all status will be updated to pending (success & failed)
 
-        $count = invoice::whereIn('id',$ids)->update(['autocount_status'=>$autocount_status]);
+        // A manual requeue also resets the auto-retry flag so the one-time
+        // auto-requeue can happen again on the next failure.
+        $count = invoice::whereIn('id',$ids)->update([
+            'autocount_status'       => $autocount_status,
+            'autocount_auto_retried' => false,
+        ]);
 
         return $count;
     }

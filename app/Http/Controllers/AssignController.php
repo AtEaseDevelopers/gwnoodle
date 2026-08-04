@@ -155,13 +155,7 @@ class AssignController extends AppBaseController
         // so make sure the currently assigned customer/driver still appear
         // as options here even if they've since been deactivated - otherwise
         // the select shows nothing selected despite the assign having a value.
-        $customerItems = Customer::where('status', 1)->orderBy('company')->pluck('company', 'id')->toArray();
-        if (!array_key_exists($assign->customer_id, $customerItems)) {
-            $currentCustomer = Customer::find($assign->customer_id);
-            if ($currentCustomer) {
-                $customerItems[$currentCustomer->id] = $currentCustomer->company . ' (inactive)';
-            }
-        }
+        $customerItems = Customer::activeSelectOptions($assign->customer_id);
 
         $driverItems = Driver::where('status', '!=', Driver::STATUS_DELETED)->orderBy('name')->pluck('name', 'id')->toArray();
         if (!array_key_exists($assign->driver_id, $driverItems)) {

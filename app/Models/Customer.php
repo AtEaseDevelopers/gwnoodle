@@ -115,6 +115,35 @@ class Customer extends Model
         'tourism_tax_registration' => 'nullable|string|max:255',
     ];
 
+    /**
+     * Build the customer_id select list (keyed by id) used by the invoice and
+     * assign forms. Only active customers (status = 1) are listed.
+     *
+     * When $selectedId points at a customer that is no longer active - e.g. an
+     * existing invoice/assign that references a since-deactivated customer - it
+     * is appended and flagged so the select still shows its saved value instead
+     * of appearing empty.
+     *
+     * @param  int|string|null  $selectedId
+     * @return array
+     */
+    public static function activeSelectOptions($selectedId = null): array
+    {
+        $options = static::where('status', 1)
+            ->orderBy('company')
+            ->pluck('company', 'id')
+            ->toArray();
+
+        if ($selectedId !== null && ! array_key_exists($selectedId, $options)) {
+            $current = static::find($selectedId);
+            if ($current) {
+                $options[$current->id] = $current->company . ' (inactive)';
+            }
+        }
+
+        return $options;
+    }
+
     public static $paymentTerm = [
             'cash' => 'Cash',
             'credit_note' => 'Credit Note',
