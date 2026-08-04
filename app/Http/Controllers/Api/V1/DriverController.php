@@ -20,6 +20,7 @@ use App\Models\Assign;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\StockInRequest;
 use App\Models\ProductCost;
 use App\Models\SpecialPrice;
 use App\Models\Customer;
@@ -8102,53 +8103,31 @@ class DriverController extends Controller
         }
 
         DB::beginTransaction();
-        
+
         try {
             $quantity = $request->quantity;
             $warehouseId = $request->warehouse_id;
-            $warehouse = Warehouse::find($warehouseId);
 
-            // Update batch quantity
-            $oldQuantity = $productBatch->quantity;
-            $productBatch->increment('quantity', $quantity);
-
-            // Update status to Active if it was Inactive
-            if ($productBatch->status == ProductBatch::STATUS_INACTIVE) {
-                $productBatch->status = ProductBatch::STATUS_ACTIVE;
-                $productBatch->save();
-            }
-
-            // Add to warehouse inventory balance
-            $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
-                [
-                    'warehouse_id' => $warehouseId,
-                    'product_id' => $productBatch->product_id,
-                    'batch_id' => $productBatch->id,
-                ],
-                ['quantity' => 0]
-            );
-            
-            $oldWarehouseQuantity = $warehouseInventory->quantity;
-            $warehouseInventory->increaseQuantity($quantity);
-
-            // Create inventory transaction
-            InventoryTransaction::create([
+            // Stock is not applied here — queue an approval request instead.
+            // The batch quantity, warehouse balance and inventory ledger are only
+            // updated once an admin approves the request (StockInRequest::approveAndApply).
+            StockInRequest::create([
+                'source' => StockInRequest::SOURCE_BULK_SCAN,
                 'warehouse_id' => $warehouseId,
                 'product_id' => $productBatch->product_id,
                 'batch_id' => $productBatch->id,
+                'requested_quantity' => $quantity,
                 'quantity' => $quantity,
-                'type' => InventoryTransaction::TYPE_STOCK_IN,
-                'remark' => ($request->remark ?? 'Stock in from mobile app') . ' - Warehouse: ' . $warehouse->name,
-                'date' => now(),
-                'user' => $user->name,
-                'stock_received'=>1
+                'remark' => $request->remark ?? 'Stock in from mobile app',
+                'status' => StockInRequest::STATUS_PENDING,
+                'requested_by' => $user->name,
             ]);
 
             DB::commit();
 
             return response()->json([
                 'result' => true,
-                'message' => __LINE__ . $this->message_separator . $quantity . ' units added to batch successfully',
+                'message' => __LINE__ . $this->message_separator . $quantity . ' units submitted for approval',
                 'data' => [
                     'batch' => [
                         'id' => $productBatch->id,
