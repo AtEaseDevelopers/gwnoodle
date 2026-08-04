@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::table('invoices', function (Blueprint $table) {
             // Tracks whether a 'failed' autocount status has already been
             // auto-requeued once. Prevents an endless retry loop.
-            $table->boolean('autocount_auto_retried')->default(false)->after('autocount_message');
+            $table->boolean('autocount_auto_retried')->default(true)->after('autocount_message');
         });
     }
 

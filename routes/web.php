@@ -629,6 +629,8 @@ Route::group(['middleware' => ['auth']], function() {
 
         // Batch stock-in approval requests (view: anyone with warehouse access; actions gated by role in controller)
         Route::get('/stockInRequests', [App\Http\Controllers\StockInRequestController::class, 'index'])->name('stockInRequests.index');
+        Route::post('/stockInRequests/bulk-approve', [App\Http\Controllers\StockInRequestController::class, 'bulkApprove'])->name('stockInRequests.bulk-approve');
+        Route::post('/stockInRequests/bulk-reject', [App\Http\Controllers\StockInRequestController::class, 'bulkReject'])->name('stockInRequests.bulk-reject');
         Route::post('/stockInRequests/{id}/approve', [App\Http\Controllers\StockInRequestController::class, 'approve'])->name('stockInRequests.approve');
         Route::post('/stockInRequests/{id}/reject', [App\Http\Controllers\StockInRequestController::class, 'reject'])->name('stockInRequests.reject');
         Route::post('/stockInRequests/{id}/update-qty', [App\Http\Controllers\StockInRequestController::class, 'updateQty'])->name('stockInRequests.update-qty');

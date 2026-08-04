@@ -102,6 +102,135 @@ class StockInRequestController extends AppBaseController
     }
 
     /**
+     * Approve several pending requests in one go. Admin only.
+     * Each request is applied in its own transaction so one failure does not
+     * roll back the rest; a summary of the outcome is returned.
+     */
+    public function bulkApprove(Request $request)
+    {
+        if (!$this->canApprove()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $ids = $this->validatedIds($request);
+
+        if ($ids === null) {
+            return response()->json(['success' => false, 'message' => 'No requests selected'], 422);
+        }
+
+        $approved = 0;
+        $skipped = 0;
+        $failed = 0;
+
+        foreach (StockInRequest::whereIn('id', $ids)->get() as $stockInRequest) {
+            if (!$stockInRequest->isPending()) {
+                $skipped++;
+                continue;
+            }
+
+            DB::beginTransaction();
+
+            try {
+                $stockInRequest->approveAndApply();
+                DB::commit();
+                $approved++;
+            } catch (\Exception $e) {
+                DB::rollBack();
+                $failed++;
+            }
+        }
+
+        return response()->json([
+            'success' => $approved > 0,
+            'message' => $this->bulkSummary('approved', $approved, $skipped, $failed),
+            'approved' => $approved,
+            'skipped' => $skipped,
+            'failed' => $failed,
+        ]);
+    }
+
+    /**
+     * Reject several pending requests with a shared remark. Admin only.
+     * No stock is applied.
+     */
+    public function bulkReject(Request $request)
+    {
+        if (!$this->canApprove()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'approval_remark' => 'required|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        }
+
+        $ids = $this->validatedIds($request);
+
+        if ($ids === null) {
+            return response()->json(['success' => false, 'message' => 'No requests selected'], 422);
+        }
+
+        $reviewer = Auth::user()->name ?? 'system';
+        $rejected = 0;
+        $skipped = 0;
+
+        foreach (StockInRequest::whereIn('id', $ids)->get() as $stockInRequest) {
+            if (!$stockInRequest->isPending()) {
+                $skipped++;
+                continue;
+            }
+
+            $stockInRequest->status = StockInRequest::STATUS_REJECTED;
+            $stockInRequest->approval_remark = $request->approval_remark;
+            $stockInRequest->reviewed_by = $reviewer;
+            $stockInRequest->reviewed_at = now();
+            $stockInRequest->save();
+            $rejected++;
+        }
+
+        return response()->json([
+            'success' => $rejected > 0,
+            'message' => $this->bulkSummary('rejected', $rejected, $skipped, 0),
+            'rejected' => $rejected,
+            'skipped' => $skipped,
+        ]);
+    }
+
+    /**
+     * Pull the selected request ids from the payload, returning null when none
+     * are usable.
+     *
+     * @return int[]|null
+     */
+    protected function validatedIds(Request $request)
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array) $request->input('ids', [])))));
+
+        return empty($ids) ? null : $ids;
+    }
+
+    /**
+     * Human-readable summary line for a bulk action outcome.
+     */
+    protected function bulkSummary($verb, $done, $skipped, $failed)
+    {
+        $parts = [$done . ' request(s) ' . $verb];
+
+        if ($skipped > 0) {
+            $parts[] = $skipped . ' skipped (already reviewed)';
+        }
+
+        if ($failed > 0) {
+            $parts[] = $failed . ' failed';
+        }
+
+        return implode(', ', $parts) . '.';
+    }
+
+    /**
      * Edit the quantity of a pending request before approval.
      * Allowed for admin and Inventory Admin.
      */

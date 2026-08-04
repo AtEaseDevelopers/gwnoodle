@@ -19,6 +19,17 @@
                             {{ $pageTitle ?? 'Stock-In Approvals' }}
                         </div>
                         <div class="card-body">
+                            @if (auth()->check() && auth()->user()->hasRole('admin'))
+                                <div class="mb-2" id="bulk-actions-bar">
+                                    <button type="button" class="btn btn-success btn-sm" id="bulk-approve-btn" disabled>
+                                        <i class="fa fa-check"></i> Approve Selected
+                                        <span class="badge badge-light" id="bulk-selected-count">0</span>
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm" id="bulk-reject-btn" disabled>
+                                        <i class="fa fa-times"></i> Reject Selected
+                                    </button>
+                                </div>
+                            @endif
                             {!! $dataTable->table(['width' => '100%', 'class' => 'table table-striped table-bordered'], true) !!}
                         </div>
                     </div>
@@ -51,6 +62,35 @@
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-danger" id="confirm-reject-btn">
                         <i class="fa fa-times"></i> Reject
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Reject Modal -->
+    <div class="modal fade" id="bulkRejectModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fa fa-times"></i> Reject Selected Requests</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>Rejecting <strong id="bulk-reject-count"></strong> selected request(s).</p>
+                    <div class="form-group">
+                        <label for="bulk-reject-remark">Reason / Remark <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="bulk-reject-remark" rows="3" maxlength="255"
+                                  placeholder="Enter reason for rejection (applied to all selected)"></textarea>
+                    </div>
+                    <div class="alert alert-danger py-2 mb-0 d-none" id="bulk-reject-error"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirm-bulk-reject-btn">
+                        <i class="fa fa-times"></i> Reject All
                     </button>
                 </div>
             </div>
@@ -95,13 +135,83 @@
         $(document).ready(function () {
             var dt = $('#dataTableBuilder').DataTable();
 
+            // ---- Bulk selection state ----
+            window.checkboxid = [];
+
             // Hide the global loading overlay once the table draws (and immediately, as a fallback)
             dt.on('preDraw', function () { ShowLoad(); });
-            dt.on('draw', function () { HideLoad(); });
+            dt.on('draw', function () {
+                // Re-apply selection to the freshly drawn rows (survives paging/search).
+                setcheckbox(window.checkboxid);
+                checkcheckbox();
+                updateBulkBar();
+                HideLoad();
+            });
             HideLoad();
 
             function reloadTable() {
                 dt.ajax.reload(null, false);
+            }
+
+            // ---- Checkbox selection helpers (shared pattern) ----
+            $(document).on('change', '.checkboxselect', function () {
+                if (this.checked) {
+                    addcheckboxid($(this).attr('checkboxid'));
+                } else {
+                    removecheckboxid($(this).attr('checkboxid'));
+                }
+                checkcheckbox();
+                updateBulkBar();
+            });
+
+            $(document).on('change', '#selectallcheckbox', function () {
+                var checkall = this.checked;
+                $('.checkboxselect').each(function (i, obj) {
+                    if (checkall && !obj.checked) {
+                        addcheckboxid($(obj).attr('checkboxid'));
+                        $(obj).prop('checked', true);
+                    } else if (!checkall && obj.checked) {
+                        removecheckboxid($(obj).attr('checkboxid'));
+                        $(obj).prop('checked', false);
+                    }
+                });
+                updateBulkBar();
+            });
+
+            function addcheckboxid(id) {
+                if ($.inArray(id, window.checkboxid) === -1) {
+                    window.checkboxid.push(id);
+                }
+            }
+
+            function removecheckboxid(id) {
+                window.checkboxid = $.grep(window.checkboxid, function (value) {
+                    return value != id;
+                });
+            }
+
+            function setcheckbox(ids) {
+                for (var i = 0; i < ids.length; ++i) {
+                    $('input.checkboxselect[checkboxid="' + ids[i] + '"]').prop('checked', true);
+                }
+            }
+
+            function checkcheckbox() {
+                var boxes = $('.checkboxselect');
+                var checked = boxes.filter(':checked').length;
+                $('#selectallcheckbox').prop('checked', boxes.length > 0 && checked === boxes.length);
+            }
+
+            function updateBulkBar() {
+                var count = window.checkboxid.length;
+                $('#bulk-selected-count').text(count);
+                $('#bulk-approve-btn, #bulk-reject-btn').prop('disabled', count === 0);
+            }
+
+            function clearSelection() {
+                window.checkboxid = [];
+                $('#selectallcheckbox').prop('checked', false);
+                updateBulkBar();
             }
 
             // ---- Approve ----
@@ -167,6 +277,83 @@
                     error: function (xhr) {
                         var message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Error rejecting request';
                         $('#reject-error').removeClass('d-none').text(message);
+                        $btn.prop('disabled', false);
+                    }
+                });
+            });
+
+            // ---- Bulk Approve ----
+            $('#bulk-approve-btn').on('click', function () {
+                var ids = window.checkboxid.slice();
+                if (!ids.length) {
+                    return;
+                }
+
+                if (!confirm('Approve ' + ids.length + ' selected stock-in request(s)?\nThis will add the stock immediately.')) {
+                    return;
+                }
+
+                var $btn = $(this);
+                $btn.prop('disabled', true);
+
+                $.ajax({
+                    url: "{{ route('stockInRequests.bulk-approve') }}",
+                    type: "POST",
+                    data: { ids: ids, _token: "{{ csrf_token() }}" },
+                    success: function (response) {
+                        toastr.success(response.message, 'Success');
+                        clearSelection();
+                        reloadTable();
+                    },
+                    error: function (xhr) {
+                        var message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Error approving requests';
+                        toastr.error(message, 'Error');
+                        $btn.prop('disabled', false);
+                    }
+                });
+            });
+
+            // ---- Bulk Reject ----
+            $('#bulk-reject-btn').on('click', function () {
+                if (!window.checkboxid.length) {
+                    return;
+                }
+                $('#bulk-reject-count').text(window.checkboxid.length);
+                $('#bulk-reject-remark').val('');
+                $('#bulk-reject-error').addClass('d-none').text('');
+                $('#bulkRejectModal').modal('show');
+            });
+
+            $('#confirm-bulk-reject-btn').on('click', function () {
+                var ids = window.checkboxid.slice();
+                var remark = $('#bulk-reject-remark').val().trim();
+
+                if (!ids.length) {
+                    $('#bulk-reject-error').removeClass('d-none').text('No requests selected.');
+                    return;
+                }
+                if (!remark) {
+                    $('#bulk-reject-error').removeClass('d-none').text('A remark is required to reject.');
+                    return;
+                }
+
+                var $btn = $(this);
+                $btn.prop('disabled', true);
+
+                $.ajax({
+                    url: "{{ route('stockInRequests.bulk-reject') }}",
+                    type: "POST",
+                    data: { ids: ids, approval_remark: remark, _token: "{{ csrf_token() }}" },
+                    success: function (response) {
+                        $('#bulkRejectModal').modal('hide');
+                        toastr.success(response.message, 'Success');
+                        clearSelection();
+                        reloadTable();
+                        $btn.prop('disabled', false);
+                    },
+                    error: function (xhr) {
+                        var message = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Error rejecting requests';
+                        $('#bulk-reject-error').removeClass('d-none').text(message);
                         $btn.prop('disabled', false);
                     }
                 });

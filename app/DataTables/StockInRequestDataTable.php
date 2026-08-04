@@ -3,6 +3,7 @@
 namespace App\DataTables;
 
 use App\Models\StockInRequest;
+use Illuminate\Support\Facades\Auth;
 use Yajra\DataTables\Services\DataTable;
 use Yajra\DataTables\EloquentDataTable;
 
@@ -19,6 +20,13 @@ class StockInRequestDataTable extends DataTable
         $dataTable = new EloquentDataTable($query);
 
         return $dataTable
+            ->addColumn('checkbox', function ($stockInRequest) {
+                // Only pending rows can be actioned in bulk, and only by an approver.
+                if ($this->isApprover() && $stockInRequest->isPending()) {
+                    return '<input type="checkbox" class="checkboxselect" checkboxid="' . $stockInRequest->id . '"/>';
+                }
+                return '';
+            })
             ->addColumn('action', function ($stockInRequest) {
                 return view('stock_in_requests.datatables_actions', ['request' => $stockInRequest])->render();
             })
@@ -58,7 +66,15 @@ class StockInRequestDataTable extends DataTable
                         return '<span class="badge badge-warning">Pending</span>';
                 }
             })
-            ->rawColumns(['action', 'warehouse_name', 'quantity', 'status']);
+            ->rawColumns(['checkbox', 'action', 'warehouse_name', 'quantity', 'status']);
+    }
+
+    /**
+     * Whether the current user may approve/reject (drives the bulk checkbox column).
+     */
+    protected function isApprover()
+    {
+        return Auth::check() && Auth::user()->hasRole('admin');
     }
 
     /**
@@ -94,7 +110,8 @@ class StockInRequestDataTable extends DataTable
                 'stateSave' => true,
                 'stateDuration' => 0,
                 'processing' => false,
-                'order'     => [[0, 'desc']],
+                // Order by Date; its index shifts by one when the checkbox column is shown.
+                'order'     => [[$this->isApprover() ? 1 : 0, 'desc']],
                 'lengthMenu' => [[10, 50, 100, 300], ['10 rows', '50 rows', '100 rows', '300 rows']],
                 'buttons' => [
                     [
@@ -131,7 +148,22 @@ class StockInRequestDataTable extends DataTable
      */
     protected function getColumns()
     {
-        return [
+        $columns = [];
+
+        // Bulk-selection column, shown only to approvers.
+        if ($this->isApprover()) {
+            $columns['checkbox'] = new \Yajra\DataTables\Html\Column([
+                'title' => '<input type="checkbox" id="selectallcheckbox">',
+                'data' => 'checkbox',
+                'name' => 'checkbox',
+                'width' => '30px',
+                'className' => 'text-center',
+                'orderable' => false,
+                'searchable' => false,
+            ]);
+        }
+
+        return $columns + [
             'created_at' => new \Yajra\DataTables\Html\Column([
                 'title' => 'Date',
                 'data' => 'created_at',
