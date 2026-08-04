@@ -55,7 +55,6 @@ class InvoiceController extends Controller
                     'products.name as product_name',
                     'products.unit_code',
                     'products.classification_code',
-                    'products.price as price',
                     'products.cost as cost',
                 ])->get()->groupBy('invoice_id'); // 🔥 important
 
