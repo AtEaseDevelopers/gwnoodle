@@ -28,6 +28,12 @@
     <p>{{ $assign->sequence }}</p>
 </div>
 
+<!-- Status Field -->
+<div class="form-group">
+    {!! Form::label('status', __('assign.status')) !!}:
+    <p>{{ $assign->status == \App\Models\Assign::STATUS_ACTIVE ? __('assign.active') : __('assign.inactive') }}</p>
+</div>
+
 @push('scripts')
     <script>
         $(document).keyup(function(e) {

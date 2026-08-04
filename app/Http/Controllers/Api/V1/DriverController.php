@@ -386,7 +386,7 @@ class DriverController extends Controller
                 'type' => Trip::START_TRIP,
             ]);
              //generate task
-                $assigns = Assign::where('driver_id', $driver->id)->orderby('sequence','asc')->pluck('customer_id')->unique()->values()->all();
+                $assigns = Assign::where('driver_id', $driver->id)->active()->whereHas('customer', function ($q) { $q->where('status', 1); })->orderby('sequence','asc')->pluck('customer_id')->unique()->values()->all();
                 $count = 1;
                 foreach($assigns as $assign){
                     $task = new Task();
@@ -1240,13 +1240,17 @@ class DriverController extends Controller
                 $customers = Customer::select('customers.*', 'assigns.sequence')
                     ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
                     ->where('assigns.driver_id', $driver->id)
+                    ->where('assigns.status', Assign::STATUS_ACTIVE)
+                    ->where('customers.status', 1)
                     ->where('customers.id', $id)
                     ->orderBy('assigns.sequence', 'asc')
-                    ->get();    
+                    ->get();
             }else{
                 $customers = Customer::select('customers.*', 'assigns.sequence')
                     ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
                     ->where('assigns.driver_id', $driver->id)
+                    ->where('assigns.status', Assign::STATUS_ACTIVE)
+                    ->where('customers.status', 1)
                     ->orderBy('assigns.sequence', 'asc')
                     ->get();
             }
@@ -2686,6 +2690,8 @@ class DriverController extends Controller
             
             // Get all customer IDs assigned to this driver
             $assignedCustomerIds = Assign::where('driver_id', $driver->id)
+                ->active()
+                ->whereHas('customer', function ($q) { $q->where('status', 1); })
                 ->pluck('customer_id')
                 ->toArray();
             
@@ -3703,6 +3709,8 @@ class DriverController extends Controller
             if($fromdrivertrip->type == 2){
                 //Take from assign & invoice
                 $assigns = Assign::where('driver_id', $fromdriver->id)
+                ->active()
+                ->whereHas('customer', function ($q) { $q->where('status', 1); })
                 ->orderby('sequence','asc')
                 ->select('customer_id','sequence',DB::RAW('0 as invoice_id'));
                 $task = Invoice::where('driver_id', $fromdriver->id)
@@ -3733,6 +3741,8 @@ class DriverController extends Controller
         }else{
             //Take from assign & invoice
             $assigns = Assign::where('driver_id', $fromdriver->id)
+            ->active()
+            ->whereHas('customer', function ($q) { $q->where('status', 1); })
             ->orderby('sequence','asc')
             ->select('customer_id','sequence',DB::RAW('0 as invoice_id'));
             $task = Invoice::where('driver_id', $fromdriver->id)
@@ -8670,6 +8680,8 @@ class DriverController extends Controller
 
         try {
             $assignedCustomerIds = Assign::where('driver_id', $driver->id)
+                ->active()
+                ->whereHas('customer', function ($q) { $q->where('status', 1); })
                 ->pluck('customer_id')
                 ->toArray();
 

@@ -112,6 +112,10 @@ class AssignDataTable extends DataTable
                         'targets' => 0,
                         'visible' => true,
                         'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
+                    ],
+                    [
+                        'targets' => 4,
+                        'render' => 'function(data, type){return data == 1 ? "Active" : "Inactive";}'
                     ]
                 ],
                 'initComplete' => 'function(){
@@ -122,7 +126,7 @@ class AssignDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == \'Status\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Unactive</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Active</option><option value="0">Inactive</option></select>\';
                             }else if(columns[index].title == \'Payment Term\'){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="1">Cash</option><option value="2">Bankin</option><option value="3">Credit Note</option></select>\';
                             }else{
@@ -162,7 +166,11 @@ class AssignDataTable extends DataTable
             'data' => 'customer.company',
             'name' => 'customer.company']),
 
-            'sequence'
+            'sequence',
+
+            'status'=> new \Yajra\DataTables\Html\Column(['title' => trans('assign.status'),
+            'data' => 'status',
+            'name' => 'status']),
 
         ];
     }

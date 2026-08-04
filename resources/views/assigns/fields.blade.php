@@ -16,6 +16,12 @@
     {!! Form::number('sequence', null, ['class' => 'form-control', 'min' => 0]) !!}
 </div>
 
+<!-- Status Field -->
+<div class="form-group col-sm-6">
+    {!! Form::label('status', __('assign.status')) !!}<span class="asterisk"> *</span>
+    {!! Form::select('status', [1 => __('assign.active'), 0 => __('assign.inactive')], isset($assign) ? null : 1, ['class' => 'form-control']) !!}
+</div>
+
 <!-- Submit Field -->
 <div class="form-group col-sm-12">
     {!! Form::submit(__('assign.save'), ['class' => 'btn btn-primary']) !!}
