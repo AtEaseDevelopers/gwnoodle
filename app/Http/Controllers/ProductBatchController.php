@@ -12,6 +12,7 @@ use App\Models\Warehouse;
 use App\Models\WarehouseInventoryBalance;
 use App\Models\InventoryTransaction;
 use App\Models\ProductBatch;
+use App\Models\StockInRequest;
 use Flash;
 use App\Http\Controllers\AppBaseController;
 use Response;
@@ -98,43 +99,40 @@ class ProductBatchController extends AppBaseController
 
         $input = $request->all();
         $input['status'] = 1; // Active
-        
+
+        // Initial stock is not applied on creation — it requires approval.
+        // Capture the requested quantity, then create the batch with 0 stock.
+        $requestedQuantity = (isset($input['quantity']) && $input['quantity'] > 0)
+            ? (int) $input['quantity']
+            : 0;
+        $input['quantity'] = 0;
+
         DB::beginTransaction();
-        
+
         try {
-            // Create product batch
+            // Create product batch (with no stock yet)
             $productBatch = $this->productBatchRepository->create($input);
-            
-            // If quantity is provided, add to warehouse inventory
-            if (isset($input['quantity']) && $input['quantity'] > 0) {
-                // Add to warehouse inventory balance
-                $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
-                    [
-                        'warehouse_id' => $request->warehouse_id,
-                        'product_id' => $productBatch->product_id,
-                        'batch_id' => $productBatch->id,
-                    ],
-                    ['quantity' => 0]
-                );
-                
-                $warehouseInventory->increaseQuantity($input['quantity']);
-                
-                // Create inventory transaction for warehouse stock in
-                InventoryTransaction::create([
+
+            // If an initial quantity was requested, queue it for approval
+            if ($requestedQuantity > 0) {
+                StockInRequest::create([
+                    'source' => StockInRequest::SOURCE_BATCH_CREATE,
                     'warehouse_id' => $request->warehouse_id,
                     'product_id' => $productBatch->product_id,
                     'batch_id' => $productBatch->id,
-                    'quantity' => $input['quantity'],
-                    'type' => 1, // Stock In
+                    'requested_quantity' => $requestedQuantity,
+                    'quantity' => $requestedQuantity,
                     'remark' => 'Initial stock for batch: ' . $productBatch->batch_code,
-                    'date' => now(),
-                    'user' => Auth::user()->name ?? 'system'
+                    'status' => StockInRequest::STATUS_PENDING,
+                    'requested_by' => Auth::user()->name ?? 'system',
                 ]);
             }
 
             DB::commit();
 
-            Flash::success('Product Batch created successfully.');
+            Flash::success($requestedQuantity > 0
+                ? 'Product Batch created. Initial stock is pending approval.'
+                : 'Product Batch created successfully.');
 
             return redirect(route('productBatches.index'));
 
@@ -531,35 +529,17 @@ class ProductBatchController extends AppBaseController
 
                 $quantity = $item['quantity'];
 
-                $productBatch->increment('quantity', $quantity);
-
-                if ($productBatch->status == 2) {
-                    $productBatch->status = 1;
-                    $productBatch->save();
-                }
-
-                $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
-                    [
-                        'warehouse_id' => $warehouse->id,
-                        'product_id' => $productBatch->product_id,
-                        'batch_id' => $productBatch->id,
-                    ],
-                    ['quantity' => 0]
-                );
-
-                $warehouseInventory->increaseQuantity($quantity);
-
-                InventoryTransaction::create([
+                // Stock is not applied here — queue an approval request instead.
+                StockInRequest::create([
+                    'source' => StockInRequest::SOURCE_BULK_SCAN,
                     'warehouse_id' => $warehouse->id,
                     'product_id' => $productBatch->product_id,
                     'batch_id' => $productBatch->id,
+                    'requested_quantity' => $quantity,
                     'quantity' => $quantity,
-                    'type' => 1,
-                    'remark' => ($request->remark ?? 'Bulk stock in from barcode scan') . ' - Warehouse: ' . $warehouse->name,
-                    'date' => now(),
-                    'user' => Auth::user()->name ?? 'system',
-                    'stock_received'=>1
-
+                    'remark' => $request->remark ?? 'Bulk stock in from barcode scan',
+                    'status' => StockInRequest::STATUS_PENDING,
+                    'requested_by' => Auth::user()->name ?? 'system',
                 ]);
 
                 $totalUnits += $quantity;
@@ -569,7 +549,7 @@ class ProductBatchController extends AppBaseController
 
             return response()->json([
                 'success' => true,
-                'message' => $totalUnits . ' units added across ' . $items->count() . ' batch(es) in ' . $warehouse->name . ' successfully.'
+                'message' => $totalUnits . ' units across ' . $items->count() . ' batch(es) submitted for approval.'
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

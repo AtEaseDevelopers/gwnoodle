@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{{ $companyInfo['name'] }} - Invoice</title>
+    <title>{{ $companyInfo['name'] }} - {{ $mode === 'do' ? 'Delivery Order' : 'Invoice' }}</title>
     <style>
         /* Real A4 page. @page margins are unreliable in dompdf, so the
            left/right spacing is applied as body padding instead - centers
@@ -412,6 +412,14 @@
     <div class="divider-dashed"></div>
 
     @if($mode !== 'do')
+    <!-- Remarks -->
+    <div class="notes-section" style="font-size: 13px;">
+        <div class="notes-title">Remarks :</div>
+        <div class="note-item">{{ $invoice->remark ?? '-' }}</div>
+    </div>
+
+    <div class="divider-dashed"></div>
+
     <!-- Amount in Words and Total - Same Row with Border -->
     <table style="width: 100%; border-collapse: collapse; margin: 5px 0;">
         <tr>

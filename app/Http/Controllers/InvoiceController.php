@@ -1842,6 +1842,17 @@ class InvoiceController extends AppBaseController
         return implode("\n", $result);
     }
 
+    /**
+     * Build the download/stream filename for the simple PDF.
+     * Delivery orders (mode "do") must not be named "invoice_...".
+     */
+    public function simplePdfFileName($mode, $invoiceno)
+    {
+        $prefix = $mode === 'do' ? 'deliveryorder_' : 'invoice_';
+
+        return $prefix . $invoiceno . '.pdf';
+    }
+
     public function getInvoiceSimplePDF($id, $function)
     {
         $id = Crypt::decrypt($id);
@@ -1906,12 +1917,14 @@ class InvoiceController extends AppBaseController
                 $pdf->getDomPDF()->set_option('fontCache', storage_path('fonts/'));
             }
 
+            $fileName = $this->simplePdfFileName($mode, $invoice->invoiceno);
+
             if ($function == 'download') {
                 return $pdf->setPaper('a4', 'portrait')
-                    ->download('invoice_' . $invoice->invoiceno . '.pdf');
+                    ->download($fileName);
             } elseif ($function == 'view') {
                 return $pdf->setPaper('a4', 'portrait')
-                    ->stream('invoice_' . $invoice->invoiceno . '.pdf');
+                    ->stream($fileName);
             }
         } catch (Exception $e) {
             dd($e->getMessage());

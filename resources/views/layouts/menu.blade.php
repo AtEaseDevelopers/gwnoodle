@@ -188,7 +188,7 @@
 
 
 @canany(['warehouse','inventorytransaction'])
-<li class="nav-item nav-dropdown {{ Request::is('warehouses*','warehouseTransactions*') ? 'open' : '' }}">
+<li class="nav-item nav-dropdown {{ Request::is('warehouses*','warehouseTransactions*','stockInRequests*') ? 'open' : '' }}">
     <a class="nav-link nav-dropdown-toggle" href="#">
         <i class="nav-icon icon-home"></i>
         <span>Warehouse</span>
@@ -199,6 +199,14 @@
             <li class="nav-item {{ Request::is('warehouses*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('warehouses*') ? 'active' : '' }}" href="{{ route('warehouses.index') }}">
                     <span>Warehouse</span>
+                </a>
+            </li>
+        </ul>
+
+        <ul class="nav-dropdown-items">
+            <li class="nav-item {{ Request::is('stockInRequests*') ? 'active' : '' }}">
+                <a class="nav-link {{ Request::is('stockInRequests*') ? 'active' : '' }}" href="{{ route('stockInRequests.index') }}">
+                    <span>{{ trans('side_menu.stock_in_approvals') }}</span>
                 </a>
             </li>
         </ul>

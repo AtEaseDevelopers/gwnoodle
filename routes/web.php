@@ -626,6 +626,12 @@ Route::group(['middleware' => ['auth']], function() {
         Route::get('/warehouses/get-batches', [App\Http\Controllers\WarehouseController::class, 'getBatches'])->name('warehouses.get-batches');
         Route::get('/warehouses/get-warehouses-list', [App\Http\Controllers\WarehouseController::class, 'getWarehousesList'])->name('warehouses.get-list');
         Route::get('/warehouses/{warehouse_id}/products/{product_id}/batches', [App\Http\Controllers\WarehouseController::class, 'getWarehouseProductBatches'])->name('warehouses.get-warehouse-product-batches');
+
+        // Batch stock-in approval requests (view: anyone with warehouse access; actions gated by role in controller)
+        Route::get('/stockInRequests', [App\Http\Controllers\StockInRequestController::class, 'index'])->name('stockInRequests.index');
+        Route::post('/stockInRequests/{id}/approve', [App\Http\Controllers\StockInRequestController::class, 'approve'])->name('stockInRequests.approve');
+        Route::post('/stockInRequests/{id}/reject', [App\Http\Controllers\StockInRequestController::class, 'reject'])->name('stockInRequests.reject');
+        Route::post('/stockInRequests/{id}/update-qty', [App\Http\Controllers\StockInRequestController::class, 'updateQty'])->name('stockInRequests.update-qty');
     });
 
     Route::group(['middleware' => ['permission:inventorybalance']], function() {
