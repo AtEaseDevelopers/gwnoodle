@@ -142,7 +142,7 @@
                                                 <td class="ta-r">{{ number_format($id['quantity'],2) }}</td>
                                                 <td class="ta-l">BAG</td>
                                                 <td class="ta-r">{{ number_format($id['price'],4) }}</td>
-                                                <td class="ta-r">{{ number_format($id['totalprice'],2) }}</td>
+                                                <td class="ta-r">{{ number_format($id['totalprice'],3) }}</td>
                                             </tr>
                                             {{-- second for each --}}
                                         @endforeach

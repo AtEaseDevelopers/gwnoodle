@@ -259,8 +259,9 @@ class AssignController extends AppBaseController
             $group_id = $data['group_id'];
             $driver_id = $data['driver_id'];
 
-            // Get all customers in the group
+            // Get active customers in the group
             $customers = Customer::where('group', 'like', '%' . $group_id . '%')
+                ->where('status', 1)
                 ->select('id', 'company')
                 ->get();
 

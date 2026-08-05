@@ -393,9 +393,9 @@
                 <td class="col-qty">{{ number_format($detail->quantity) }}</td>
                 <td class="col-uom">{{ $detail->product->uom ?? 'PCS' }}</td>
                 @if($mode !== 'do')
-                <td class="col-price">{{ number_format($detail->price, 2) }}</td>
+                <td class="col-price">{{ number_format($detail->price, 3) }}</td>
                 <td class="col-disc">-</td>
-                <td class="col-total">{{ number_format($detail->totalprice, 2) }}</td>
+                <td class="col-total">{{ number_format($detail->totalprice, 3) }}</td>
                 @endif
             </tr>
             @if(!empty($detail->remark))
@@ -431,7 +431,7 @@
             <td style="width: 35%; text-align: right;">
                 <div style="border: 1px solid #000; padding: 5px 10px; text-align: center;">
                     <div style="font-size: 14px; font-weight: bold;">TOTAL (RM)</div>
-                    <div style="font-size: 25px; font-weight: bold;">{{ number_format($totalAmount, 2) }}</div>
+                    <div style="font-size: 25px; font-weight: bold;">{{ number_format($totalAmount, 3) }}</div>
                 </div>
             </td>
         </tr>

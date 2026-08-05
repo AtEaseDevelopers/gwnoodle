@@ -75,7 +75,7 @@
                                                                          }
                                                                      }
                                                                  @endphp
-                                                                 MYR {{ number_format($total, 2) }}
+                                                                 MYR {{ number_format($total, 3) }}
                                                              </td>
                                                          </tr>
                                                      @endforeach
@@ -192,10 +192,10 @@
             html += '<div class="row"><div class="col-md-12">';
             html += '<h6>Financial Details</h6>';
             html += '<table class="table table-sm table-borderless">';
-            html += '<tr><th width="30%">Total Excluding Tax:</th><td>MYR ' + parseFloat(apiDetails.totalExcludingTax || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</td></tr>';
-            html += '<tr><th>Total Discount:</th><td>MYR ' + parseFloat(apiDetails.totalDiscount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</td></tr>';
-            html += '<tr><th>Total Net Amount:</th><td>MYR ' + parseFloat(apiDetails.totalNetAmount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</td></tr>';
-            html += '<tr><th>Total Payable Amount:</th><td><strong>MYR ' + parseFloat(apiDetails.totalPayableAmount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</strong></td></tr>';
+            html += '<tr><th width="30%">Total Excluding Tax:</th><td>MYR ' + parseFloat(apiDetails.totalExcludingTax || 0).toFixed(3).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</td></tr>';
+            html += '<tr><th>Total Discount:</th><td>MYR ' + parseFloat(apiDetails.totalDiscount || 0).toFixed(3).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</td></tr>';
+            html += '<tr><th>Total Net Amount:</th><td>MYR ' + parseFloat(apiDetails.totalNetAmount || 0).toFixed(3).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</td></tr>';
+            html += '<tr><th>Total Payable Amount:</th><td><strong>MYR ' + parseFloat(apiDetails.totalPayableAmount || 0).toFixed(3).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + '</strong></td></tr>';
             html += '</table></div></div>';
             if(apiDetails.validationResults && apiDetails.validationResults.validationSteps) {
                 html += '<hr>';

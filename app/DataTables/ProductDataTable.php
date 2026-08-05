@@ -161,7 +161,7 @@ class ProductDataTable extends DataTable
                         'className' => 'text-right',
                         'width' => '100px',
                         'render' => 'function(data, type){
-                            return type === "export" ? data : "RM " + parseFloat(data).toFixed(2);
+                            return type === "export" ? data : "RM " + parseFloat(data).toFixed(3);
                         }'
                     ],
                     [

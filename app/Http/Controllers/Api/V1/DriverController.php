@@ -1631,7 +1631,7 @@ class DriverController extends Controller
                     'status' => $invoice->getStatusTextAttribute(),
                     'allow_edit' => $allowEdit, // This field indicates if the invoice can be cancelled
                     'remark' => $invoice->remark,
-                    'total' => number_format($invoice->total, 2),
+                    'total' => number_format($invoice->total, 3),
                     'created_at' => $invoice->created_at->format('Y-m-d H:i:s'),
                     'updated_at' => $invoice->updated_at->format('Y-m-d H:i:s'),
                     'items_count' => $invoice->invoicedetail->count(),
@@ -1644,7 +1644,7 @@ class DriverController extends Controller
                             'quantity' => (float) $detail->quantity,
                             'price' => (float) $detail->price,
                             'total' => (float) $detail->totalprice,
-                            'total_formatted' => number_format($detail->totalprice, 2)
+                            'total_formatted' => number_format($detail->totalprice, 3)
                         ];
                     })->toArray(),
                     'pdf_url' => $this->getinvoicepdf($invoice->id)
@@ -1730,7 +1730,7 @@ class DriverController extends Controller
                     'paymentterm' => $invoice->paymentterm,
                     'status' => $invoice->getStatusTextAttribute(),
                     'remark' => $invoice->remark,
-                    'total' => number_format($invoice->total, 2),
+                    'total' => number_format($invoice->total, 3),
                     'created_at' => $invoice->created_at->format('Y-m-d H:i:s'),
                     'updated_at' => $invoice->updated_at->format('Y-m-d H:i:s'),
                     'items_count' => $invoice->invoicedetail->count(),
@@ -1741,7 +1741,7 @@ class DriverController extends Controller
                             'quantity' => (float) $detail->quantity,
                             'price' => (float) $detail->price,
                             'total' => (float) $detail->totalprice,
-                            'total_formatted' => number_format($detail->totalprice, 2)
+                            'total_formatted' => number_format($detail->totalprice, 3)
                         ];
                     })->toArray(),
                     'pdf_url' => $this->getinvoicepdf($invoice->id)
@@ -2780,7 +2780,7 @@ class DriverController extends Controller
                         'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
                         'payment_term_code' => $invoice->paymentterm,
                         'total_amount' => (float) $totalAmount,
-                        'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                        'formatted_amount' => 'RM ' . number_format($totalAmount, 3),
                         'is_paid' => $hasCompletedPayment,
                         'invoice_payments' => $paymentRecords,
                         'payment_count' => count($paymentRecords)
@@ -2851,7 +2851,7 @@ class DriverController extends Controller
                             'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
                             'payment_term_code' => $invoice->paymentterm,
                             'total_amount' => (float) $totalAmount,
-                            'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                            'formatted_amount' => 'RM ' . number_format($totalAmount, 3),
                             'is_paid' => $hasCompletedPayment,
                             'invoice_payments' => $paymentRecords,
                             'payment_count' => count($paymentRecords)
@@ -4488,7 +4488,7 @@ class DriverController extends Controller
                         'name' => $batch->product->name,
                         'unit_code' => $batch->product->unit_code,
                         'is_special_price' => isset($specialPrices[$batch->product_id]), 
-                        'price' => number_format($price, 2),
+                        'price' => number_format($price, 3),
                     ]
                 ];
             }

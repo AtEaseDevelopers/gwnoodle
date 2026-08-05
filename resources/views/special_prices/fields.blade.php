@@ -13,7 +13,7 @@
 <!-- Price Field -->
 <div class="form-group col-sm-6">
     {!! Form::label('price', __('special_prices.price')) !!}
-    {!! Form::number('price', null, ['class' => 'form-control', 'step' => '0.01', 'min' => '0']) !!}
+    {!! Form::number('price', null, ['class' => 'form-control', 'step' => '0.001', 'min' => '0']) !!}
 </div>
 
 <!-- Status Field -->

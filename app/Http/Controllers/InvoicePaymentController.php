@@ -493,7 +493,7 @@ class InvoicePaymentController extends AppBaseController
                 return [
                     'invoiceno'   => $inv->invoiceno,
                     'date'        => \Carbon\Carbon::parse($inv->date)->format('d/m/Y'),
-                    'finalprice'  => round($items->sum('totalprice'), 2),
+                    'finalprice'  => round($items->sum('totalprice'), 3),
                 ];
             })->values();
         }

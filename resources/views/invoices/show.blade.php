@@ -64,8 +64,8 @@
                                                     <td>{{ $invoicedetail['product']['name'] }}</td>
                                                     <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
-                                                    <td>{{ number_format($invoicedetail['price'], 2) }}</td>
-                                                    <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
+                                                    <td>{{ number_format($invoicedetail['price'], 3) }}</td>
+                                                    <td>{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
                                                         <div class='btn-group'>
@@ -91,8 +91,8 @@
                                                     <td>{{ $invoicedetail['product']['name'] }}</td>
                                                     <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
-                                                    <td>{{ number_format($invoicedetail['price'], 2) }}</td>
-                                                    <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
+                                                    <td>{{ number_format($invoicedetail['price'], 3) }}</td>
+                                                    <td>{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
                                                         <div class='btn-group'>
@@ -336,7 +336,7 @@
                     </div>
                     <div class="form-group">
                         {!! Form::label('edit_price_input', 'Price') !!}<span class="asterisk"> *</span>
-                        {!! Form::number('price', null, ['class' => 'form-control', 'id' => 'edit_price_input', 'step' => '0.01', 'min' => '0', 'required' => 'required']) !!}
+                        {!! Form::number('price', null, ['class' => 'form-control', 'id' => 'edit_price_input', 'step' => '0.001', 'min' => '0', 'required' => 'required']) !!}
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -667,7 +667,7 @@
                     qtyInput.val(item.quantity);
                     
                     // Update total cell
-                    targetRow.find('.item-total').text('RM ' + item.total.toFixed(2));
+                    targetRow.find('.item-total').text('RM ' + item.total.toFixed(3));
                     
                     // Update hidden inputs
                     $(`.qty-hidden-${rowIndex}`).val(item.quantity);
@@ -834,12 +834,12 @@
                         <small class="text-danger qty-error" id="qty-error-${index}" style="display: none; font-size: 11px;"></small>
                     </td>
                     <td class="price-cell">
-                        <input type="number" step="0.01" value="${item.price.toFixed(2)}" 
+                        <input type="number" step="0.001" value="${item.price.toFixed(3)}" 
                             class="form-control item-price" 
                             data-index="${index}" 
                             style="width: 100%; min-width: 100px; display: block !important; visibility: visible !important;">
                     </td>
-                    <td class="text-right item-total">RM ${item.total.toFixed(2)}</td>
+                    <td class="text-right item-total">RM ${item.total.toFixed(3)}</td>
                     <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-item" data-index="${index}"><i class="fa fa-trash"></i></button></td>
                 `);
                 
@@ -876,7 +876,7 @@
                 });
                 
                 $('#totalItemsCount').text(totalItems);
-                $('#grandTotal').text('RM ' + grandTotal.toFixed(2));
+                $('#grandTotal').text('RM ' + grandTotal.toFixed(3));
                 $('#grandTotalInput').val(grandTotal);
                 $('#modalSubmitBtn').prop('disabled', !hasValidItems || invoiceItems.length === 0);
                 
@@ -928,7 +928,7 @@
                 
                 // Update total cell
                 const totalCell = $(this).closest('tr').find('.item-total');
-                totalCell.text('RM ' + item.total.toFixed(2));
+                totalCell.text('RM ' + item.total.toFixed(3));
                 
                 // Update hidden input
                 $(`.qty-hidden-${index}`).val(item.quantity);
@@ -977,10 +977,10 @@
                 
                 // Update total cell
                 const totalCell = $(this).closest('tr').find('.item-total');
-                totalCell.text('RM ' + item.total.toFixed(2));
+                totalCell.text('RM ' + item.total.toFixed(3));
                 
                 // Update hidden input
-                $(`.price-hidden-${index}`).val(price.toFixed(2));
+                $(`.price-hidden-${index}`).val(price.toFixed(3));
                 
                 updateTotalsAndSubmitButton();
             });
@@ -1039,12 +1039,12 @@
                             <small class="text-danger qty-error" id="qty-error-${index}" style="display: none; font-size: 11px;"></small>
                         </td>
                         <td>
-                            <input type="number" step="0.01" value="${item.price.toFixed(2)}" 
+                            <input type="number" step="0.001" value="${item.price.toFixed(3)}" 
                                 class="form-control item-price" 
                                 data-index="${index}" 
                                 style="width: 100%; min-width: 100px;">
                         </td>
-                        <td class="text-right item-total">RM ${item.total.toFixed(2)}</td>
+                        <td class="text-right item-total">RM ${item.total.toFixed(3)}</td>
                         <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-item" data-index="${index}"><i class="fa fa-trash"></i></button></td>
                     `);
                     

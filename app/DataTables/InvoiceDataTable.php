@@ -182,7 +182,7 @@ class InvoiceDataTable extends DataTable
                     [
                         'targets' => 4,
                         'visible' => true,
-                        'render' => 'function(data, type){var totalprice = 0; $.each(data,function(index,value){ totalprice=totalprice+parseFloat(value.totalprice) }); return totalprice.toFixed(2);}'
+                        'render' => 'function(data, type){var totalprice = 0; $.each(data,function(index,value){ totalprice=totalprice+parseFloat(value.totalprice) }); return totalprice.toFixed(3);}'
                     ],
                     [
                         'targets' => 5, // Payment term column index
@@ -341,6 +341,8 @@ class InvoiceDataTable extends DataTable
                                 var input = \'<select id="group" class="border-0" style="width: 100%;"><option value=""></option></select>\';
                             }else if(columns[index].title == \'Created By\'){
                                 var input = \'<select class="border-0" style="width: 100%;">' . $driverOptions . '</select>\';
+                            }else if(columns[index].title == \'Autocount Status\'){
+                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="pending">Pending</option><option value="success">Success</option><option value="failed">Failed</option></select>\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }
@@ -443,7 +445,7 @@ class InvoiceDataTable extends DataTable
                 'title' => trans('invoices.autocount_status'),
                 'data' => 'autocount_status',
                 'name' => 'invoices.autocount_status',
-                'searchable' => false
+                'searchable' => true
             ]),
 
             'created_by' => new \Yajra\DataTables\Html\Column([

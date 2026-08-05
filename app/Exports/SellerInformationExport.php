@@ -64,8 +64,8 @@ class SellerInformationExport implements FromCollection, WithHeadings
                 'Quantity' => number_format($detail['quantity'],2),
                 'UOM' => 'BAG',
                 'Unit Price' => number_format($detail['price'],4),
-                'Amount' => number_format($detail['totalprice'],2),
-                'Total Amount' => number_format($invoice['invoicedetail_sum_totalprice'],2),
+                'Amount' => number_format($detail['totalprice'],3),
+                'Total Amount' => number_format($invoice['invoicedetail_sum_totalprice'],3),
                 'Agent' => $params['p_agents'],
                 'Driver' => $params['p_drivers'],
             ];

@@ -115,6 +115,11 @@ class StockInRequestDataTable extends DataTable
                 'lengthMenu' => [[10, 50, 100, 300], ['10 rows', '50 rows', '100 rows', '300 rows']],
                 'buttons' => [
                     [
+                        'extend' => 'reset',
+                        'className' => 'btn btn-default btn-sm no-corner',
+                        'text' => '<i class="fa fa-undo"></i> ' . trans('table_buttons.reset'),
+                    ],
+                    [
                         'extend' => 'reload',
                         'className' => 'btn btn-default btn-sm no-corner',
                         'text' => '<i class="fa fa-refresh"></i> ' . trans('table_buttons.reload'),
@@ -138,6 +143,52 @@ class StockInRequestDataTable extends DataTable
                         'searchable' => false,
                     ],
                 ],
+                // Per-column filters rendered into the table footer.
+                'initComplete' => 'function(){
+                    var table = this.api();
+
+                    // Status: dropdown mapped to the stored tinyint (0/1/2).
+                    var statusColumn = table.column("status:name");
+                    var statusSelect = \'<select class="form-control form-control-sm" style="width:100%;">\'
+                        + \'<option value="">All</option>\'
+                        + \'<option value="0">Pending</option>\'
+                        + \'<option value="1">Approved</option>\'
+                        + \'<option value="2">Rejected</option>\'
+                        + \'</select>\';
+                    $(statusSelect).appendTo($(statusColumn.footer()).empty()).on("change", function(){
+                        statusColumn.search($(this).val()).draw();
+                    });
+
+                    // Filter for every other data column.
+                    table.columns().every(function (index) {
+                        var column = this;
+                        var title = column.header().textContent.trim();
+                        if (title === "Status") { return; } // handled above
+                        $(column.footer()).empty();
+                        if (title === "" || title === "Actions") { return; }
+
+                        // Date: opens the shared daterangepicker modal (same as
+                        // the Invoice listing). It fills this input with a
+                        // pipe-delimited YYYY-MM-DD list which is regex-searched
+                        // against the stored datetime column.
+                        if (title === "Date") {
+                            var dateInput = \'<input type="text" id="\' + index + \'Date" class="form-control form-control-sm" style="width:100%; cursor:pointer; background:#fff;" onclick="searchDateColumn(this);" placeholder="Search" readonly>\';
+                            $(dateInput).appendTo(column.footer()).on("change", function(){
+                                var val = $(this).val();
+                                var isDateList = /^\d{4}-\d{2}-\d{2}(\|\d{4}-\d{2}-\d{2})*$/.test(val);
+                                column.search(val, isDateList, !isDateList).draw();
+                            });
+                            return;
+                        }
+
+                        var input = \'<input type="text" class="form-control form-control-sm" placeholder="Search" style="width:100%;">\';
+                        $(input).appendTo(column.footer()).on("keyup change", function(){
+                            if (column.search() !== this.value) {
+                                column.search(this.value, true, false).draw();
+                            }
+                        });
+                    });
+                }',
             ]);
     }
 

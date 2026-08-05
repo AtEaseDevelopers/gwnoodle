@@ -236,7 +236,7 @@
                         <tr class="invoice-item">
                             <td class="ta-l">{{ $detail['invoiceno'] }}</td>
                             <td class="ta-l">{{ $detail['date'] }}</td>
-                            <td class="ta-r">{{ number_format($detail['finalprice'], 2) }}</td>
+                            <td class="ta-r">{{ number_format($detail['finalprice'], 3) }}</td>
                         </tr>
                         @endforeach
                     </tbody>

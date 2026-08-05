@@ -97,6 +97,36 @@
         </div>
     </div>
 
+    <!-- Date Range Filter Modal (shared pattern with the Invoice listing) -->
+    <div class="modal fade" id="dateModel" tabindex="-1" role="dialog" aria-labelledby="dateModelLabel" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dateModelLabel"><i class="fa fa-calendar"></i> Select a Date Range</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input id="columnid" type="hidden" value="">
+                    <input id="datefrommodel" type="hidden" value="">
+                    <input id="datetomodel" type="hidden" value="">
+                    <div class="form-group col-sm-12">
+                        <label for="reportrange">Date:</label>
+                        <div id="reportrange" style="background: #fff; cursor: pointer; padding: 5px 10px; border: 1px solid #ccc; width: 100%">
+                            <i class="fa fa-calendar"></i>&nbsp;
+                            <span></span> <i class="fa fa-caret-down"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="dateRange();">Search</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Edit Quantity Modal -->
     <div class="modal fade" id="editQtyModal" tabindex="-1" role="dialog" aria-hidden="true">
         <div class="modal-dialog" role="document">
@@ -132,6 +162,67 @@
     {!! $dataTable->scripts() !!}
 
     <script>
+        // ---- Date column filter (daterangepicker), shared with Invoice listing ----
+        function searchDateColumn(el) {
+            $('#columnid').val(el.id);
+            $('#dateModel').modal('show');
+        }
+
+        function parseDMY(str) {
+            var parts = str.split("-");
+            return new Date(+parts[2], parts[1] - 1, +parts[0]);
+        }
+
+        function dateRange(steps = 1) {
+            if ($('#datefrommodel').val() == '') {
+                noti('i', 'Date From cannot be empty', 'Please select the Date From');
+                return;
+            }
+            if ($('#datetomodel').val() == '') {
+                noti('i', 'Date To cannot be empty', 'Please select the Date To');
+                return;
+            }
+            var currentDate = parseDMY($('#datefrommodel').val());
+            var endDate = parseDMY($('#datetomodel').val());
+            if (endDate < currentDate) {
+                noti('i', 'Date From cannot be greater than Date To', 'Please select the Date again');
+                return;
+            }
+            var dateArray = '';
+            while (currentDate <= endDate) {
+                // Server-side search runs a raw "date REGEXP ?" against the
+                // stored datetime column, whose string form is ISO Y-m-d, so
+                // the tokens must be YYYY-MM-DD joined by "|" (regex alternation).
+                dateArray = dateArray + moment(currentDate).format("YYYY-MM-DD") + '|';
+                currentDate.setUTCDate(currentDate.getUTCDate() + steps);
+            }
+            $('#' + $('#columnid').val()).val(dateArray.substring(0, dateArray.length - 1)).change();
+            $('#dateModel').modal('hide');
+        }
+
+        (function () {
+            var start = moment();
+            var end = moment();
+            function cb(start, end) {
+                $('#reportrange span').html(start.format('DD-MM-YYYY') + ' - ' + end.format('DD-MM-YYYY'));
+                $('#datefrommodel').val(start.format('DD-MM-YYYY'));
+                $('#datetomodel').val(end.format('DD-MM-YYYY'));
+            }
+            $('#reportrange').daterangepicker({
+                startDate: start,
+                endDate: end,
+                ranges: {
+                    'Today': [moment(), moment()],
+                    'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+                    'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+                    'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+                    'This Month': [moment().startOf('month'), moment().endOf('month')],
+                    'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+                }
+            }, cb);
+            cb(start, end);
+        })();
+
         $(document).ready(function () {
             var dt = $('#dataTableBuilder').DataTable();
 
@@ -148,6 +239,13 @@
                 HideLoad();
             });
             HideLoad();
+
+            // ---- Reset button: clear the visible per-column filter inputs ----
+            // (the reset button itself already clears the DataTable searches and redraws)
+            $(document).on('click', '.buttons-reset', function () {
+                $('#dataTableBuilder tfoot th input').val('');
+                $('#dataTableBuilder tfoot th select').val('');
+            });
 
             function reloadTable() {
                 dt.ajax.reload(null, false);

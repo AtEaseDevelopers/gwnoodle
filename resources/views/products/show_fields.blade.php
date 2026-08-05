@@ -79,7 +79,7 @@
                         </tr>
                         <tr>
                             <th>Selling Price</th>
-                            <td><strong class="text-primary">{{ number_format($product->price, 2) }}</strong></td>
+                            <td><strong class="text-primary">{{ number_format($product->price, 3) }}</strong></td>
                         </tr>
                         <tr>
                             <th>Cost Price</th>

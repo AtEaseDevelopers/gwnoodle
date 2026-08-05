@@ -123,16 +123,16 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('invoiceItems', $invoiceItems);
         });
         View::composer(['tasks.fields'], function ($view) {
-            $customerItems = Customer::orderBy("company")->pluck('company','id')->toArray();
-            $view->with('customerItems', $customerItems);
+            $selectedId = optional($view->getData()['task'] ?? null)->customer_id;
+            $view->with('customerItems', Customer::activeSelectOptions($selectedId));
         });
         View::composer(['tasks.fields'], function ($view) {
             $driverItems = Driver::orderBy("name")->pluck('name','id')->toArray();
             $view->with('driverItems', $driverItems);
         });
         View::composer(['invoice_payments.fields'], function ($view) {
-            $customerItems = Customer::orderBy("company")->pluck('company','id')->toArray();
-            $view->with('customerItems', $customerItems);
+            $selectedId = optional($view->getData()['invoicePayment'] ?? null)->customer_id;
+            $view->with('customerItems', Customer::activeSelectOptions($selectedId));
         });
         View::composer(['invoice_payments.fields'], function ($view) {
             $invoiceItems = Invoice::pluck('invoiceno','id')->toArray();
@@ -199,8 +199,8 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('productItems', $productItems);
         });
         View::composer(['focs.fields'], function ($view) {
-            $customerItems = Customer::orderBy("company")->pluck('company','id')->toArray();
-            $view->with('customerItems', $customerItems);
+            $selectedId = optional($view->getData()['foc'] ?? null)->customer_id;
+            $view->with('customerItems', Customer::activeSelectOptions($selectedId));
         });
         View::composer(['focs.fields'], function ($view) {
             $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {
@@ -209,8 +209,8 @@ class ViewServiceProvider extends ServiceProvider
             $view->with('productItems', $productItems);
         });
         View::composer(['special_prices.fields'], function ($view) {
-            $customerItems = Customer::orderBy("company")->pluck('company','id')->toArray();
-            $view->with('customerItems', $customerItems);
+            $selectedId = optional($view->getData()['specialPrice'] ?? null)->customer_id;
+            $view->with('customerItems', Customer::activeSelectOptions($selectedId));
         });
         View::composer(['special_prices.fields'], function ($view) {
             $productItems = Product::orderBy('name')->get()->mapWithKeys(function ($product) {

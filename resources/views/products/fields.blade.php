@@ -18,7 +18,7 @@
 <!-- Price Field (Selling Price) -->
 <div class="form-group col-sm-6">
     {!! Form::label('price', __('products.price') . ' (Selling Price)') !!}<span class="asterisk"> *</span>
-    {!! Form::number('price', null, ['class' => 'form-control', 'step' => '0.01', 'id' => 'price']) !!}
+    {!! Form::number('price', null, ['class' => 'form-control', 'step' => '0.001', 'id' => 'price']) !!}
 </div>
 
 <!-- NEW: Cost Field (Purchase/Cost Price) - REQUIRED -->
