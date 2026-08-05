@@ -97,6 +97,21 @@ class InvoicePaymentController extends AppBaseController
 
         $input['user_id'] = Auth::user()->id;
 
+        // One payment event = one AutoCount AR Payment. Tag every row created here
+        // with the same batch id so they later sync as a single OR knocking off all
+        // the invoices. Credit-term batches are held for a manual "Sync" click.
+        $invoiceIdsForBatch = array_filter((array) ($input['invoice_id'] ?? []));
+        $batchIsCredit = !empty($invoiceIdsForBatch) && Invoice::whereIn('id', $invoiceIdsForBatch)
+            ->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT)
+            ->exists();
+        // Auto-sync only a single-invoice, non-credit payment. A payment spanning
+        // multiple invoices is held for a manual web "Sync" click (client: these are
+        // almost always credit); it still becomes ONE OR knocking off all invoices.
+        $isMultiInvoice = count($invoiceIdsForBatch) > 1;
+        $input['payment_batch_id'] = (string) \Illuminate\Support\Str::uuid();
+        $input['autocount_status'] = ($batchIsCredit || $isMultiInvoice)
+            ? InvoicePayment::AC_HOLD : InvoicePayment::AC_PENDING;
+
         if (isset($input['invoice_id']) && is_array($input['invoice_id']) && count($input['invoice_id']) > 0) {
             foreach ($input['invoice_id'] as $invoice_id) {
                 if ($invoice_id) {
@@ -308,6 +323,44 @@ class InvoicePaymentController extends AppBaseController
         return redirect(route('invoicePayments.index'));
     }
     
+    /**
+     * Manually queue a payment (and its whole batch) for AutoCount AR Payment sync.
+     *
+     * Used for credit-term payments (created on 'hold' and never auto-synced) and
+     * to re-sync a payment that already synced ('success'/'failed'). Releasing the
+     * batch to 'pending' is all that is needed - the plugin polls /api/payment/pending
+     * and, because payment_no/doc_id are retained, edits the existing OR instead of
+     * creating a duplicate.
+     */
+    public function syncAutocount($id)
+    {
+        // Accept the encrypted id used elsewhere in this controller, or a raw id.
+        try { $id = Crypt::decrypt($id); } catch (\Throwable $e) { /* already raw */ }
+
+        $payment = $this->invoicePaymentRepository->find($id);
+        if (empty($payment)) {
+            return response()->json(['status' => false, 'message' => 'Payment not found!'], 404);
+        }
+        if ((int) $payment->status !== 1) {
+            return response()->json(['status' => false, 'message' => 'Only approved payments can be synced to AutoCount.'], 422);
+        }
+        if (empty($payment->payment_batch_id)) {
+            return response()->json(['status' => false, 'message' => 'This payment has no batch and cannot be synced.'], 422);
+        }
+
+        $count = InvoicePayment::where('payment_batch_id', $payment->payment_batch_id)
+            ->update([
+                'autocount_status'       => InvoicePayment::AC_PENDING,
+                'autocount_auto_retried' => false,
+            ]);
+
+        return response()->json([
+            'status'  => true,
+            'message' => 'Payment queued for AutoCount sync.',
+            'count'   => $count,
+        ]);
+    }
+
     public function massupdatestatus(Request $request)
     {
         $data = $request->all();

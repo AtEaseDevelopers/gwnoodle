@@ -941,6 +941,9 @@ class InvoiceController extends AppBaseController
                 if (!$existingPayment) {
                     $invoicePayment = new InvoicePayment();
                     $invoicePayment->invoice_id = $id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicePayment->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicePayment->type = 1;
                     $invoicePayment->customer_id = $invoice->customer_id;
                     $invoicePayment->driver_id = $invoice->driver_id;
@@ -950,7 +953,13 @@ class InvoiceController extends AppBaseController
                     $invoicePayment->amount = $existingTotal;
                     $invoicePayment->save();
                 } else {
+                    // Amount changed -> re-queue so AutoCount edits the existing OR.
                     $existingPayment->amount = $existingTotal;
+                    if (empty($existingPayment->payment_batch_id)) {
+                        $existingPayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $existingPayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $existingPayment->autocount_auto_retried = false;
                     $existingPayment->save();
                 }
             }
@@ -1137,6 +1146,9 @@ class InvoiceController extends AppBaseController
                 if (!$invoicePayment) {
                     $invoicepayment_new = new InvoicePayment();
                     $invoicepayment_new->invoice_id = $id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment_new->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment_new->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
@@ -1146,8 +1158,14 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
                     $invoicepayment_new->save();
                 } else {
+                    // Amount changed -> re-queue so AutoCount edits the existing OR.
                     $invoicePayment->status = 1;
                     $invoicePayment->amount = $totalAmount;
+                    if (empty($invoicePayment->payment_batch_id)) {
+                        $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $invoicePayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $invoicePayment->autocount_auto_retried = false;
                     $invoicePayment->save();
                 }
             }
@@ -1297,6 +1315,9 @@ class InvoiceController extends AppBaseController
                 if (!$invoicePayment) {
                     $invoicepayment_new = new InvoicePayment();
                     $invoicepayment_new->invoice_id = $invoiceId;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment_new->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment_new->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
@@ -1306,8 +1327,14 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
                     $invoicepayment_new->save();
                 } else {
+                    // Amount changed -> re-queue so AutoCount edits the existing OR.
                     $invoicePayment->status = 1;
                     $invoicePayment->amount = $totalAmount;
+                    if (empty($invoicePayment->payment_batch_id)) {
+                        $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $invoicePayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $invoicePayment->autocount_auto_retried = false;
                     $invoicePayment->save();
                 }
             }

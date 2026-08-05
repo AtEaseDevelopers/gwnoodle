@@ -101,6 +101,23 @@
             });
             
         });
+        function syncAutocountPayment(id){
+            ShowLoad();
+            $.ajax({
+                url: "{{config('app.url')}}/invoicePayments/sync-autocount/"+id,
+                type:"POST",
+                data:{ _token: "{{ csrf_token() }}" },
+                success:function(response){
+                    $('.buttons-reload').click();
+                    noti('s','Queued for AutoCount', response.message || 'Payment queued for AutoCount sync.');
+                },
+                error: function(error) {
+                    HideLoad();
+                    var msg = (error.responseJSON && error.responseJSON.message) ? error.responseJSON.message : 'Unable to queue payment.';
+                    noti('e','Sync failed', msg);
+                }
+            });
+        }
         function massupdatestatus(ids,status){
             ShowLoad();
             $.ajax({

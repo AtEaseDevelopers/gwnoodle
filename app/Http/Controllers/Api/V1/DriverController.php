@@ -2093,6 +2093,9 @@ class DriverController extends Controller
             if ($data['paymentterm'] == 1) {
                 $invoicepayment = new InvoicePayment();
                 $invoicepayment->invoice_id = $invoice->id;
+                // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                $invoicepayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                $invoicepayment->autocount_status = InvoicePayment::AC_PENDING;
                 $invoicepayment->type = 1;
                 $invoicepayment->customer_id = $invoice->customer_id;
                 $invoicepayment->amount = $totalprice;
@@ -2457,13 +2460,22 @@ class DriverController extends Controller
                 $existingPayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
                 
                 if ($existingPayment) {
-                    // Update existing payment
+                    // Update existing payment. Re-queue it for AutoCount so the
+                    // amount change is pushed as an edit to the existing OR.
                     $existingPayment->amount = $totalprice;
+                    if (empty($existingPayment->payment_batch_id)) {
+                        $existingPayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $existingPayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $existingPayment->autocount_auto_retried = false;
                     $existingPayment->save();
                 } else {
                     // Create new payment
                     $invoicepayment = new InvoicePayment();
                     $invoicepayment->invoice_id = $invoice->id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment->type = 1;
                     $invoicepayment->customer_id = $invoice->customer_id;
                     $invoicepayment->amount = $totalprice;
@@ -2961,12 +2973,29 @@ class DriverController extends Controller
             
             $createdPayments = [];
             $invoiceIds = $data['invoice_ids'];
-            
+
             // If invoice_ids is a string (comma-separated), convert to array
             if (!is_array($invoiceIds)) {
                 $invoiceIds = explode(',', $invoiceIds);
             }
-            
+
+            // One payment event = one AutoCount AR Payment. Tag every row created
+            // here with the same batch id so they later sync as a single OR that
+            // knocks off all these invoices. If ANY invoice in the batch is on
+            // Credit term the whole batch is put on 'hold' and only syncs after a
+            // manual "Sync" click from web; otherwise it auto-syncs.
+            $paymentBatchId  = (string) \Illuminate\Support\Str::uuid();
+            $batchIsCredit   = Invoice::whereIn('id', $invoiceIds)
+                ->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT)
+                ->exists();
+            // Auto-sync only a single-invoice, non-credit payment. A payment that
+            // spans multiple invoices is held for a manual web "Sync" click (client:
+            // these are almost always credit); it still becomes ONE OR knocking off
+            // all its invoices, it just waits for the click.
+            $isMultiInvoice  = count($invoiceIds) > 1;
+            $autocountStatus = ($batchIsCredit || $isMultiInvoice)
+                ? InvoicePayment::AC_HOLD : InvoicePayment::AC_PENDING;
+
             // Get the total amount from the request or calculate from invoices
             $totalAmount = isset($data['amount']) ? $data['amount'] : 0;
             $amountPerInvoice = $totalAmount / count($invoiceIds);
@@ -3003,6 +3032,8 @@ class DriverController extends Controller
             
             $invoicepayment = new InvoicePayment();
             $invoicepayment->invoice_id = $invoiceId;
+            $invoicepayment->payment_batch_id = $paymentBatchId;
+            $invoicepayment->autocount_status = $autocountStatus;
             $invoicepayment->type = $data['type'];
             $invoicepayment->customer_id = $data['customer_id'];
             
@@ -8587,6 +8618,9 @@ class DriverController extends Controller
                 if ($invoiceInput['paymentterm'] == 1) {
                     $invoicePayment              = new InvoicePayment();
                     $invoicePayment->invoice_id  = $invoice->id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicePayment->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicePayment->type        = 1;
                     $invoicePayment->customer_id = $invoice->customer_id;
                     $invoicePayment->amount      = $totalprice;
