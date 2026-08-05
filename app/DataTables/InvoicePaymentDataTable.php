@@ -24,7 +24,7 @@ class InvoicePaymentDataTable extends DataTable
         })
         ->addColumn('action', 'invoice_payments.datatables_actions')
         ->editColumn('autocount_or_no', function ($row) {
-            return !empty($row->autocount_or_no) ? $row->autocount_or_no : '-';
+            return !empty($row->autocount_or_no) ? $row->autocount_or_no : '';
         })
         ->filter(function ($query) {
             
@@ -150,7 +150,9 @@ class InvoicePaymentDataTable extends DataTable
                             }'
                     ],
                     [
-                        'targets' => 9,
+                        // Attachment "view" link. Index 10 after the AutoCount OR No
+                        // column (index 9) was inserted ahead of it.
+                        'targets' => 10,
                         'render' => 'function(data, type){ if(data != null){return "<a target=\'_blank\' href=\''.config('app.url').'/"+data+"\'>view</a>";}else{return "";}}'
                     ],
                     [
