@@ -25,9 +25,8 @@ use App\Models\Customer;
 class PaymentController extends Controller
 {
     // Only sync invoice-payments created on/after this date so historical
-    // payments are never retro-pushed. AR Payment sync went live on 05 Aug 2026.
-    // Empty string disables the cut-off.
-    const cut_off_date = '2026-08-05 00:00:00';
+    // payments are never retro-pushed. Empty string disables the cut-off.
+    const cut_off_date = '2026-08-04 00:00:00';
 
     // invoice_payments.type -> a human payment-method label. The plugin maps this
     // label to the company's AutoCount PaymentMethod code (configurable there).
