@@ -41,7 +41,16 @@ class InvoicePaymentController extends AppBaseController
      */
     public function index(Request $req, InvoicePaymentDataTable $invoicePaymentDataTable)
     {
-        return $invoicePaymentDataTable->render('invoice_payments.index');
+        // Count payment batches stranded on a failed AutoCount sync so the
+        // listing can surface them (they are not retried automatically and
+        // need a manual "Sync" re-queue). One badge per batch, not per row.
+        $failedAutocountCount = InvoicePayment::where('autocount_status', InvoicePayment::AC_FAILED)
+            ->where('status', 1)
+            ->whereNotNull('payment_batch_id')
+            ->distinct('payment_batch_id')
+            ->count('payment_batch_id');
+
+        return $invoicePaymentDataTable->render('invoice_payments.index', compact('failedAutocountCount'));
     }
 
     /**

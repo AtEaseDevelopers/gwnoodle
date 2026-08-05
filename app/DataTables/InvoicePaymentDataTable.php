@@ -23,6 +23,9 @@ class InvoicePaymentDataTable extends DataTable
             return 'PR' . str_pad($row->id, 5, '0', STR_PAD_LEFT); // Assuming 'PR00001' format
         })
         ->addColumn('action', 'invoice_payments.datatables_actions')
+        ->editColumn('autocount_or_no', function ($row) {
+            return !empty($row->autocount_or_no) ? $row->autocount_or_no : '-';
+        })
         ->filter(function ($query) {
             
             $searchValue = request('columns')[4]['search']['value'] ?? '';
@@ -48,7 +51,9 @@ class InvoicePaymentDataTable extends DataTable
         return $model->newQuery()
         ->with('invoice:id,invoiceno')
         ->with('customer')
-        ->selectRaw('invoice_payments.*, CONCAT(\'PR\', LPAD(invoice_payments.id, 5, \'0\')) AS payment_no');
+        // payment_no is overridden below with the computed web reference (PR#####),
+        // so expose the real DB column (the AutoCount OR DocNo) under its own alias.
+        ->selectRaw('invoice_payments.*, invoice_payments.payment_no AS autocount_or_no, CONCAT(\'PR\', LPAD(invoice_payments.id, 5, \'0\')) AS payment_no');
         
     }
 
@@ -309,6 +314,10 @@ class InvoicePaymentDataTable extends DataTable
             'autocount_status'=> new \Yajra\DataTables\Html\Column(['title' => 'Autocount Status',
             'data' => 'autocount_status',
             'name' => 'invoice_payments.autocount_status']),
+
+            'autocount_or_no'=> new \Yajra\DataTables\Html\Column(['title' => 'AutoCount OR No',
+            'data' => 'autocount_or_no',
+            'name' => 'invoice_payments.payment_no']),
 
             'attachment'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.attachment'),
             'data' => 'attachment',

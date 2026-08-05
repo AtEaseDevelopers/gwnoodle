@@ -28,6 +28,18 @@ class PaymentController extends Controller
     // payments are never retro-pushed. Empty string disables the cut-off.
     const cut_off_date = '2026-08-04 00:00:00';
 
+    // Max eligible batches returned per poll. Mirrors the plugin's per-cycle
+    // cap so the web never hands over more than the plugin will process; the
+    // remainder is re-served (oldest first) on the next poll.
+    const MAX_BATCHES_PER_POLL = 20;
+
+    // A batch stays pending while it waits for its invoice to be approved in
+    // AutoCount. If that never happens it would retry forever, so we give up
+    // and mark the batch 'failed' after this many hours. A human can still
+    // re-queue it later with a "Sync" click. 0 disables the timeout.
+    // Runtime override: .env AUTOCOUNT_PAYMENT_WAIT_GIVEUP_HOURS
+    const WAIT_GIVE_UP_HOURS = 72;
+
     // invoice_payments.type -> a human payment-method label. The plugin maps this
     // label to the company's AutoCount PaymentMethod code (configurable there).
     const PAYMENT_METHOD_MAP = [
@@ -54,6 +66,7 @@ class PaymentController extends Controller
                 ->when(!empty(self::cut_off_date), function ($q) {
                     $q->where('invoice_payments.created_at', '>=', self::cut_off_date);
                 })
+                ->orderBy('invoice_payments.created_at')   // oldest first, drains fairly
                 ->select([
                     'invoice_payments.id',
                     'invoice_payments.payment_batch_id',
@@ -74,8 +87,34 @@ class PaymentController extends Controller
             $customerCodes = Customer::whereIn('id', $rows->pluck('customer_id')->filter()->unique())
                 ->pluck('code', 'id');
 
-            // Step 3: group rows by batch and emit one AR Payment per batch.
-            $data = $rows->groupBy('payment_batch_id')
+            // Step 3: group rows by batch.
+            $grouped = $rows->groupBy('payment_batch_id');
+
+            // Give-up sweep: a batch that has stayed pending past the timeout
+            // (its invoice was never approved in AutoCount) is marked 'failed'
+            // instead of being retried forever. It can still be re-queued by a
+            // manual "Sync" click. Skipped when the window is 0.
+            $giveUpHours = (int) env('AUTOCOUNT_PAYMENT_WAIT_GIVEUP_HOURS', self::WAIT_GIVE_UP_HOURS);
+            if ($giveUpHours > 0) {
+                $deadline = now()->subHours($giveUpHours);
+                $timedOut = $grouped->filter(function ($batch) use ($deadline) {
+                    $createdAt = optional($batch->first())->created_at;
+                    return $createdAt !== null && $createdAt->lt($deadline);
+                });
+                foreach ($timedOut as $batchId => $batch) {
+                    InvoicePayment::where('payment_batch_id', $batchId)
+                        ->where('status', 1)
+                        ->where('autocount_status', InvoicePayment::AC_PENDING)
+                        ->update([
+                            'autocount_status'  => InvoicePayment::AC_FAILED,
+                            'autocount_message' => 'FIX: approve the invoice in AutoCount then click Sync | WHERE: web give-up sweep | WHY: batch stayed pending ' . $giveUpHours . 'h without its invoice being approved | BATCH: ' . $batchId,
+                        ]);
+                }
+                $grouped = $grouped->diffKeys($timedOut);
+            }
+
+            // Step 4: emit one AR Payment per eligible batch.
+            $data = $grouped
                 ->filter(function ($batch) {
                     // Eligibility: keep the batch only if EVERY invoice in it is
                     // already synced to AutoCount (has a doc number). An OR cannot
@@ -85,6 +124,8 @@ class PaymentController extends Controller
                             && $r->invoice_autocount_status === 'success';
                     });
                 })
+                // Cap per poll; the rest re-serves next cycle (oldest first).
+                ->take(self::MAX_BATCHES_PER_POLL)
                 ->map(function ($batch) use ($customerCodes) {
                     $first = $batch->first();
 

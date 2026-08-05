@@ -13,6 +13,11 @@
                          <div class="card-header">
                              <i class="fa fa-align-justify"></i>
                              {{ __('invoice_payments.invoice_payments') }}
+                             @if(!empty($failedAutocountCount) && $failedAutocountCount > 0)
+                             <span class="badge badge-danger ml-2" title="{{ $failedAutocountCount }} payment batch(es) failed AutoCount sync and will NOT retry automatically. Select the row(s) and click 'Submit Autocount Payment' to re-queue.">
+                                 <i class="fa fa-exclamation-triangle"></i> {{ $failedAutocountCount }} AutoCount failed
+                             </span>
+                             @endif
                              <a class="pull-right" href="{{ route('invoicePayments.create') }}"><i class="fa fa-plus-square fa-lg"></i></a>
                              @can('paymentapprove')
                              <button type="button" class="btn btn-info btn-sm pull-right mr-2" onclick="submitAutocountPayment()" title="Queue selected payment(s) for AutoCount AR Payment sync">
