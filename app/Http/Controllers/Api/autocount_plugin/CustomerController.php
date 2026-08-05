@@ -63,31 +63,49 @@ class CustomerController extends Controller
                     $digits   = isset($customer_data['PostCode']) ? preg_replace('/\D/', '', $customer_data['PostCode']) : '';
                     $postcode = $digits === '' ? null : (int) $digits;
 
+                    // Core fields (always sourced from the Debtor table).
+                    $attributes = [
+                        'company'          => $customer_data['CompanyName'] ?? '',
+                        //'chinese_name'     => $customer_data['Desc2'] ?? null,
+                        'phone'            => $customer_data['Phone1'] ?? null,
+                        'billing_address'  => $full_address,
+                        'delivery_address' => $delivery_address,
+                        'status'           => $status,
+                        'registration_no'  => $customer_data['RegisterNo'] ?? null,   // MAPPED: 'BRN' is now 'RegisterNo'
+                        'postcode'         => $postcode,
+                        'group'            => $customer_data['AreaCode'] ?? null,      // MAPPED: 'Area' is now 'AreaCode'
+                        'paymentterm'      => (isset($customer_data['DisplayTerm']) && $customer_data['DisplayTerm'] === 'Cash') ? 'cash' : 'credit_note',
+                        'driver_id'        => $driverMap[$customer_data['SalesAgent'] ?? ''] ?? null,
+                    ];
+
+                    // e-invoice / TaxEntity fields: only overwrite when the source
+                    // actually sends the key. Some AutoCount databases don't expose
+                    // these columns, so the plugin omits them - and blindly writing
+                    // null here would wipe existing customers' saved e-invoice data.
+                    if (array_key_exists('FullTIN', $customer_data) || array_key_exists('TIN', $customer_data)) {
+                        $attributes['tin'] = $customer_data['FullTIN'] ?? $customer_data['TIN'] ?? null;
+                    }
+                    if (array_key_exists('SSTRegisterNo', $customer_data)) {
+                        $attributes['sst_registration_no'] = $customer_data['SSTRegisterNo'];
+                    }
+                    if (array_key_exists('TourismTaxRegisterNo', $customer_data)) {
+                        $attributes['tourism_tax_registration'] = $customer_data['TourismTaxRegisterNo'];
+                    }
+                    if (array_key_exists('MSICCode', $customer_data)) {
+                        $attributes['msic'] = $customer_data['MSICCode'];
+                    }
+                    if (array_key_exists('CountryCode', $customer_data)) {
+                        $attributes['country'] = $customer_data['CountryCode'];
+                    }
+                    if (array_key_exists('StateCode', $customer_data)) {
+                        $attributes['state'] = $stateMap[$customer_data['StateCode']] ?? null;   // MAPPED: 'State' is now 'StateCode'
+                    }
+                    if (array_key_exists('TaxEntityEmail', $customer_data)) {
+                        $attributes['email'] = $customer_data['TaxEntityEmail'];
+                    }
+
                     // Use Laravel's updateOrCreate to automatically Insert OR Update
-                    Customer::updateOrCreate(
-                        ['code' => $customer_data['AccNo']],
-                        [
-                            'company'                  => $customer_data['CompanyName'] ?? '',
-                            //'chinese_name'             => $customer_data['Desc2'] ?? null,
-                            'phone'                    => $customer_data['Phone1'] ?? null,
-                            'billing_address'          => $full_address,
-                            'delivery_address'         => $delivery_address,
-                            'status'                   => $status,
-                            'tin'                      => $customer_data['FullTIN'] ?? $customer_data['TIN'] ?? null,
-                            'sst_registration_no'      => $customer_data['SSTRegisterNo'] ?? null,        // MAPPED: 'TaxRegNo' is now 'SSTRegisterNo' (or could use GSTRegisterNo)
-                            'registration_no'          => $customer_data['RegisterNo'] ?? null,           // MAPPED: 'BRN' is now 'RegisterNo'
-                            'tourism_tax_registration' => $customer_data['TourismTaxRegisterNo'] ?? null, // MAPPED: 'TourismTaxRegNo' is now 'TourismTaxRegisterNo'
-                            'msic'                     => $customer_data['MSICCode'] ?? null,             // MAPPED: 'MSIC' is now 'MSICCode'
-                           // 'city'                     => $customer_data['TaxEntityCity'] ?? null,
-                            'country'                  => $customer_data['CountryCode'] ?? null,
-                            'postcode'                 => $postcode,
-                            'email'                    => $customer_data['TaxEntityEmail'] ?? null,
-                            'group'                    => $customer_data['AreaCode'] ?? null, // MAPPED: 'Area' is now 'AreaCode'
-                            'paymentterm'              => (isset($customer_data['DisplayTerm']) && $customer_data['DisplayTerm'] === 'Cash') ? 'cash' : 'credit_note',
-                            'state'                    => $stateMap[$customer_data['StateCode'] ?? ''] ?? null,   // MAPPED: 'State' is now 'StateCode'
-                            'driver_id'                => $driverMap[$customer_data['SalesAgent'] ?? ''] ?? null,
-                        ]
-                    );
+                    Customer::updateOrCreate(['code' => $customer_data['AccNo']], $attributes);
 
                     $synced++;
                 } catch (\Throwable $e) {
