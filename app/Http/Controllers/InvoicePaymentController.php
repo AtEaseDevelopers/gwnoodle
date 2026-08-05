@@ -361,6 +361,41 @@ class InvoicePaymentController extends AppBaseController
         ]);
     }
 
+    /**
+     * Bulk-queue selected payments (and their whole batches) for AutoCount sync.
+     * Mirrors the invoices listing's "Submit Autocount Invoice" toolbar action.
+     * A payment event may span several rows (one batch), so releasing any selected
+     * row releases its whole batch. Only approved (status=1) rows are queued.
+     */
+    public function massSyncAutocount(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (empty($ids)) {
+            return response()->json(['status' => false, 'message' => 'Please select at least one payment.'], 422);
+        }
+
+        $batchIds = InvoicePayment::whereIn('id', $ids)
+            ->whereNotNull('payment_batch_id')
+            ->pluck('payment_batch_id')->unique()->values();
+
+        if ($batchIds->isEmpty()) {
+            return response()->json(['status' => false, 'message' => 'Selected payment(s) have no batch to sync.'], 422);
+        }
+
+        $count = InvoicePayment::whereIn('payment_batch_id', $batchIds)
+            ->where('status', 1)
+            ->update([
+                'autocount_status'       => InvoicePayment::AC_PENDING,
+                'autocount_auto_retried' => false,
+            ]);
+
+        return response()->json([
+            'status'  => true,
+            'message' => $count . ' payment(s) queued for AutoCount sync.',
+            'count'   => $count,
+        ]);
+    }
+
     public function massupdatestatus(Request $request)
     {
         $data = $request->all();

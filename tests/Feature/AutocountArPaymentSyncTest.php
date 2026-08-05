@@ -191,6 +191,35 @@ class AutocountArPaymentSyncTest extends TestCase
         $this->assertNotNull(collect($res->json('data'))->firstWhere('batch_id', $batch));
     }
 
+    public function test_mass_sync_endpoint_releases_batches_of_selected_payments(): void
+    {
+        $batch = (string) Str::uuid();
+        $invA = $this->makeInvoice(Invoice::PAYMENT_TERM_CREDIT);
+        $invB = $this->makeInvoice(Invoice::PAYMENT_TERM_CREDIT);
+        $pA = $this->makePayment($batch, $invA, 200, 2, InvoicePayment::AC_HOLD);
+        $pB = $this->makePayment($batch, $invB, 300, 2, InvoicePayment::AC_HOLD);
+
+        // Select only ONE row -> its whole batch is released.
+        $this->actingAs($this->makeAdmin())
+            ->post('/invoicePayments/massSyncAutocount', ['ids' => [$pA]])
+            ->assertStatus(200)
+            ->assertJson(['status' => true]);
+
+        foreach ([$pA, $pB] as $pid) {
+            $this->assertEquals(
+                InvoicePayment::AC_PENDING,
+                DB::table('invoice_payments')->where('id', $pid)->value('autocount_status')
+            );
+        }
+    }
+
+    public function test_mass_sync_endpoint_requires_selection(): void
+    {
+        $this->actingAs($this->makeAdmin())
+            ->post('/invoicePayments/massSyncAutocount', ['ids' => []])
+            ->assertStatus(422);
+    }
+
     public function test_manual_sync_endpoint_rejects_unapproved_payment(): void
     {
         $batch = (string) Str::uuid();
