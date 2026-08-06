@@ -91,7 +91,13 @@ class InvoiceController extends Controller
                                 'invoice_id'          => $d->invoice_id,
                                 'product_id'          => $d->product_id,
                                 'quantity'            => $d->quantity,
-                                'price'               => $d->price,
+                                // Send unit price derived from the authoritative line total so
+                                // AutoCount's Qty x UnitPrice equals VMS totalprice. The stored
+                                // `price` column is double(10,3) and rounds fractional-sen prices
+                                // (e.g. 0.025 -> 0.02), which would undercharge AutoCount.
+                                'price'               => $d->quantity > 0
+                                    ? round($d->totalprice / $d->quantity, 4)
+                                    : $d->price,
                                 'cost'                => $d->cost,
                                 'remark'              => $d->remark,
                                 'product_name'        => $d->product_name,
