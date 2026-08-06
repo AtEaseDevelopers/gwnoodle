@@ -55,4 +55,14 @@ class User extends Authenticatable
         'terminated' => 'terminated',
         'removed' => 'removed',
     ];
+
+    /**
+     * The "Inventory Admin" role is the app's inventory manager (managed under
+     * /Managerusers). These users get view-only access to a limited set of
+     * screens such as Vans and Trips, and must never create/edit/delete there.
+     */
+    public function isInventoryManager(): bool
+    {
+        return $this->hasRole('Inventory Admin');
+    }
 }

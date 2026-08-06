@@ -48,23 +48,20 @@ class LorryDataTable extends DataTable
      */
     public function html()
     {
-        return $this->builder()
-            ->columns($this->getColumns())
-            ->minifiedAjax()
-            ->addAction(['title' => trans('invoices.action'), 'printable' => false])
-            ->parameters([
-                'dom'       => '<"row"B><"row"<"dataTableBuilderDiv"t>><"row"ip>',
-                'stateSave' => true,
-                'stateDuration' => 0,
-                'processing' => false,
-                'order'     => [[1, 'desc']],
-                'lengthMenu' => [[ 10, 50, 100, 300 ],[ '10 rows', '50 rows', '100 rows', '300 rows' ]],
-                'buttons' => [
-                    [
-                        'extend' => 'create',
-                        'className' => 'btn btn-default btn-sm no-corner',
-                        'text' => '<i class="fa fa-plus"></i> ' . trans('table_buttons.create'),
-                    ],
+        // Inventory managers get view-only access to Vans, so hide the create button.
+        $isInventoryManager = auth()->check() && auth()->user()->isInventoryManager();
+
+        $buttons = [];
+
+        if (!$isInventoryManager) {
+            $buttons[] = [
+                'extend' => 'create',
+                'className' => 'btn btn-default btn-sm no-corner',
+                'text' => '<i class="fa fa-plus"></i> ' . trans('table_buttons.create'),
+            ];
+        }
+
+        $buttons = array_merge($buttons, [
                     [
                         'extend' => 'print',
                         'className' => 'btn btn-default btn-sm no-corner',
@@ -108,7 +105,20 @@ class LorryDataTable extends DataTable
                         'className' => 'btn btn-default btn-sm no-corner',
                         'text' => trans('table_buttons.show_10_rows')
                     ],
-                ],
+                ]);
+
+        return $this->builder()
+            ->columns($this->getColumns())
+            ->minifiedAjax()
+            ->addAction(['title' => trans('invoices.action'), 'printable' => false])
+            ->parameters([
+                'dom'       => '<"row"B><"row"<"dataTableBuilderDiv"t>><"row"ip>',
+                'stateSave' => true,
+                'stateDuration' => 0,
+                'processing' => false,
+                'order'     => [[1, 'desc']],
+                'lengthMenu' => [[ 10, 50, 100, 300 ],[ '10 rows', '50 rows', '100 rows', '300 rows' ]],
+                'buttons' => $buttons,
                 'columnDefs' => [
                     [
                         'targets' => -1,

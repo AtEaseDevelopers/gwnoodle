@@ -322,8 +322,9 @@ Route::group(['middleware' => ['auth']], function() {
     //     Route::post('/commissionByVendors/masssave', [App\Http\Controllers\CommissionByVendorsController::class, 'masssave']);
     // });
 
+    // Vans (lorries) write actions: full-access users only.
     Route::group(['middleware' => ['permission:lorry']], function() {
-        Route::resource('lorries', App\Http\Controllers\LorryController::class);
+        Route::resource('lorries', App\Http\Controllers\LorryController::class)->except(['index', 'show']);
         Route::post('/lorries/massdestroy', [App\Http\Controllers\LorryController::class, 'massdestroy']);
         Route::post('/lorries/massupdatestatus', [App\Http\Controllers\LorryController::class, 'massupdatestatus']);
         Route::resource('servicedetails', App\Http\Controllers\servicedetailsController::class);
@@ -335,6 +336,11 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('/servicedetails/getInspectionServiceInfo', [App\Http\Controllers\servicedetailsController::class, 'getInspectionServiceInfo']);
         Route::post('/servicedetails/getOtherServiceInfo', [App\Http\Controllers\servicedetailsController::class, 'getOtherServiceInfo']);
         Route::post('/servicedetails/getFireExtinguisherServiceInfo', [App\Http\Controllers\servicedetailsController::class, 'getFireExtinguisherServiceInfo']);
+    });
+    // Vans (lorries) read-only: full-access users OR inventory managers (view only).
+    Route::group(['middleware' => ['role_or_permission:lorry|Inventory Admin']], function() {
+        Route::get('/lorries', [App\Http\Controllers\LorryController::class, 'index'])->name('lorries.index');
+        Route::get('/lorries/{lorry}', [App\Http\Controllers\LorryController::class, 'show'])->name('lorries.show');
     });
     Route::group(['middleware' => ['permission:driver']], function() {
         Route::get('/drivers/{id}/assign', [App\Http\Controllers\DriverController::class, 'assign'])->name('drivers.assign');
@@ -588,9 +594,15 @@ Route::group(['middleware' => ['auth']], function() {
         Route::resource('tasks', App\Http\Controllers\TaskController::class);
         Route::resource('taskTransfers', App\Http\Controllers\TaskTransferController::class);
     });
+    // Trips write actions: full-access users only.
     Route::group(['middleware' => ['permission:trip']], function() {
-        Route::resource('trips', App\Http\Controllers\TripController::class);
+        Route::resource('trips', App\Http\Controllers\TripController::class)->except(['index', 'show']);
+    });
+    // Trips read-only: full-access users OR inventory managers (view only).
+    Route::group(['middleware' => ['role_or_permission:trip|Inventory Admin']], function() {
+        Route::get('trips', [App\Http\Controllers\TripController::class, 'index'])->name('trips.index');
         Route::get('trips/view-report/{trip_uuid}/{driver_id}', [App\Http\Controllers\TripController::class, 'viewTripReport'])->name('trips.viewReport');
+        Route::get('trips/{trip}', [App\Http\Controllers\TripController::class, 'show'])->name('trips.show');
     });
     // Warehouse Routes
     Route::group(['middleware' => ['permission:warehouse']], function() {
