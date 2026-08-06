@@ -217,7 +217,7 @@
                                 <p >{{ $invoicedetail['product']['name'] }}</p>
                             </td>
                             <td>
-                                <p class="ta-r" style="">{{ number_format($invoicedetail['price'], 3) }}</p>
+                                <p class="ta-r" style="">{{ number_format($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price'], 3) }}</p>
                             </td>
                            
                             <td>

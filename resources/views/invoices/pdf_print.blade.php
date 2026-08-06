@@ -393,7 +393,7 @@
                 <td class="col-qty">{{ number_format($detail->quantity) }}</td>
                 <td class="col-uom">{{ $detail->product->uom ?? 'PCS' }}</td>
                 @if($mode !== 'do')
-                <td class="col-price">{{ number_format($detail->price, 3) }}</td>
+                <td class="col-price">{{ number_format($detail->quantity > 0 ? $detail->totalprice / $detail->quantity : $detail->price, 3) }}</td>
                 <td class="col-disc">-</td>
                 <td class="col-total">{{ number_format($detail->totalprice, 3) }}</td>
                 @endif

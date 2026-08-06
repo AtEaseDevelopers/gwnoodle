@@ -261,7 +261,7 @@ p{
                 @foreach ($invoice['invoicedetail'] as $invoicedetail)
 
                 <tr class="item-row">
-                    <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['price'], 3) }}</td>
+                    <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price'], 3) }}</td>
                     <td class="ta-r" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
                     <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                 </tr>
