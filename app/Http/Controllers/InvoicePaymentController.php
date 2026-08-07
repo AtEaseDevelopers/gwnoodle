@@ -106,6 +106,16 @@ class InvoicePaymentController extends AppBaseController
 
         $input['user_id'] = Auth::user()->id;
 
+        // A payment may only knock off invoices that belong to the customer it is
+        // booked under. Booking customer A's receipt against customer B's invoice
+        // is a data error AutoCount rejects on sync (a debtor cannot pay another
+        // debtor's invoice), so block it at the source instead of shipping a batch
+        // that can never post.
+        if ($msg = $this->invoicesBelongToCustomer($input['invoice_id'] ?? null, $input['customer_id'] ?? null)) {
+            Flash::error($msg);
+            return redirect()->back()->withInput();
+        }
+
         // One payment event = one AutoCount AR Payment. Tag every row created here
         // with the same batch id so they later sync as a single OR knocking off all
         // the invoices. Credit-term batches are held for a manual "Sync" click.
@@ -145,6 +155,38 @@ class InvoicePaymentController extends AppBaseController
         Flash::success('Payment saved successfully.');
 
         return redirect(route('invoicePayments.index'));
+    }
+
+    /**
+     * Guard: every selected invoice must belong to the paying customer.
+     *
+     * Returns an error message listing the offending invoice numbers, or null
+     * when the payment is clean (no invoices, no customer, or all match). A
+     * mismatch here is exactly what makes the AutoCount AR Payment sync fail
+     * with "belongs to debtor X, not Y", so it is cheaper to stop it before the
+     * rows are written than to chase a failed batch later.
+     */
+    private function invoicesBelongToCustomer($invoiceIds, $customerId): ?string
+    {
+        $ids = array_filter((array) $invoiceIds);
+        if (empty($ids) || empty($customerId)) {
+            return null;
+        }
+
+        $mismatched = Invoice::whereIn('id', $ids)
+            ->where(function ($q) use ($customerId) {
+                $q->where('customer_id', '!=', $customerId)
+                  ->orWhereNull('customer_id');
+            })
+            ->pluck('invoiceno')
+            ->all();
+
+        if (empty($mismatched)) {
+            return null;
+        }
+
+        return 'Cannot record this payment: invoice(s) ' . implode(', ', $mismatched)
+             . ' do not belong to the selected customer. Choose the customer that owns these invoices.';
     }
 
     /**
@@ -243,6 +285,16 @@ class InvoicePaymentController extends AppBaseController
                 File::makeDirectory($path, 0777, true, true);
             }
             $input['attachment'] = $request->file('attachment')->store($path);
+        }
+
+        // Same cross-customer guard as store(): never let an edit repoint a payment
+        // at an invoice owned by a different customer (rejected by AutoCount on sync).
+        if ($msg = $this->invoicesBelongToCustomer(
+            $input['invoice_id'] ?? null,
+            $input['customer_id'] ?? $invoicePayment->customer_id
+        )) {
+            Flash::error($msg);
+            return redirect()->back()->withInput();
         }
 
         if(isset($input['invoice_id']) && is_array($input['invoice_id']) && count($input['invoice_id']) > 0) {

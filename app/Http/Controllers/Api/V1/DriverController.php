@@ -3012,7 +3012,20 @@ class DriverController extends Controller
                     'data' => null,
                 ], 400);
             }
-            
+
+            // The payment is booked under $data['customer_id']; every invoice it
+            // knocks off must belong to that same customer. A cross-customer
+            // knock-off is rejected by AutoCount on sync ("belongs to debtor X,
+            // not Y"), so block it here before any row is written.
+            if ((int) $invoice->customer_id !== (int) $data['customer_id']) {
+                DB::rollBack();
+                return response()->json([
+                    'result' => false,
+                    'message' => __LINE__.$this->message_separator.'Invoice '.$invoice->invoiceno.' does not belong to the selected customer',
+                    'data' => null,
+                ], 400);
+            }
+
             // Calculate invoice total amount
             $invoiceTotal = $invoice->invoicedetail ? $invoice->invoicedetail->sum("totalprice") : 0;
             

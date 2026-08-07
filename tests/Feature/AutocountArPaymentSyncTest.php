@@ -266,6 +266,103 @@ class AutocountArPaymentSyncTest extends TestCase
         $this->assertEquals(InvoicePayment::AC_HOLD, $multi->autocount_status);
     }
 
+    public function test_store_rejects_payment_whose_invoice_belongs_to_another_customer(): void
+    {
+        // A second customer owns the invoice, but the payment is booked under the
+        // first customer -> the exact shape that fails AutoCount sync with
+        // "belongs to debtor X, not Y". The guard must block it before any row.
+        $otherCustomerId = DB::table('customers')->insertGetId([
+            'code'        => 'TESTAR' . random_int(1000, 9999),
+            'company'     => 'OTHER AR CUSTOMER',
+            'paymentterm' => 1,
+            'status'      => 1,
+        ]);
+        $foreignInvoice = DB::table('invoices')->insertGetId([
+            'invoiceno'        => 'AR/TEST/' . Str::upper(Str::random(8)),
+            'date'             => now(),
+            'customer_id'      => $otherCustomerId,
+            'paymentterm'      => Invoice::PAYMENT_TERM_CASH,
+            'status'           => 1,
+            'autocount_status' => 'success',
+            'created_at'       => now(),
+        ]);
+
+        $this->actingAs($this->makeAdmin())->post(route('invoicePayments.store'), [
+            'type'        => 1,
+            'customer_id' => $this->customerId,       // booked under a DIFFERENT customer
+            'amount'      => 73,
+            'invoice_id'  => [$foreignInvoice],
+        ]);
+
+        // Nothing was written for the mismatched invoice.
+        $this->assertDatabaseMissing('invoice_payments', [
+            'invoice_id'  => $foreignInvoice,
+            'customer_id' => $this->customerId,
+        ]);
+    }
+
+    public function test_store_allows_payment_when_invoice_belongs_to_the_customer(): void
+    {
+        $invoice = $this->makeInvoice(Invoice::PAYMENT_TERM_CASH, 'success');
+
+        $this->actingAs($this->makeAdmin())->post(route('invoicePayments.store'), [
+            'type'        => 1,
+            'customer_id' => $this->customerId,
+            'amount'      => 100,
+            'invoice_id'  => [$invoice],
+        ]);
+
+        $this->assertDatabaseHas('invoice_payments', [
+            'invoice_id'  => $invoice,
+            'customer_id' => $this->customerId,
+        ]);
+    }
+
+    public function test_driver_addpayment_rejects_invoice_belonging_to_another_customer(): void
+    {
+        // Invoice owned by a SECOND customer, but the driver posts the payment
+        // under the first customer -> AutoCount would reject on sync. The API
+        // guard must return 400 and write no payment row.
+        $otherCustomerId = DB::table('customers')->insertGetId([
+            'code'        => 'TESTAR' . random_int(1000, 9999),
+            'company'     => 'DRIVER OTHER CUSTOMER',
+            'paymentterm' => 1,
+            'status'      => 1,
+        ]);
+        $foreignInvoice = DB::table('invoices')->insertGetId([
+            'invoiceno'        => 'AR/TEST/' . Str::upper(Str::random(8)),
+            'date'             => now(),
+            'customer_id'      => $otherCustomerId,
+            'paymentterm'      => Invoice::PAYMENT_TERM_CASH,
+            'status'           => 1,
+            'autocount_status' => 'pending',
+            'created_at'       => now(),
+        ]);
+
+        $session = 'sess-' . Str::random(20);
+        DB::table('drivers')->insert([
+            'name'       => 'GUARD TEST DRIVER',
+            'employeeid' => 'EMP' . random_int(1000, 9999),
+            'password'   => bcrypt('secret'),
+            'phone'      => '0100000000',
+            'session'    => $session,
+            'status'     => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $res = $this->withHeader('session', $session)
+            ->postJson('/api/v1/driver/invoicepayment', [
+                'customer_id' => $this->customerId,   // booked under a DIFFERENT customer
+                'type'        => 1,
+                'amount'      => 73,
+                'invoice_ids' => [$foreignInvoice],
+            ]);
+
+        $res->assertStatus(400);
+        $this->assertDatabaseMissing('invoice_payments', ['invoice_id' => $foreignInvoice]);
+    }
+
     private function makeAdmin(): User
     {
         $user = User::create([
