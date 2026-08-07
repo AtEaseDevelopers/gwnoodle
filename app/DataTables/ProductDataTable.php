@@ -298,20 +298,22 @@ class ProductDataTable extends DataTable
                 'name' => 'status'
             ],
             
+            // Computed from model accessors (no DB column) - searching or
+            // sorting them would emit SQL against a non-existent column.
             'total_quantity' => [
                 'title' => 'Total Qty',
                 'data' => 'total_quantity',
                 'name' => 'total_quantity',
-                'searchable' => true,
-                'orderable' => true
+                'searchable' => false,
+                'orderable' => false
             ],
-            
+
             'active_batches' => [
                 'title' => 'Active Batches',
                 'data' => 'active_batches',
                 'name' => 'active_batches',
-                'searchable' => true,
-                'orderable' => true
+                'searchable' => false,
+                'orderable' => false
             ],
             
             'total_batches' => [

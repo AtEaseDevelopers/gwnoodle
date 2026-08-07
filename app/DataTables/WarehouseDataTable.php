@@ -20,6 +20,11 @@ class WarehouseDataTable extends DataTable
 
         return $dataTable
             ->addColumn('action', 'warehouses.datatables_actions')
+            // Exact match: status stores 'active'/'inactive' strings, and a
+            // LIKE '%active%' search would match 'inactive' rows too.
+            ->filterColumn('status', function ($query, $keyword) {
+                $query->where('warehouses.status', $keyword);
+            })
             ->editColumn('status', function($warehouse) {
                 $badgeClass = $warehouse->status_badge_class;
                 $status = ucfirst($warehouse->status);
@@ -183,12 +188,14 @@ class WarehouseDataTable extends DataTable
                         statusColumn.search(val).draw();
                     });
                     
-                    // Add text search for other columns
+                    // Add text search for other columns (skip non-searchable
+                    // ones - a box on those would silently do nothing)
+                    var columnDefs = table.init().columns;
                     table.columns().every(function (index) {
                         var column = this;
                         var columnName = column.header().textContent.trim();
-                        
-                        if(columnName !== "Status" && columnName !== "Stock Out" && columnName !== "Actions") {
+
+                        if(columnDefs[index] && columnDefs[index].searchable && columnName !== "Status" && columnName !== "Stock Out" && columnName !== "Actions") {
                             var input = \'<input type="text" placeholder="Search" style="width: 100%;">\';
                             $(input).appendTo($(column.footer()).empty()).on(\'keyup change\', function(){
                                 column.search($(this).val(), true, false).draw();

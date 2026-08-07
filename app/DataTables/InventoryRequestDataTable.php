@@ -313,7 +313,7 @@ class InventoryRequestDataTable extends DataTable
                         if(columns[index].searchable){
                             if(columns[index].title == "Status"){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select>\';
-                            }else if(columns[index].title == "Created At"){
+                            }else if(columns[index].title == "Requested At"){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search">\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search">\';
@@ -498,7 +498,7 @@ class InventoryRequestDataTable extends DataTable
             [
                 'title' => 'Status',
                 'data' => 'status',
-                'name' => 'status',
+                'name' => 'inventory_requests.status',
                 'searchable' => true,
                 'orderable' => true,
                 'width' => '80px',
@@ -516,7 +516,7 @@ class InventoryRequestDataTable extends DataTable
             [
                 'title' => 'Requested At',
                 'data' => 'created_at',
-                'name' => 'created_at',
+                'name' => 'inventory_requests.created_at',
                 'searchable' => true,
                 'orderable' => true,
                 'width' => '120px'

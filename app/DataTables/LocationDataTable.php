@@ -89,6 +89,8 @@ class LocationDataTable extends DataTable
                         if(columns[index].searchable){
                             if(columns[index].title == \'Status\'){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Unactive</option></select>\';
+                            }else if(columns[index].title == \'Source\' || columns[index].title == \'Destination\'){
+                                var input = \'<select class="border-0" style="width: 100%;"><option value="">All</option><option value="1">Yes</option><option value="0">No</option></select>\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }

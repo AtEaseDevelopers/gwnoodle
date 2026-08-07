@@ -41,6 +41,25 @@ class CustomerDataTable extends DataTable
             })
             ->editColumn('category', function($customer) use ($categoryMap) {
                 return $categoryMap[$customer->category] ?? $customer->category;
+            })
+            // The footer select submits the key ('cash'/'credit_note'/'cod')
+            // but the column stores the numeric term (1/2/3) on most rows -
+            // match both forms, mirroring the display mapping above.
+            ->filterColumn('paymentterm', function ($query, $keyword) use ($paymentTermMap) {
+                $index = array_search($keyword, array_keys($paymentTermMap));
+                if ($index !== false) {
+                    $query->where(function ($q) use ($keyword, $index) {
+                        $q->where('customers.paymentterm', $index + 1)
+                          ->orWhere('customers.paymentterm', $keyword);
+                    });
+                } else {
+                    $query->where('customers.paymentterm', 'like', "%{$keyword}%");
+                }
+            })
+            // 'credit' is a SELECT alias, not a real column - MySQL can't use
+            // it in WHERE, so repeat the joined expression here.
+            ->filterColumn('credit', function ($query, $keyword) {
+                $query->whereRaw('COALESCE(invoicesummary.credit, 0) LIKE ?', ["%{$keyword}%"]);
             });
 
             // If you want to keep the original values for exporting, you can add raw columns
@@ -234,10 +253,12 @@ class CustomerDataTable extends DataTable
             'orderable' => false,
             'searchable' => false]),
 
-            'code',
+            'code'=> new \Yajra\DataTables\Html\Column(['title' => 'Code',
+            'data' => 'code',
+            'name' => 'customers.code']),
             'company'=> new \Yajra\DataTables\Html\Column(['title' => trans('customers.company'),
             'data' => 'company',
-            'name' => 'company']),
+            'name' => 'customers.company']),
 
             'paymentterm'=> new \Yajra\DataTables\Html\Column(['title' => trans('Payment Term'),
             'data' => 'paymentterm',
@@ -247,10 +268,16 @@ class CustomerDataTable extends DataTable
             'data' => 'driver.name',
             'name' => 'driver.name']),
             
-            'phone',
-            'status',
+            // Qualified: the drivers table (joined when the Driver column is
+            // searched/sorted) also has phone and status columns.
+            'phone'=> new \Yajra\DataTables\Html\Column(['title' => 'Phone',
+            'data' => 'phone',
+            'name' => 'customers.phone']),
+            'status'=> new \Yajra\DataTables\Html\Column(['title' => 'Status',
+            'data' => 'status',
+            'name' => 'customers.status']),
             'credit',
-            
+
             'category'=> new \Yajra\DataTables\Html\Column(['title' => trans('Category'),
             'data' => 'category',
             'name' => 'category']),

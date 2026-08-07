@@ -109,7 +109,11 @@ class ReportdetailDataTable extends DataTable
             'type',
             'data',
             'sequence',
-            'status'
+            // Qualified: the reports table (joined for the Report column's
+            // search/sort) also has a status column.
+            'status'=> new \Yajra\DataTables\Html\Column(['title' => 'Status',
+            'data' => 'status',
+            'name' => 'reportdetails.status'])
         ];
     }
 

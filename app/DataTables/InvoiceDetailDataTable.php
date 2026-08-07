@@ -173,11 +173,11 @@ class InvoiceDetailDataTable extends DataTable
             
             'quantity'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('invoice_details.quantity'),
             'data' => 'quantity',
-            'name' => 'product.quantity']),
+            'name' => 'invoice_details.quantity']),
 
             'price'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('invoice_details.price'),
             'data' => 'price',
-            'name' => 'product.price']),
+            'name' => 'invoice_details.price']),
 
             'totalprice'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_details.total_price'),
             'data' => 'totalprice',

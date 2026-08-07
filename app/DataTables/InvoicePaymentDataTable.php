@@ -26,16 +26,13 @@ class InvoicePaymentDataTable extends DataTable
         ->editColumn('autocount_or_no', function ($row) {
             return !empty($row->autocount_or_no) ? $row->autocount_or_no : '';
         })
-        ->filter(function ($query) {
-            
-            $searchValue = request('columns')[4]['search']['value'] ?? '';
-
-            if (!empty($searchValue)) {
-                $query->where(function ($q) use ($searchValue) {
-                    // Filter by custom field 'payment_no'
-                    $q->whereRaw("LOWER(CONCAT('PR', LPAD(invoice_payments.id, 5, '0'))) LIKE LOWER(?)", ["%{$searchValue}%"]);
-                });
-            }
+        // payment_no displays the computed PR reference, but a bare
+        // `payment_no` in WHERE resolves to the real DB column (the AutoCount
+        // OR DocNo), so search against the computed expression instead. A
+        // filterColumn (unlike the old ->filter() with a hardcoded column
+        // index) also keeps Yajra's other column filters working.
+        ->filterColumn('payment_no', function ($query, $keyword) {
+            $query->whereRaw("LOWER(CONCAT('PR', LPAD(invoice_payments.id, 5, '0'))) LIKE LOWER(?)", ["%{$keyword}%"]);
         });
         return $dataTable;
     }
@@ -237,10 +234,10 @@ class InvoicePaymentDataTable extends DataTable
                         var column = this;
                         if(columns[index].searchable){
                             if(columns[index].title == \'Status\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="1">Completed</option><option value="2">Cancelled</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="0">New</option><option value="1">Completed</option><option value="2">Cancelled</option></select>\';
                             }else if(columns[index].title == \'Type\'){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="1">Cash</option><option value="2">Credit</option><option value="3">Online BankIn</option><option value="4">E-wallet</option><option value="5">Cheque</option></select>\';
-                            }else if(columns[index].title == \'Approve At\'){
+                            }else if(columns[index].title == \'Approve at\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
                             }else if(columns[index].title == \'Date\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
@@ -287,7 +284,7 @@ class InvoicePaymentDataTable extends DataTable
 
             'created_at'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.date'),
             'data' => 'created_at',
-            'name' => 'created_at']),
+            'name' => 'invoice_payments.created_at']),
 
             'customer_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.customer'),
             'data' => 'customer.company',
@@ -307,11 +304,11 @@ class InvoicePaymentDataTable extends DataTable
 
             'amount'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.amount'),
             'data' => 'amount',
-            'name' => 'invoice.amount']),
+            'name' => 'invoice_payments.amount']),
 
             'status'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.status'),
             'data' => 'status',
-            'name' => 'status']),
+            'name' => 'invoice_payments.status']),
 
             'autocount_status'=> new \Yajra\DataTables\Html\Column(['title' => 'Autocount Status',
             'data' => 'autocount_status',

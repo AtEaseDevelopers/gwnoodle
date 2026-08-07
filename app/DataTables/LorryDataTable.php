@@ -181,7 +181,9 @@ class LorryDataTable extends DataTable
             'driver_name'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('Driver'),
                 'data' => 'driver_name',
-                'name' => 'driver_name'
+                // driver_name is only a SELECT alias - search/sort must hit
+                // the real joined column.
+                'name' => 'drivers.name'
             ]),
             'status'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('lorries.status'),

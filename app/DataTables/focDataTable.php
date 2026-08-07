@@ -129,6 +129,8 @@ class focDataTable extends DataTable
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Inactive</option></select>\';
                             }else if(columns[index].title == \'Payment Term\'){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="1">Cash</option><option value="2">Bankin</option><option value="3">Credit Note</option></select>\';
+                            }else if(columns[index].title == \'Start date\' || columns[index].title == \'End date\'){
+                                var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }

@@ -18,6 +18,31 @@ class InventoryTransferDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
+        // fromdriver/todriver both point at drivers, and fromlorry/tolorry
+        // both point at lorrys; Yajra only joins each table once, so without
+        // these overrides the "To" searches would silently run against the
+        // "From" join instead.
+        $dataTable->filterColumn('fromdriver.name', function ($query, $keyword) {
+            $query->whereHas('fromdriver', function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%");
+            });
+        });
+        $dataTable->filterColumn('todriver.name', function ($query, $keyword) {
+            $query->whereHas('todriver', function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%");
+            });
+        });
+        $dataTable->filterColumn('fromlorry.lorryno', function ($query, $keyword) {
+            $query->whereHas('fromlorry', function ($q) use ($keyword) {
+                $q->where('lorryno', 'like', "%{$keyword}%");
+            });
+        });
+        $dataTable->filterColumn('tolorry.lorryno', function ($query, $keyword) {
+            $query->whereHas('tolorry', function ($q) use ($keyword) {
+                $q->where('lorryno', 'like', "%{$keyword}%");
+            });
+        });
+
         return $dataTable->addColumn('action', 'inventory_transfers.datatables_actions');
     }
 
@@ -153,7 +178,7 @@ class InventoryTransferDataTable extends DataTable
         return [
             'date'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transfers.date'),
             'data' => 'date',
-            'name' => 'date']),
+            'name' => 'inventory_transfers.date']),
 
             'from_driver_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transfers.from_driver'),
             'data' => 'fromdriver.name',
@@ -178,15 +203,15 @@ class InventoryTransferDataTable extends DataTable
 
             'quantity'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transfers.quantity'),
             'data' => 'quantity',
-            'name' => 'quantity']),
+            'name' => 'inventory_transfers.quantity']),
 
             'status'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transfers.status'),
             'data' => 'status',
-            'name' => 'status']),
+            'name' => 'inventory_transfers.status']),
 
             'remark'=> new \Yajra\DataTables\Html\Column(['title' => trans('inventory_transfers.remark'),
             'data' => 'remark',
-            'name' => 'remark']),
+            'name' => 'inventory_transfers.remark']),
 
         ];
     }

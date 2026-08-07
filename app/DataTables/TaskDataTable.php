@@ -179,11 +179,11 @@ class TaskDataTable extends DataTable
 
             'trip_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('tasks.trip_id'),
             'data' => 'trip_id',
-            'name' => 'trip_id']),
+            'name' => 'tasks.trip_id']),
 
             'date'=> new \Yajra\DataTables\Html\Column(['title' => trans('tasks.date'),
             'data' => 'date',
-            'name' => 'date']),
+            'name' => 'tasks.date']),
 
             'driver_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('tasks.driver'),
             'data' => 'driver.name',
@@ -195,11 +195,12 @@ class TaskDataTable extends DataTable
 
             'sequence'=> new \Yajra\DataTables\Html\Column(['title' => trans('tasks.sequence'),
             'data' => 'sequence',
-            'name' => 'customer.sequence']),
+            'name' => 'tasks.sequence']),
 
             'invoice_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('tasks.invoice_no'),
-            'data' => 'invoice_id',
-            'name' => 'invoice.invoiceno']),
+            'data' => 'invoice.invoiceno',
+            'name' => 'invoice.invoiceno',
+            'defaultContent' => '']),
 
             'status'=> new \Yajra\DataTables\Html\Column(['title' => trans('tasks.status'),
             'data' => 'status',

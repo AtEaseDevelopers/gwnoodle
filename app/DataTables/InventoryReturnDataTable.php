@@ -574,7 +574,7 @@ class InventoryReturnDataTable extends DataTable
             [
                 'title' => 'Status',
                 'data' => 'status',
-                'name' => 'status',
+                'name' => 'inventory_returns.status',
                 'searchable' => true,
                 'orderable' => true,
                 'width' => '100px',
@@ -592,7 +592,7 @@ class InventoryReturnDataTable extends DataTable
             [
                 'title' => 'Remarks',
                 'data' => 'remarks',
-                'name' => 'remarks',
+                'name' => 'inventory_returns.remarks',
                 'searchable' => true,
                 'orderable' => false,
                 'width' => '200px'
@@ -600,7 +600,7 @@ class InventoryReturnDataTable extends DataTable
             [
                 'title' => 'Returned At',
                 'data' => 'created_at',
-                'name' => 'created_at',
+                'name' => 'inventory_returns.created_at',
                 'searchable' => true,
                 'orderable' => true,
                 'width' => '120px'

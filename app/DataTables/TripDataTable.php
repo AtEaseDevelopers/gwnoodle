@@ -184,14 +184,14 @@ class TripDataTable extends DataTable
             'id'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('trips.trip_id'),
                 'data' => 'id',
-                'name' => 'id',
+                'name' => 'trips.id',
                 'width' => '80px', // Set width
                 'className' => 'dt-body-left',
             ]),
             'date'=> new \Yajra\DataTables\Html\Column([
                 'title' => 'Date',
                 'data' => 'date',
-                'name' => 'date',
+                'name' => 'trips.date',
                 'width' => '150px', // Set width
                 'className' => 'dt-body-left',
             ]),
@@ -212,7 +212,7 @@ class TripDataTable extends DataTable
             'type'=> new \Yajra\DataTables\Html\Column([
                 'title' => trans('trips.type'),
                 'data' => 'type',
-                'name' => 'type',
+                'name' => 'trips.type',
                 'width' => '100px', // Set width
                 'className' => 'dt-body-left',
             ]),
