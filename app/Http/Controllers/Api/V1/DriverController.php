@@ -2462,6 +2462,10 @@ class DriverController extends Controller
                 if ($existingPayment) {
                     // Update existing payment. Re-queue it for AutoCount so the
                     // amount change is pushed as an edit to the existing OR.
+                    // The customer may also have been changed on this edit -
+                    // keep the payment pointing at the invoice's (new)
+                    // customer, otherwise the OR is issued to the old debtor.
+                    $existingPayment->customer_id = $invoice->customer_id;
                     $existingPayment->amount = $totalprice;
                     if (empty($existingPayment->payment_batch_id)) {
                         $existingPayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
