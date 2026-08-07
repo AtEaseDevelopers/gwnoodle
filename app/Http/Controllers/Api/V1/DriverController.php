@@ -9076,20 +9076,10 @@ class DriverController extends Controller
                 </table>
 
                 <div class="divider-solid"></div>
-
-                <!-- Payments -->
-                <table class="payment-section">
-                    <tr>
-                        <td class="ta-l">Payments :</td>
-                        <td class="ta-r">Cash @totalAmount</td>
-                    </tr>
-                </table>
-
                 <div class="divider"></div>
             </div>
         </body>
         </html>
         HTML;
     }
-    //test
 }
