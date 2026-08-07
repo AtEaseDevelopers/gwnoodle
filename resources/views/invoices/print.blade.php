@@ -293,13 +293,15 @@ p{
 
         <div class="divider-solid"></div>
 
-        <!-- Payments -->
+        <!-- Payments - not shown for credit sales, since nothing has been paid yet -->
+        @if(($invoice['paymentterm'] ?? null) != \App\Models\Invoice::PAYMENT_TERM_CREDIT)
         <table class="payment-section">
             <tr>
                 <td class="ta-l">Payments :</td>
                 <td class="ta-r">Cash {{ number_format($totalamount, 2) }}</td>
             </tr>
         </table>
+        @endif
 
         @if(!empty($invoice['remark']))
         <div class="divider"></div>
