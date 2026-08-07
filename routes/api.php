@@ -164,6 +164,10 @@ Route::namespace('App\Http\Controllers\Api\autocount_plugin')->group(function ()
     Route::post('/invoice/update', 'InvoiceController@update');
     Route::post('/invoice/update-log', 'InvoiceController@updateLog');
 
+    // AR payments (Official Receipts)
+    Route::get('/payment/pending', 'PaymentController@syncPending');
+    Route::post('/payment/update', 'PaymentController@update');
+
 });
 
 Route::fallback(function(){

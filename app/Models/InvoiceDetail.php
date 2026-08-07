@@ -103,12 +103,12 @@ class InvoiceDetail extends Model
      */
     public function getFormattedPriceAttribute()
     {
-        return number_format($this->price, 2);
+        return number_format($this->price, 3);
     }
 
     public function getFormattedTotalPriceAttribute()
     {
-        return number_format($this->totalprice, 2);
+        return number_format($this->totalprice, 3);
     }
 
     public function getFormattedQuantityAttribute()

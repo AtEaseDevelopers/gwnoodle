@@ -322,8 +322,9 @@ Route::group(['middleware' => ['auth']], function() {
     //     Route::post('/commissionByVendors/masssave', [App\Http\Controllers\CommissionByVendorsController::class, 'masssave']);
     // });
 
+    // Vans (lorries) write actions: full-access users only.
     Route::group(['middleware' => ['permission:lorry']], function() {
-        Route::resource('lorries', App\Http\Controllers\LorryController::class);
+        Route::resource('lorries', App\Http\Controllers\LorryController::class)->except(['index', 'show']);
         Route::post('/lorries/massdestroy', [App\Http\Controllers\LorryController::class, 'massdestroy']);
         Route::post('/lorries/massupdatestatus', [App\Http\Controllers\LorryController::class, 'massupdatestatus']);
         Route::resource('servicedetails', App\Http\Controllers\servicedetailsController::class);
@@ -335,6 +336,11 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('/servicedetails/getInspectionServiceInfo', [App\Http\Controllers\servicedetailsController::class, 'getInspectionServiceInfo']);
         Route::post('/servicedetails/getOtherServiceInfo', [App\Http\Controllers\servicedetailsController::class, 'getOtherServiceInfo']);
         Route::post('/servicedetails/getFireExtinguisherServiceInfo', [App\Http\Controllers\servicedetailsController::class, 'getFireExtinguisherServiceInfo']);
+    });
+    // Vans (lorries) read-only: full-access users OR inventory managers (view only).
+    Route::group(['middleware' => ['role_or_permission:lorry|Inventory Admin']], function() {
+        Route::get('/lorries', [App\Http\Controllers\LorryController::class, 'index'])->name('lorries.index');
+        Route::get('/lorries/{lorry}', [App\Http\Controllers\LorryController::class, 'show'])->name('lorries.show');
     });
     Route::group(['middleware' => ['permission:driver']], function() {
         Route::get('/drivers/{id}/assign', [App\Http\Controllers\DriverController::class, 'assign'])->name('drivers.assign');
@@ -530,6 +536,8 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('invoicePayments/updatepayment/{id}', [App\Http\Controllers\InvoicePaymentController::class, 'updatepayment']);
         Route::get('invoicePayments/getpayment/{id}', [App\Http\Controllers\InvoicePaymentController::class, 'getpayment']);
         Route::get('invoicePayments/getinvoice', [App\Http\Controllers\InvoicePaymentController::class, 'getinvoice']);
+        Route::post('invoicePayments/sync-autocount/{id}', [App\Http\Controllers\InvoicePaymentController::class, 'syncAutocount'])->name('invoicePayments.syncAutocount');
+        Route::post('/invoicePayments/massSyncAutocount', [App\Http\Controllers\InvoicePaymentController::class, 'massSyncAutocount']);
         Route::resource('invoicePayments', App\Http\Controllers\InvoicePaymentController::class);
         Route::post('/invoicePayments/massupdatestatus', [App\Http\Controllers\InvoicePaymentController::class, 'massupdatestatus']);
         //Print Invoice
@@ -586,9 +594,15 @@ Route::group(['middleware' => ['auth']], function() {
         Route::resource('tasks', App\Http\Controllers\TaskController::class);
         Route::resource('taskTransfers', App\Http\Controllers\TaskTransferController::class);
     });
+    // Trips write actions: full-access users only.
     Route::group(['middleware' => ['permission:trip']], function() {
-        Route::resource('trips', App\Http\Controllers\TripController::class);
+        Route::resource('trips', App\Http\Controllers\TripController::class)->except(['index', 'show']);
+    });
+    // Trips read-only: full-access users OR inventory managers (view only).
+    Route::group(['middleware' => ['role_or_permission:trip|Inventory Admin']], function() {
+        Route::get('trips', [App\Http\Controllers\TripController::class, 'index'])->name('trips.index');
         Route::get('trips/view-report/{trip_uuid}/{driver_id}', [App\Http\Controllers\TripController::class, 'viewTripReport'])->name('trips.viewReport');
+        Route::get('trips/{trip}', [App\Http\Controllers\TripController::class, 'show'])->name('trips.show');
     });
     // Warehouse Routes
     Route::group(['middleware' => ['permission:warehouse']], function() {
@@ -626,6 +640,14 @@ Route::group(['middleware' => ['auth']], function() {
         Route::get('/warehouses/get-batches', [App\Http\Controllers\WarehouseController::class, 'getBatches'])->name('warehouses.get-batches');
         Route::get('/warehouses/get-warehouses-list', [App\Http\Controllers\WarehouseController::class, 'getWarehousesList'])->name('warehouses.get-list');
         Route::get('/warehouses/{warehouse_id}/products/{product_id}/batches', [App\Http\Controllers\WarehouseController::class, 'getWarehouseProductBatches'])->name('warehouses.get-warehouse-product-batches');
+
+        // Batch stock-in approval requests (view: anyone with warehouse access; actions gated by role in controller)
+        Route::get('/stockInRequests', [App\Http\Controllers\StockInRequestController::class, 'index'])->name('stockInRequests.index');
+        Route::post('/stockInRequests/bulk-approve', [App\Http\Controllers\StockInRequestController::class, 'bulkApprove'])->name('stockInRequests.bulk-approve');
+        Route::post('/stockInRequests/bulk-reject', [App\Http\Controllers\StockInRequestController::class, 'bulkReject'])->name('stockInRequests.bulk-reject');
+        Route::post('/stockInRequests/{id}/approve', [App\Http\Controllers\StockInRequestController::class, 'approve'])->name('stockInRequests.approve');
+        Route::post('/stockInRequests/{id}/reject', [App\Http\Controllers\StockInRequestController::class, 'reject'])->name('stockInRequests.reject');
+        Route::post('/stockInRequests/{id}/update-qty', [App\Http\Controllers\StockInRequestController::class, 'updateQty'])->name('stockInRequests.update-qty');
     });
 
     Route::group(['middleware' => ['permission:inventorybalance']], function() {

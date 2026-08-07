@@ -735,7 +735,12 @@ class InvoiceController extends AppBaseController
         $ids = $data['ids'];
         $autocount_status = 'pending'; // all status will be updated to pending (success & failed)
 
-        $count = invoice::whereIn('id',$ids)->update(['autocount_status'=>$autocount_status]);
+        // A manual requeue also resets the auto-retry flag so the one-time
+        // auto-requeue can happen again on the next failure.
+        $count = invoice::whereIn('id',$ids)->update([
+            'autocount_status'       => $autocount_status,
+            'autocount_auto_retried' => false,
+        ]);
 
         return $count;
     }
@@ -936,6 +941,9 @@ class InvoiceController extends AppBaseController
                 if (!$existingPayment) {
                     $invoicePayment = new InvoicePayment();
                     $invoicePayment->invoice_id = $id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicePayment->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicePayment->type = 1;
                     $invoicePayment->customer_id = $invoice->customer_id;
                     $invoicePayment->driver_id = $invoice->driver_id;
@@ -945,7 +953,13 @@ class InvoiceController extends AppBaseController
                     $invoicePayment->amount = $existingTotal;
                     $invoicePayment->save();
                 } else {
+                    // Amount changed -> re-queue so AutoCount edits the existing OR.
                     $existingPayment->amount = $existingTotal;
+                    if (empty($existingPayment->payment_batch_id)) {
+                        $existingPayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $existingPayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $existingPayment->autocount_auto_retried = false;
                     $existingPayment->save();
                 }
             }
@@ -1132,6 +1146,9 @@ class InvoiceController extends AppBaseController
                 if (!$invoicePayment) {
                     $invoicepayment_new = new InvoicePayment();
                     $invoicepayment_new->invoice_id = $id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment_new->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment_new->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
@@ -1141,8 +1158,14 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
                     $invoicepayment_new->save();
                 } else {
+                    // Amount changed -> re-queue so AutoCount edits the existing OR.
                     $invoicePayment->status = 1;
                     $invoicePayment->amount = $totalAmount;
+                    if (empty($invoicePayment->payment_batch_id)) {
+                        $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $invoicePayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $invoicePayment->autocount_auto_retried = false;
                     $invoicePayment->save();
                 }
             }
@@ -1292,6 +1315,9 @@ class InvoiceController extends AppBaseController
                 if (!$invoicePayment) {
                     $invoicepayment_new = new InvoicePayment();
                     $invoicepayment_new->invoice_id = $invoiceId;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment_new->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment_new->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
@@ -1301,8 +1327,14 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->approve_at = date('Y-m-d H:i:s');
                     $invoicepayment_new->save();
                 } else {
+                    // Amount changed -> re-queue so AutoCount edits the existing OR.
                     $invoicePayment->status = 1;
                     $invoicePayment->amount = $totalAmount;
+                    if (empty($invoicePayment->payment_batch_id)) {
+                        $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $invoicePayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $invoicePayment->autocount_auto_retried = false;
                     $invoicePayment->save();
                 }
             }
@@ -1842,6 +1874,17 @@ class InvoiceController extends AppBaseController
         return implode("\n", $result);
     }
 
+    /**
+     * Build the download/stream filename for the simple PDF.
+     * Delivery orders (mode "do") must not be named "invoice_...".
+     */
+    public function simplePdfFileName($mode, $invoiceno)
+    {
+        $prefix = $mode === 'do' ? 'deliveryorder_' : 'invoice_';
+
+        return $prefix . $invoiceno . '.pdf';
+    }
+
     public function getInvoiceSimplePDF($id, $function)
     {
         $id = Crypt::decrypt($id);
@@ -1906,12 +1949,14 @@ class InvoiceController extends AppBaseController
                 $pdf->getDomPDF()->set_option('fontCache', storage_path('fonts/'));
             }
 
+            $fileName = $this->simplePdfFileName($mode, $invoice->invoiceno);
+
             if ($function == 'download') {
                 return $pdf->setPaper('a4', 'portrait')
-                    ->download('invoice_' . $invoice->invoiceno . '.pdf');
+                    ->download($fileName);
             } elseif ($function == 'view') {
                 return $pdf->setPaper('a4', 'portrait')
-                    ->stream('invoice_' . $invoice->invoiceno . '.pdf');
+                    ->stream($fileName);
             }
         } catch (Exception $e) {
             dd($e->getMessage());

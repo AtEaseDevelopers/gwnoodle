@@ -217,11 +217,11 @@
                                 <p >{{ $invoicedetail['product']['name'] }}</p>
                             </td>
                             <td>
-                                <p class="ta-r" style="">{{ number_format($invoicedetail['price'],2) }}</p>
+                                <p class="ta-r" style="">{{ number_format($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price'], 3) }}</p>
                             </td>
                            
                             <td>
-                                <p class="ta-r" style="">{{ number_format($invoicedetail['totalprice'],2) }}</p>
+                                <p class="ta-r" style="">{{ number_format($invoicedetail['totalprice'], 3) }}</p>
                             </td>
                         </tr>
                     @endforeach
@@ -233,7 +233,7 @@
                               Subtotal ({{  $invoice['invoicedetail']->count() }})
                             </td>
                             <td>
-                                <p class="ta-l" style="">RM {{ number_format($totalamount,2) }}</p>
+                                <p class="ta-l" style="">RM {{ number_format($totalamount, 3) }}</p>
                             </td>
                         </tr>
                 </table>
@@ -248,7 +248,7 @@
                             <p class="ta-l">Total</p>
                         </th>
                         <th>
-                            <p class="ta-r" >RM {{ number_format($totalamount,2) }}</p>
+                            <p class="ta-r" >RM {{ number_format($totalamount, 3) }}</p>
                         </th>
                     </tr>
                 </table>
@@ -259,7 +259,7 @@
                             <p class="ta-l" style="">Credit</p>
                         </td>
                         <td>
-                            <p class="ta-r" style="">RM {{ number_format($invoice["offset_amount"],2) }}</p>
+                            <p class="ta-r" style="">RM {{ number_format($invoice["offset_amount"], 3) }}</p>
                         </td>
                     </tr>
                      <tr>
@@ -267,7 +267,7 @@
                             <p class="ta-l" style="font-size:22px;">Remaining</p>
                         </td>
                         <td>
-                            <p class="ta-r" style="font-size:22px">RM {{ number_format($totalamount - $invoice["offset_amount"],2) }}</p>
+                            <p class="ta-r" style="font-size:22px">RM {{ number_format($totalamount - $invoice["offset_amount"], 3) }}</p>
                         </td>
                     </tr>
                     <tr>
@@ -275,7 +275,7 @@
                             <p class="ta-l" style="">Paid Amount</p>
                         </td>
                         <td>
-                            <p class="ta-r" style="">RM {{ number_format($invoice["paid_amount"],2) }}</p>
+                            <p class="ta-r" style="">RM {{ number_format($invoice["paid_amount"], 3) }}</p>
                         </td>
                     </tr>
                     <tr>
@@ -283,7 +283,7 @@
                             <p class="ta-l" style="">Updated Credit</p>
                         </td>
                         <td>
-                            <p class="ta-r" style="">RM {{ number_format($invoice->newcredit ?? 0,2) }}</p>
+                            <p class="ta-r" style="">RM {{ number_format($invoice->newcredit ?? 0, 3) }}</p>
                         </td>
                     </tr>
                     <tr>

@@ -7,6 +7,18 @@
          </a>
       @endif
     @endcan
+    @can('paymentapprove')
+      @php $acStatus = $autocount_status ?? null; @endphp
+      @if($status == 1 && in_array($acStatus, ['hold', 'failed', 'success']))
+         <a href="#"
+            onclick="syncAutocountPayment('{{ encrypt($id) }}'); return false;"
+            class='btn {{ $acStatus === 'failed' ? 'btn-ghost-danger' : ($acStatus === 'success' ? 'btn-ghost-secondary' : 'btn-ghost-warning') }}'
+            data-toggle="tooltip"
+            title="{{ $acStatus === 'success' ? 'Re-sync AR Payment to AutoCount' : 'Sync AR Payment to AutoCount' }}">
+            <i class="fa fa-cloud-upload"></i>
+         </a>
+      @endif
+    @endcan
     <a href="{{ route('invoicePayments.show', encrypt($id)) }}" class='btn btn-ghost-primary'>
        <i class="fa fa-eye"></i>
     </a>

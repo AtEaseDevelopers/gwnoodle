@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{{ $companyInfo['name'] }} - Invoice</title>
+    <title>{{ $companyInfo['name'] }} - {{ $mode === 'do' ? 'Delivery Order' : 'Invoice' }}</title>
     <style>
         /* Real A4 page. @page margins are unreliable in dompdf, so the
            left/right spacing is applied as body padding instead - centers
@@ -393,9 +393,9 @@
                 <td class="col-qty">{{ number_format($detail->quantity) }}</td>
                 <td class="col-uom">{{ $detail->product->uom ?? 'PCS' }}</td>
                 @if($mode !== 'do')
-                <td class="col-price">{{ number_format($detail->price, 2) }}</td>
+                <td class="col-price">{{ number_format($detail->quantity > 0 ? $detail->totalprice / $detail->quantity : $detail->price, 3) }}</td>
                 <td class="col-disc">-</td>
-                <td class="col-total">{{ number_format($detail->totalprice, 2) }}</td>
+                <td class="col-total">{{ number_format($detail->totalprice, 3) }}</td>
                 @endif
             </tr>
             @if(!empty($detail->remark))
@@ -412,6 +412,14 @@
     <div class="divider-dashed"></div>
 
     @if($mode !== 'do')
+    <!-- Remarks -->
+    <div class="notes-section" style="font-size: 13px;">
+        <div class="notes-title">Remarks :</div>
+        <div class="note-item">{{ $invoice->remark ?? '-' }}</div>
+    </div>
+
+    <div class="divider-dashed"></div>
+
     <!-- Amount in Words and Total - Same Row with Border -->
     <table style="width: 100%; border-collapse: collapse; margin: 5px 0;">
         <tr>
@@ -423,7 +431,7 @@
             <td style="width: 35%; text-align: right;">
                 <div style="border: 1px solid #000; padding: 5px 10px; text-align: center;">
                     <div style="font-size: 14px; font-weight: bold;">TOTAL (RM)</div>
-                    <div style="font-size: 25px; font-weight: bold;">{{ number_format($totalAmount, 2) }}</div>
+                    <div style="font-size: 25px; font-weight: bold;">{{ number_format($totalAmount, 3) }}</div>
                 </div>
             </td>
         </tr>

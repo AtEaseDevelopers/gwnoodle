@@ -22,16 +22,19 @@ class Assign extends Model
     use HasFactory;
 
     public $table = 'assigns';
-    
+
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
 
-
+    // Assign status: active assigns are the ones the driver sees.
+    const STATUS_INACTIVE = 0;
+    const STATUS_ACTIVE = 1;
 
     public $fillable = [
         'driver_id',
         'customer_id',
-        'sequence'
+        'sequence',
+        'status'
     ];
 
     /**
@@ -43,7 +46,8 @@ class Assign extends Model
         'id' => 'integer',
         'driver_id' => 'integer',
         'customer_id' => 'integer',
-        'sequence' => 'integer'
+        'sequence' => 'integer',
+        'status' => 'integer'
     ];
 
     /**
@@ -55,9 +59,18 @@ class Assign extends Model
         'driver_id' => 'required',
         'customer_id' => 'required',
         'sequence' => 'required',
+        'status' => 'required|boolean',
         'created_at' => 'nullable|nullable',
         'updated_at' => 'nullable|nullable'
     ];
+
+    /**
+     * Scope to only active assigns (the ones a driver should see).
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE);
+    }
 
     public function customer()
     {

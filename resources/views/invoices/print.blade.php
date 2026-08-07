@@ -240,7 +240,7 @@ p{
         <table class="items-summary">
             <tr>
                 <td class="ta-l">total {{ count($invoice['invoicedetail']) }} items :</td>
-                <td class="ta-r" style="font-weight: bold;">{{ number_format($totalamount, 2) }}</td>
+                <td class="ta-r" style="font-weight: bold;">{{ number_format($totalamount, 3) }}</td>
             </tr>
         </table>
 
@@ -261,9 +261,9 @@ p{
                 @foreach ($invoice['invoicedetail'] as $invoicedetail)
 
                 <tr class="item-row">
-                    <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['price'], 2) }}</td>
+                    <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price'], 3) }}</td>
                     <td class="ta-r" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
-                    <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 2) }}</td>
+                    <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                 </tr>
                 <tr class="item-row">
                     <td colspan="3" class="item-name">{{ $invoicedetail['product']['name'] }} <br>({{$invoicedetail->batch->batch_code }})</td>
@@ -277,7 +277,7 @@ p{
                 <tr class="item-row">
                     <td class="ta-l" style="width: 25%;"></td>
                     <td class="ta-r" style="width: 30%;">{{ $totalquantity }}</td>
-                    <td class="ta-r" style="width: 20%;">{{ number_format($totalamount, 2) }}</td>
+                    <td class="ta-r" style="width: 20%;">{{ number_format($totalamount, 3) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -287,7 +287,7 @@ p{
         <table class="totals totals-section-bold">
             <tr>
                 <td class="ta-r">Total :</td>
-                <td class="ta-r" style="font-size: 20px; font-weight: bold;">RM {{ number_format($totalamount, 2) }}</td>
+                <td class="ta-r" style="font-size: 20px; font-weight: bold;">RM {{ number_format($totalamount, 3) }}</td>
             </tr>
         </table>
 
@@ -298,7 +298,7 @@ p{
         <table class="payment-section">
             <tr>
                 <td class="ta-l">Payments :</td>
-                <td class="ta-r">Cash {{ number_format($totalamount, 2) }}</td>
+                <td class="ta-r">Cash {{ number_format($totalamount, 3) }}</td>
             </tr>
         </table>
         @endif

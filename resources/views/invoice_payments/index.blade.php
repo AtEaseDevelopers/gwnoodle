@@ -13,8 +13,16 @@
                          <div class="card-header">
                              <i class="fa fa-align-justify"></i>
                              {{ __('invoice_payments.invoice_payments') }}
+                             @if(!empty($failedAutocountCount) && $failedAutocountCount > 0)
+                             <span class="badge badge-danger ml-2" title="{{ $failedAutocountCount }} payment batch(es) failed AutoCount sync and will NOT retry automatically. Select the row(s) and click 'Submit Autocount Payment' to re-queue.">
+                                 <i class="fa fa-exclamation-triangle"></i> {{ $failedAutocountCount }} AutoCount failed
+                             </span>
+                             @endif
                              <a class="pull-right" href="{{ route('invoicePayments.create') }}"><i class="fa fa-plus-square fa-lg"></i></a>
                              @can('paymentapprove')
+                             <button type="button" class="btn btn-info btn-sm pull-right mr-2" onclick="submitAutocountPayment()" title="Queue selected payment(s) for AutoCount AR Payment sync">
+                                <i class="fa fa-files-o"></i> Submit Autocount Payment
+                             </button>
                              <!--<a class="pull-right text-success pr-2" id="massactive" href="#" alt="Mass active"><i class="fa fa-check fa-lg"></i></a>-->
                              @endcan
                          </div>
@@ -101,6 +109,61 @@
             });
             
         });
+        function submitAutocountPayment(){
+            if(window.checkboxid.length == 0){
+                noti('i','Info','Please select at least one payment');
+                return;
+            }
+            $.confirm({
+                title: 'Submit to Autocount',
+                content: `<p>Confirm to queue <b>` + window.checkboxid.length + `</b> selected payment(s) for Autocount sync?</p>`,
+                buttons: {
+                    Submit: {
+                        text: 'Submit',
+                        btnClass: 'btn-info',
+                        action: function(){ submitAutocountPaymentRequest(window.checkboxid); }
+                    },
+                    Cancel: function(){ return; }
+                }
+            });
+        }
+
+        function submitAutocountPaymentRequest(ids){
+            ShowLoad();
+            $.ajax({
+                url: "{{ url('/invoicePayments/massSyncAutocount') }}",
+                type: "POST",
+                data: { ids: ids, _token: "{{ csrf_token() }}" },
+                success: function(response){
+                    HideLoad();
+                    window.checkboxid = [];
+                    $('.buttons-reload').click();
+                    noti('s','Success', response.message || 'Payment(s) successfully queued for Autocount.');
+                },
+                error: function(error){
+                    HideLoad();
+                    noti('e','Error', error.responseJSON?.message || 'Failed to submit payments to Autocount');
+                }
+            });
+        }
+
+        function syncAutocountPayment(id){
+            ShowLoad();
+            $.ajax({
+                url: "{{config('app.url')}}/invoicePayments/sync-autocount/"+id,
+                type:"POST",
+                data:{ _token: "{{ csrf_token() }}" },
+                success:function(response){
+                    $('.buttons-reload').click();
+                    noti('s','Queued for AutoCount', response.message || 'Payment queued for AutoCount sync.');
+                },
+                error: function(error) {
+                    HideLoad();
+                    var msg = (error.responseJSON && error.responseJSON.message) ? error.responseJSON.message : 'Unable to queue payment.';
+                    noti('e','Sync failed', msg);
+                }
+            });
+        }
         function massupdatestatus(ids,status){
             ShowLoad();
             $.ajax({

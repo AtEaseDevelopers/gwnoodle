@@ -1550,6 +1550,20 @@ class EInvoiceXmlGenerateService
         return $paymentTerms;
     }
 
+    /**
+     * Format a monetary value for the e-invoice XML.
+     *
+     * MyInvois amount fields are xsd:decimal (no 2-decimal cap) and reject
+     * scientific notation, so we emit a plain fixed-point string. Unit prices
+     * and line totals carry 3 decimals to match the system-wide 3dp pricing;
+     * keeping every amount at the same scale keeps the MyInvois arithmetic
+     * checks (Subtotal = PriceAmount x Quantity, totals = sum of lines) exact.
+     */
+    private function money($value): string
+    {
+        return number_format((float) $value, 3, '.', '');
+    }
+
     public function createPrepaidPaymentElement($xml, $params)
     {
         $prepaidPayment = $xml->createElement('cac:PrepaidPayment');
@@ -1557,7 +1571,7 @@ class EInvoiceXmlGenerateService
         $id = $xml->createElement('cbc:ID', $params['id']);
         $prepaidPayment->appendChild($id);
 
-        $paidAmount = $xml->createElement('cbc:PaidAmount', $params['paidAmount']);
+        $paidAmount = $xml->createElement('cbc:PaidAmount', $this->money($params['paidAmount']));
         $paidAmount->setAttribute('currencyID', 'MYR');
         $prepaidPayment->appendChild($paidAmount);
 
@@ -1599,7 +1613,7 @@ class EInvoiceXmlGenerateService
         $allowanceChargeReason = $xml->createElement('cbc:AllowanceChargeReason', $params['reason']);
         $allowanceCharge->appendChild($allowanceChargeReason);
 
-        $amountElement = $xml->createElement('cbc:Amount', $params['amount']);
+        $amountElement = $xml->createElement('cbc:Amount', $this->money($params['amount']));
         $amountElement->setAttribute('currencyID', $params['currency']);
         $allowanceCharge->appendChild($amountElement);
 
@@ -1631,17 +1645,17 @@ class EInvoiceXmlGenerateService
     {
         $taxTotal = $xml->createElement('cac:TaxTotal');
 
-        $taxAmountElement = $xml->createElement('cbc:TaxAmount', $params['taxAmount']);
+        $taxAmountElement = $xml->createElement('cbc:TaxAmount', $this->money($params['taxAmount']));
         $taxAmountElement->setAttribute('currencyID', $params['currencyID']);
         $taxTotal->appendChild($taxAmountElement);
 
         $taxSubtotal = $xml->createElement('cac:TaxSubtotal');
 
-        $taxableAmountElement = $xml->createElement('cbc:TaxableAmount', $params['taxableAmount']);
+        $taxableAmountElement = $xml->createElement('cbc:TaxableAmount', $this->money($params['taxableAmount']));
         $taxableAmountElement->setAttribute('currencyID', $params['currencyID']);
         $taxSubtotal->appendChild($taxableAmountElement);
 
-        $taxAmountSubtotalElement = $xml->createElement('cbc:TaxAmount', $params['taxAmount']);
+        $taxAmountSubtotalElement = $xml->createElement('cbc:TaxAmount', $this->money($params['taxAmount']));
         $taxAmountSubtotalElement->setAttribute('currencyID', $params['currencyID']);
         $taxSubtotal->appendChild($taxAmountSubtotalElement);
 
@@ -1660,11 +1674,11 @@ class EInvoiceXmlGenerateService
         $taxSubtotal->appendChild($taxCategory);
 
         $taxSubtotal2 = $xml->createElement('cac:TaxSubtotal');
-        $taxableAmountElement2 = $xml->createElement('cbc:TaxableAmount', $params['taxableAmount']);
+        $taxableAmountElement2 = $xml->createElement('cbc:TaxableAmount', $this->money($params['taxableAmount']));
         $taxableAmountElement2->setAttribute('currencyID', $params['currencyID']);
         $taxSubtotal2->appendChild($taxableAmountElement2);
 
-        $taxAmountSubtotalElement2 = $xml->createElement('cbc:TaxAmount', $params['taxAmount']);
+        $taxAmountSubtotalElement2 = $xml->createElement('cbc:TaxAmount', $this->money($params['taxAmount']));
         $taxAmountSubtotalElement2->setAttribute('currencyID', $params['currencyID']);
         $taxSubtotal2->appendChild($taxAmountSubtotalElement2);
 
@@ -1710,33 +1724,33 @@ class EInvoiceXmlGenerateService
         $legalMonetaryTotal = $xml->createElement('cac:LegalMonetaryTotal');
     
         // customer真正给的价钱
-        $lineExtensionAmountElement = $xml->createElement('cbc:LineExtensionAmount', $params['lineExtensionAmount']);
+        $lineExtensionAmountElement = $xml->createElement('cbc:LineExtensionAmount', $this->money($params['lineExtensionAmount']));
         $lineExtensionAmountElement->setAttribute('currencyID', $params['currency']);
         $legalMonetaryTotal->appendChild($lineExtensionAmountElement);
     
         //好像跟上面一样
-        $taxExclusiveAmountElement = $xml->createElement('cbc:TaxExclusiveAmount', $params['taxExclusiveAmount']);
+        $taxExclusiveAmountElement = $xml->createElement('cbc:TaxExclusiveAmount', $this->money($params['taxExclusiveAmount']));
         $taxExclusiveAmountElement->setAttribute('currencyID', $params['currency']);
         $legalMonetaryTotal->appendChild($taxExclusiveAmountElement);
     
         //全部包括tax
-        $taxInclusiveAmountElement = $xml->createElement('cbc:TaxInclusiveAmount', $params['taxInclusiveAmount']);
+        $taxInclusiveAmountElement = $xml->createElement('cbc:TaxInclusiveAmount', $this->money($params['taxInclusiveAmount']));
         $taxInclusiveAmountElement->setAttribute('currencyID', $params['currency']);
         $legalMonetaryTotal->appendChild($taxInclusiveAmountElement);
     
         //total discount多少
-        $allowanceTotalAmountElement = $xml->createElement('cbc:AllowanceTotalAmount', $params['allowanceTotalAmount']);
+        $allowanceTotalAmountElement = $xml->createElement('cbc:AllowanceTotalAmount', $this->money($params['allowanceTotalAmount']));
         $allowanceTotalAmountElement->setAttribute('currencyID', $params['currency']);
         $legalMonetaryTotal->appendChild($allowanceTotalAmountElement);
     
         //税前charge的费用
-        $chargeTotalAmountElement = $xml->createElement('cbc:ChargeTotalAmount', $params['chargeTotalAmount']);
+        $chargeTotalAmountElement = $xml->createElement('cbc:ChargeTotalAmount', $this->money($params['chargeTotalAmount']));
         $chargeTotalAmountElement->setAttribute('currencyID', $params['currency']);
         $legalMonetaryTotal->appendChild($chargeTotalAmountElement);
     
     
         //总共费用，包括tax和discount，不包括提前给的费用
-        $payableAmountElement = $xml->createElement('cbc:PayableAmount', $params['payableAmount']);
+        $payableAmountElement = $xml->createElement('cbc:PayableAmount', $this->money($params['payableAmount']));
         $payableAmountElement->setAttribute('currencyID', $params['currency']);
         $legalMonetaryTotal->appendChild($payableAmountElement);
     
@@ -1783,7 +1797,7 @@ class EInvoiceXmlGenerateService
         $invoicedQuantityElement->setAttribute('unitCode', $params['unitCode']);
         $invoiceLine->appendChild($invoicedQuantityElement);
     
-        $lineExtensionAmountElement = $xml->createElement('cbc:LineExtensionAmount', $params['lineExtensionAmount']);
+        $lineExtensionAmountElement = $xml->createElement('cbc:LineExtensionAmount', $this->money($params['lineExtensionAmount']));
         $lineExtensionAmountElement->setAttribute('currencyID', $params['currencyID']);
         $invoiceLine->appendChild($lineExtensionAmountElement);
 
@@ -1798,7 +1812,7 @@ class EInvoiceXmlGenerateService
                 $allowanceChargeReason = $xml->createElement('cbc:AllowanceChargeReason', $charge['reason']);
                 $allowanceCharge->appendChild($allowanceChargeReason);
 
-                $amount = $xml->createElement('cbc:Amount', number_format($charge['amount'], 2, '.', ''));
+                $amount = $xml->createElement('cbc:Amount', $this->money($charge['amount']));
                 $amount->setAttribute('currencyID', $params['currencyID']);
                 $allowanceCharge->appendChild($amount);
         
@@ -1808,16 +1822,16 @@ class EInvoiceXmlGenerateService
 
     
         $taxTotal = $xml->createElement('cac:TaxTotal');
-        $taxAmountElement = $xml->createElement('cbc:TaxAmount', number_format($params['taxAmount'], 2, '.', ''));
+        $taxAmountElement = $xml->createElement('cbc:TaxAmount', $this->money($params['taxAmount']));
         $taxAmountElement->setAttribute('currencyID', $params['currencyID']);
         $taxTotal->appendChild($taxAmountElement);
     
         $taxSubtotal = $xml->createElement('cac:TaxSubtotal');
-        $taxableAmountElement = $xml->createElement('cbc:TaxableAmount', number_format($params['taxableAmount'], 2, '.', ''));
+        $taxableAmountElement = $xml->createElement('cbc:TaxableAmount', $this->money($params['taxableAmount']));
         $taxableAmountElement->setAttribute('currencyID', $params['currencyID']);
         $taxSubtotal->appendChild($taxableAmountElement);
     
-        $taxAmountElement2 = $xml->createElement('cbc:TaxAmount', number_format($params['taxAmount'], 2, '.', ''));
+        $taxAmountElement2 = $xml->createElement('cbc:TaxAmount', $this->money($params['taxAmount']));
         $taxAmountElement2->setAttribute('currencyID', $params['currencyID']);
         $taxSubtotal->appendChild($taxAmountElement2);
     
@@ -1860,13 +1874,13 @@ class EInvoiceXmlGenerateService
         $invoiceLine->appendChild($item);
     
         $price = $xml->createElement('cac:Price');
-        $priceAmountElement = $xml->createElement('cbc:PriceAmount', number_format($params['priceAmount'], 2, '.', ''));
+        $priceAmountElement = $xml->createElement('cbc:PriceAmount', $this->money($params['priceAmount']));
         $priceAmountElement->setAttribute('currencyID', $params['currencyID']);
         $price->appendChild($priceAmountElement);
         $invoiceLine->appendChild($price);
     
         $itemPriceExtension = $xml->createElement('cac:ItemPriceExtension');
-        $amountElement = $xml->createElement('cbc:Amount', number_format($params['amount'], 2, '.', ''));
+        $amountElement = $xml->createElement('cbc:Amount', $this->money($params['amount']));
         $amountElement->setAttribute('currencyID', $params['currencyID']);
         $itemPriceExtension->appendChild($amountElement);
         $invoiceLine->appendChild($itemPriceExtension);

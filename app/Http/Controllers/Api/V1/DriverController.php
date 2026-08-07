@@ -20,6 +20,7 @@ use App\Models\Assign;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\StockInRequest;
 use App\Models\ProductCost;
 use App\Models\SpecialPrice;
 use App\Models\Customer;
@@ -386,7 +387,7 @@ class DriverController extends Controller
                 'type' => Trip::START_TRIP,
             ]);
              //generate task
-                $assigns = Assign::where('driver_id', $driver->id)->orderby('sequence','asc')->pluck('customer_id')->unique()->values()->all();
+                $assigns = Assign::where('driver_id', $driver->id)->active()->whereHas('customer', function ($q) { $q->where('status', 1); })->orderby('sequence','asc')->pluck('customer_id')->unique()->values()->all();
                 $count = 1;
                 foreach($assigns as $assign){
                     $task = new Task();
@@ -1240,13 +1241,17 @@ class DriverController extends Controller
                 $customers = Customer::select('customers.*', 'assigns.sequence')
                     ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
                     ->where('assigns.driver_id', $driver->id)
+                    ->where('assigns.status', Assign::STATUS_ACTIVE)
+                    ->where('customers.status', 1)
                     ->where('customers.id', $id)
                     ->orderBy('assigns.sequence', 'asc')
-                    ->get();    
+                    ->get();
             }else{
                 $customers = Customer::select('customers.*', 'assigns.sequence')
                     ->join('assigns', 'customers.id', '=', 'assigns.customer_id')
                     ->where('assigns.driver_id', $driver->id)
+                    ->where('assigns.status', Assign::STATUS_ACTIVE)
+                    ->where('customers.status', 1)
                     ->orderBy('assigns.sequence', 'asc')
                     ->get();
             }
@@ -1626,7 +1631,7 @@ class DriverController extends Controller
                     'status' => $invoice->getStatusTextAttribute(),
                     'allow_edit' => $allowEdit, // This field indicates if the invoice can be cancelled
                     'remark' => $invoice->remark,
-                    'total' => number_format($invoice->total, 2),
+                    'total' => number_format($invoice->total, 3),
                     'created_at' => $invoice->created_at->format('Y-m-d H:i:s'),
                     'updated_at' => $invoice->updated_at->format('Y-m-d H:i:s'),
                     'items_count' => $invoice->invoicedetail->count(),
@@ -1639,7 +1644,7 @@ class DriverController extends Controller
                             'quantity' => (float) $detail->quantity,
                             'price' => (float) $detail->price,
                             'total' => (float) $detail->totalprice,
-                            'total_formatted' => number_format($detail->totalprice, 2)
+                            'total_formatted' => number_format($detail->totalprice, 3)
                         ];
                     })->toArray(),
                     'pdf_url' => $this->getinvoicepdf($invoice->id)
@@ -1725,7 +1730,7 @@ class DriverController extends Controller
                     'paymentterm' => $invoice->paymentterm,
                     'status' => $invoice->getStatusTextAttribute(),
                     'remark' => $invoice->remark,
-                    'total' => number_format($invoice->total, 2),
+                    'total' => number_format($invoice->total, 3),
                     'created_at' => $invoice->created_at->format('Y-m-d H:i:s'),
                     'updated_at' => $invoice->updated_at->format('Y-m-d H:i:s'),
                     'items_count' => $invoice->invoicedetail->count(),
@@ -1736,7 +1741,7 @@ class DriverController extends Controller
                             'quantity' => (float) $detail->quantity,
                             'price' => (float) $detail->price,
                             'total' => (float) $detail->totalprice,
-                            'total_formatted' => number_format($detail->totalprice, 2)
+                            'total_formatted' => number_format($detail->totalprice, 3)
                         ];
                     })->toArray(),
                     'pdf_url' => $this->getinvoicepdf($invoice->id)
@@ -2088,6 +2093,9 @@ class DriverController extends Controller
             if ($data['paymentterm'] == 1) {
                 $invoicepayment = new InvoicePayment();
                 $invoicepayment->invoice_id = $invoice->id;
+                // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                $invoicepayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                $invoicepayment->autocount_status = InvoicePayment::AC_PENDING;
                 $invoicepayment->type = 1;
                 $invoicepayment->customer_id = $invoice->customer_id;
                 $invoicepayment->amount = $totalprice;
@@ -2452,13 +2460,22 @@ class DriverController extends Controller
                 $existingPayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
                 
                 if ($existingPayment) {
-                    // Update existing payment
+                    // Update existing payment. Re-queue it for AutoCount so the
+                    // amount change is pushed as an edit to the existing OR.
                     $existingPayment->amount = $totalprice;
+                    if (empty($existingPayment->payment_batch_id)) {
+                        $existingPayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    }
+                    $existingPayment->autocount_status       = InvoicePayment::AC_PENDING;
+                    $existingPayment->autocount_auto_retried = false;
                     $existingPayment->save();
                 } else {
                     // Create new payment
                     $invoicepayment = new InvoicePayment();
                     $invoicepayment->invoice_id = $invoice->id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment->type = 1;
                     $invoicepayment->customer_id = $invoice->customer_id;
                     $invoicepayment->amount = $totalprice;
@@ -2686,6 +2703,8 @@ class DriverController extends Controller
             
             // Get all customer IDs assigned to this driver
             $assignedCustomerIds = Assign::where('driver_id', $driver->id)
+                ->active()
+                ->whereHas('customer', function ($q) { $q->where('status', 1); })
                 ->pluck('customer_id')
                 ->toArray();
             
@@ -2773,7 +2792,7 @@ class DriverController extends Controller
                         'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
                         'payment_term_code' => $invoice->paymentterm,
                         'total_amount' => (float) $totalAmount,
-                        'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                        'formatted_amount' => 'RM ' . number_format($totalAmount, 3),
                         'is_paid' => $hasCompletedPayment,
                         'invoice_payments' => $paymentRecords,
                         'payment_count' => count($paymentRecords)
@@ -2844,7 +2863,7 @@ class DriverController extends Controller
                             'payment_term' => $this->getPaymentTermText($invoice->paymentterm),
                             'payment_term_code' => $invoice->paymentterm,
                             'total_amount' => (float) $totalAmount,
-                            'formatted_amount' => 'RM ' . number_format($totalAmount, 2),
+                            'formatted_amount' => 'RM ' . number_format($totalAmount, 3),
                             'is_paid' => $hasCompletedPayment,
                             'invoice_payments' => $paymentRecords,
                             'payment_count' => count($paymentRecords)
@@ -2954,12 +2973,29 @@ class DriverController extends Controller
             
             $createdPayments = [];
             $invoiceIds = $data['invoice_ids'];
-            
+
             // If invoice_ids is a string (comma-separated), convert to array
             if (!is_array($invoiceIds)) {
                 $invoiceIds = explode(',', $invoiceIds);
             }
-            
+
+            // One payment event = one AutoCount AR Payment. Tag every row created
+            // here with the same batch id so they later sync as a single OR that
+            // knocks off all these invoices. If ANY invoice in the batch is on
+            // Credit term the whole batch is put on 'hold' and only syncs after a
+            // manual "Sync" click from web; otherwise it auto-syncs.
+            $paymentBatchId  = (string) \Illuminate\Support\Str::uuid();
+            $batchIsCredit   = Invoice::whereIn('id', $invoiceIds)
+                ->where('paymentterm', Invoice::PAYMENT_TERM_CREDIT)
+                ->exists();
+            // Auto-sync only a single-invoice, non-credit payment. A payment that
+            // spans multiple invoices is held for a manual web "Sync" click (client:
+            // these are almost always credit); it still becomes ONE OR knocking off
+            // all its invoices, it just waits for the click.
+            $isMultiInvoice  = count($invoiceIds) > 1;
+            $autocountStatus = ($batchIsCredit || $isMultiInvoice)
+                ? InvoicePayment::AC_HOLD : InvoicePayment::AC_PENDING;
+
             // Get the total amount from the request or calculate from invoices
             $totalAmount = isset($data['amount']) ? $data['amount'] : 0;
             $amountPerInvoice = $totalAmount / count($invoiceIds);
@@ -2996,6 +3032,8 @@ class DriverController extends Controller
             
             $invoicepayment = new InvoicePayment();
             $invoicepayment->invoice_id = $invoiceId;
+            $invoicepayment->payment_batch_id = $paymentBatchId;
+            $invoicepayment->autocount_status = $autocountStatus;
             $invoicepayment->type = $data['type'];
             $invoicepayment->customer_id = $data['customer_id'];
             
@@ -3703,6 +3741,8 @@ class DriverController extends Controller
             if($fromdrivertrip->type == 2){
                 //Take from assign & invoice
                 $assigns = Assign::where('driver_id', $fromdriver->id)
+                ->active()
+                ->whereHas('customer', function ($q) { $q->where('status', 1); })
                 ->orderby('sequence','asc')
                 ->select('customer_id','sequence',DB::RAW('0 as invoice_id'));
                 $task = Invoice::where('driver_id', $fromdriver->id)
@@ -3733,6 +3773,8 @@ class DriverController extends Controller
         }else{
             //Take from assign & invoice
             $assigns = Assign::where('driver_id', $fromdriver->id)
+            ->active()
+            ->whereHas('customer', function ($q) { $q->where('status', 1); })
             ->orderby('sequence','asc')
             ->select('customer_id','sequence',DB::RAW('0 as invoice_id'));
             $task = Invoice::where('driver_id', $fromdriver->id)
@@ -4477,7 +4519,7 @@ class DriverController extends Controller
                         'name' => $batch->product->name,
                         'unit_code' => $batch->product->unit_code,
                         'is_special_price' => isset($specialPrices[$batch->product_id]), 
-                        'price' => number_format($price, 2),
+                        'price' => number_format($price, 3),
                     ]
                 ];
             }
@@ -8092,53 +8134,31 @@ class DriverController extends Controller
         }
 
         DB::beginTransaction();
-        
+
         try {
             $quantity = $request->quantity;
             $warehouseId = $request->warehouse_id;
-            $warehouse = Warehouse::find($warehouseId);
 
-            // Update batch quantity
-            $oldQuantity = $productBatch->quantity;
-            $productBatch->increment('quantity', $quantity);
-
-            // Update status to Active if it was Inactive
-            if ($productBatch->status == ProductBatch::STATUS_INACTIVE) {
-                $productBatch->status = ProductBatch::STATUS_ACTIVE;
-                $productBatch->save();
-            }
-
-            // Add to warehouse inventory balance
-            $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(
-                [
-                    'warehouse_id' => $warehouseId,
-                    'product_id' => $productBatch->product_id,
-                    'batch_id' => $productBatch->id,
-                ],
-                ['quantity' => 0]
-            );
-            
-            $oldWarehouseQuantity = $warehouseInventory->quantity;
-            $warehouseInventory->increaseQuantity($quantity);
-
-            // Create inventory transaction
-            InventoryTransaction::create([
+            // Stock is not applied here — queue an approval request instead.
+            // The batch quantity, warehouse balance and inventory ledger are only
+            // updated once an admin approves the request (StockInRequest::approveAndApply).
+            StockInRequest::create([
+                'source' => StockInRequest::SOURCE_BULK_SCAN,
                 'warehouse_id' => $warehouseId,
                 'product_id' => $productBatch->product_id,
                 'batch_id' => $productBatch->id,
+                'requested_quantity' => $quantity,
                 'quantity' => $quantity,
-                'type' => InventoryTransaction::TYPE_STOCK_IN,
-                'remark' => ($request->remark ?? 'Stock in from mobile app') . ' - Warehouse: ' . $warehouse->name,
-                'date' => now(),
-                'user' => $user->name,
-                'stock_received'=>1
+                'remark' => $request->remark ?? 'Stock in from mobile app',
+                'status' => StockInRequest::STATUS_PENDING,
+                'requested_by' => $user->name,
             ]);
 
             DB::commit();
 
             return response()->json([
                 'result' => true,
-                'message' => __LINE__ . $this->message_separator . $quantity . ' units added to batch successfully',
+                'message' => __LINE__ . $this->message_separator . $quantity . ' units submitted for approval',
                 'data' => [
                     'batch' => [
                         'id' => $productBatch->id,
@@ -8598,6 +8618,9 @@ class DriverController extends Controller
                 if ($invoiceInput['paymentterm'] == 1) {
                     $invoicePayment              = new InvoicePayment();
                     $invoicePayment->invoice_id  = $invoice->id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicePayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicePayment->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicePayment->type        = 1;
                     $invoicePayment->customer_id = $invoice->customer_id;
                     $invoicePayment->amount      = $totalprice;
@@ -8670,6 +8693,8 @@ class DriverController extends Controller
 
         try {
             $assignedCustomerIds = Assign::where('driver_id', $driver->id)
+                ->active()
+                ->whereHas('customer', function ($q) { $q->where('status', 1); })
                 ->pluck('customer_id')
                 ->toArray();
 

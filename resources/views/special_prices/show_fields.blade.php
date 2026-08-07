@@ -13,7 +13,7 @@
 <!-- Price Field -->
 <div class="form-group">
     {!! Form::label('price', __('special_prices.price')) !!}:
-    <p>{{ number_format($specialPrice->price, 2) }}</p>
+    <p>{{ number_format($specialPrice->price, 3) }}</p>
 </div>
 
 <!-- Status Field -->

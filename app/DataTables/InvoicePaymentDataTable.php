@@ -23,6 +23,9 @@ class InvoicePaymentDataTable extends DataTable
             return 'PR' . str_pad($row->id, 5, '0', STR_PAD_LEFT); // Assuming 'PR00001' format
         })
         ->addColumn('action', 'invoice_payments.datatables_actions')
+        ->editColumn('autocount_or_no', function ($row) {
+            return !empty($row->autocount_or_no) ? $row->autocount_or_no : '';
+        })
         ->filter(function ($query) {
             
             $searchValue = request('columns')[4]['search']['value'] ?? '';
@@ -48,7 +51,9 @@ class InvoicePaymentDataTable extends DataTable
         return $model->newQuery()
         ->with('invoice:id,invoiceno')
         ->with('customer')
-        ->selectRaw('invoice_payments.*, CONCAT(\'PR\', LPAD(invoice_payments.id, 5, \'0\')) AS payment_no');
+        // payment_no is overridden below with the computed web reference (PR#####),
+        // so expose the real DB column (the AutoCount OR DocNo) under its own alias.
+        ->selectRaw('invoice_payments.*, invoice_payments.payment_no AS autocount_or_no, CONCAT(\'PR\', LPAD(invoice_payments.id, 5, \'0\')) AS payment_no');
         
     }
 
@@ -145,7 +150,9 @@ class InvoicePaymentDataTable extends DataTable
                             }'
                     ],
                     [
-                        'targets' => 8,
+                        // Attachment "view" link. Index 10 after the AutoCount OR No
+                        // column (index 9) was inserted ahead of it.
+                        'targets' => 10,
                         'render' => 'function(data, type){ if(data != null){return "<a target=\'_blank\' href=\''.config('app.url').'/"+data+"\'>view</a>";}else{return "";}}'
                     ],
                     [
@@ -165,18 +172,63 @@ class InvoicePaymentDataTable extends DataTable
                             return "<span class=\'badge " + badgeClass + "\'>" + label + "</span>";
                         }'
                     ],
-                    // [
-                    // 'targets' => 11,
-                    // 'render' => 'function(data, type){
-                    //     if(data == 1) {
-                    //         return "Synced";
-                    //     } else if (data == 2) {
-                    //         return "Voided";
-                    //     }
-                        
-                    // }'
-                    // ],
+                    [
+                        // AutoCount AR Payment sync status (index 8, right after Status).
+                        'targets' => 8,
+                        'render' => 'function(data, type, row){
+                            if (type !== "display" || !data) { return data ? data : ""; }
+                            var label = data.charAt(0).toUpperCase() + data.slice(1);
+                            if (row.autocount_message) {
+                                var rawMsg = row.autocount_message;
+                                var formattedMsg = rawMsg;
+                                try {
+                                    if (typeof rawMsg === "string" && (rawMsg.trim().startsWith("{") || rawMsg.trim().startsWith("["))) {
+                                        formattedMsg = JSON.stringify(JSON.parse(rawMsg), null, 2);
+                                    } else if (typeof rawMsg === "object") {
+                                        formattedMsg = JSON.stringify(rawMsg, null, 2);
+                                    }
+                                } catch (e) {}
+                                var safeMsg = String(formattedMsg)
+                                    .replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/\'/g, "&#39;")
+                                    .replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                                return "<span class=\'autocount-error-popover\' data-msg=\'" + safeMsg + "\' style=\'cursor:pointer; display:block; width:100%;\'>" + label + "</span>";
+                            }
+                            return label;
+                        }',
+                        'createdCell' => 'function(td, cellData){
+                            if (!cellData) { return; }
+                            var bgColor = "#e2e3e5", textColor = "#383d41"; // hold / other - gray
+                            if (cellData === "success") { bgColor = "#d4edda"; textColor = "#155724"; }
+                            else if (cellData === "failed") { bgColor = "#f8d7da"; textColor = "#721c24"; }
+                            else if (cellData === "pending") { bgColor = "#fff3cd"; textColor = "#856404"; }
+                            $(td).css({ "background-color": bgColor, "color": textColor, "font-weight": "500", "text-align": "center" });
+                        }'
+                    ],
                 ],
+                'drawCallback' => 'function(settings) {
+                    if(typeof $.fn.popover !== "undefined") {
+                        $(".autocount-error-popover").each(function() {
+                            var $el = $(this);
+                            $el.popover({
+                                trigger: "manual", placement: "left", html: true,
+                                title: "AutoCount Message <small style=\'float:right; font-weight:normal; color:#6c757d;\'>Click to pin</small>",
+                                content: "<div style=\'max-height: 250px; overflow-y: auto; user-select: text; font-family: monospace; font-size:12px; white-space: pre-wrap; word-wrap: break-word;\'>" + $el.attr("data-msg") + "</div>"
+                            });
+                            $el.on("mouseenter", function(){ if (!$el.data("pinned")) { $el.popover("show"); } });
+                            $el.on("mouseleave", function(){ if (!$el.data("pinned")) { $el.popover("hide"); } });
+                            $el.on("click", function(e){
+                                e.stopPropagation();
+                                if ($el.data("pinned")) { $el.data("pinned", false); $el.popover("hide"); }
+                                else { $(".autocount-error-popover").data("pinned", false).popover("hide"); $el.data("pinned", true); $el.popover("show"); }
+                            });
+                        });
+                        $(document).off("click.closePaymentPopover").on("click.closePaymentPopover", function(e) {
+                            if (!$(e.target).closest(".popover").length && !$(e.target).hasClass("autocount-error-popover")) {
+                                $(".autocount-error-popover").data("pinned", false).popover("hide");
+                            }
+                        });
+                    }
+                }',
                 'initComplete' => 'function(){
                     var columns = this.api().init().columns;
                     this.api()
@@ -194,6 +246,8 @@ class InvoicePaymentDataTable extends DataTable
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
                             }else if(columns[index].title == \'Group\'){
                                 var input = \'<select id="group" class="border-0" style="width: 100%;"><option value=""></option></select>\';
+                            }else if(columns[index].title == \'Autocount Status\'){
+                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="pending">Pending</option><option value="hold">Hold</option><option value="success">Success</option><option value="failed">Failed</option></select>\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }
@@ -259,6 +313,14 @@ class InvoicePaymentDataTable extends DataTable
             'data' => 'status',
             'name' => 'status']),
 
+            'autocount_status'=> new \Yajra\DataTables\Html\Column(['title' => 'Autocount Status',
+            'data' => 'autocount_status',
+            'name' => 'invoice_payments.autocount_status']),
+
+            'autocount_or_no'=> new \Yajra\DataTables\Html\Column(['title' => 'AutoCount OR No',
+            'data' => 'autocount_or_no',
+            'name' => 'invoice_payments.payment_no']),
+
             'attachment'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.attachment'),
             'data' => 'attachment',
             'name' => 'attachment']),
@@ -270,7 +332,7 @@ class InvoicePaymentDataTable extends DataTable
             'approve_at'=> new \Yajra\DataTables\Html\Column(['title' => trans('invoice_payments.approve_at'),
             'data' => 'approve_at',
             'name' => 'approve_at']),
-            
+
             // 'xero_status'=> new \Yajra\DataTables\Html\Column(['title' => 'Xero Status',
             // 'data' => 'xero_status',
             // 'name' => 'xero_status']),

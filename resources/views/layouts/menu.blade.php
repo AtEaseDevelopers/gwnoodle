@@ -169,26 +169,27 @@
 </li>
 @endif
 
-@canany(['task'])
+@can('task')
 <li class="nav-item {{ Request::is('tasks*','taskTransfers*') ? 'open' : '' }}">
     <a class="nav-link {{ Request::is('tasks*','taskTransfers*') ? 'active' : '' }}" href="{{ route('tasks.index') }}">
         <i class="nav-icon icon-menu"></i>
         <span>{{ trans('side_menu.tasks') }}</span>
     </a>
 </li>
+@endcan
 
+@if($isInventoryManager || (auth()->check() && auth()->user()->can('task')))
 <li class="nav-item {{ Request::is('trips*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('trips.index') }}">
         <i class="nav-icon icon-login"></i>
         <span>{{ trans('side_menu.trips') }}</span>
     </a>
 </li>
-
-@endcanany
+@endif
 
 
 @canany(['warehouse','inventorytransaction'])
-<li class="nav-item nav-dropdown {{ Request::is('warehouses*','warehouseTransactions*') ? 'open' : '' }}">
+<li class="nav-item nav-dropdown {{ Request::is('warehouses*','warehouseTransactions*','stockInRequests*') ? 'open' : '' }}">
     <a class="nav-link nav-dropdown-toggle" href="#">
         <i class="nav-icon icon-home"></i>
         <span>Warehouse</span>
@@ -199,6 +200,14 @@
             <li class="nav-item {{ Request::is('warehouses*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('warehouses*') ? 'active' : '' }}" href="{{ route('warehouses.index') }}">
                     <span>Warehouse</span>
+                </a>
+            </li>
+        </ul>
+
+        <ul class="nav-dropdown-items">
+            <li class="nav-item {{ Request::is('stockInRequests*') ? 'active' : '' }}">
+                <a class="nav-link {{ Request::is('stockInRequests*') ? 'active' : '' }}" href="{{ route('stockInRequests.index') }}">
+                    <span>{{ trans('side_menu.stock_in_approvals') }}</span>
                 </a>
             </li>
         </ul>
@@ -313,14 +322,14 @@
 
 
 
-@canany(['lorry','driver','kelindan','agent','supervisor','customer','specialprice','foc','assigns'])
+@if($isInventoryManager || (auth()->check() && auth()->user()->canAny(['lorry','driver','kelindan','agent','supervisor','customer','specialprice','foc','assigns'])))
 <li class="nav-item nav-dropdown {{ Request::is('lorries*','servicedetails*','drivers*','driverLocations*','kelindans*','agents*','supervisors*','customers*','specialprices*','focs*','assigns*') ? 'open' : '' }}">
     <a class="nav-link nav-dropdown-toggle" href="#">
         <i class="nav-icon icon-list"></i>
         <span>{{ trans('side_menu.master_data') }}</span>
     </a>
 
-    @can('lorry')
+    @if($isInventoryManager || (auth()->check() && auth()->user()->can('lorry')))
         <ul class="nav-dropdown-items">
             <li class="nav-item {{ Request::is('lorries*') ? 'active' : '' }}">
                 <a class="nav-link {{ Request::is('lorries*') ? 'active' : '' }}" href="{{ route('lorries.index') }}">
@@ -335,7 +344,7 @@
                 </a>
             </li>
         </ul> -->
-    @endcan
+    @endif
 
     @can('driver')
         <ul class="nav-dropdown-items">
@@ -435,7 +444,7 @@
     @endcan
 
 </li>
-@endcanany
+@endif
 
 @canany(['code'])
 <li class="nav-item nav-dropdown {{ Request::is('codes*') ? 'open' : '' }}">

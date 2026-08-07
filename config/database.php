@@ -52,6 +52,12 @@ return [
             'username' => env('DB_USERNAME', 'forge'),
             'password' => env('DB_PASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
+            // Force the MySQL session timezone so TIMESTAMP columns (created_at,
+            // updated_at) render in MYT on every host. Without this MySQL falls
+            // back to the OS timezone (MYT locally, UTC on the live server),
+            // which shifted timestamps 8h back on live. Numeric offset is used
+            // because named zones require MySQL's timezone tables to be loaded.
+            'timezone' => env('DB_TIMEZONE', '+08:00'),
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'prefix' => '',

@@ -2,6 +2,7 @@
 
 return [
     'action' => 'Action',
+    'active' => 'Active',
     'are_you_sure_to_delete_the_assign' => 'Are you sure to delete the assign',
     'assign_deleted_successfully' => 'Assign deleted successfully',
     'assign_not_found' => 'Assign not found',
@@ -24,6 +25,7 @@ return [
     'edit' => 'Edit',
     'edit_assigns' => 'Edit Assigns',
     'group' => 'Group',
+    'inactive' => 'Inactive',
     'placeholder_pick_driver' => 'pick driver',
     'placeholder_pick_group' => 'pick group',
     'save' => 'Save',

@@ -495,7 +495,7 @@
                                     <td class="text-center">{{ $index + 1 }}</td>
                                     <td>{{ $item['product_name'] }} ({{ $item['product_code'] }})</td>
                                     <td class="text-right">{{ number_format($item['quantity']) }}</td>
-                                    <td class="text-right">{{ number_format($item['price'], 2) }}</td>
+                                    <td class="text-right">{{ number_format($item['price'], 3) }}</td>
                                     <td class="text-right">{{ number_format($item['total'], 2) }}</td>
                                 </tr>
                                 @endforeach

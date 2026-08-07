@@ -55,7 +55,6 @@ class InvoiceController extends Controller
                     'products.name as product_name',
                     'products.unit_code',
                     'products.classification_code',
-                    'products.price as price',
                     'products.cost as cost',
                 ])->get()->groupBy('invoice_id'); // 🔥 important
 
@@ -92,7 +91,13 @@ class InvoiceController extends Controller
                                 'invoice_id'          => $d->invoice_id,
                                 'product_id'          => $d->product_id,
                                 'quantity'            => $d->quantity,
-                                'price'               => $d->price,
+                                // Send unit price derived from the authoritative line total so
+                                // AutoCount's Qty x UnitPrice equals VMS totalprice. The stored
+                                // `price` column is double(10,3) and rounds fractional-sen prices
+                                // (e.g. 0.025 -> 0.02), which would undercharge AutoCount.
+                                'price'               => $d->quantity > 0
+                                    ? round($d->totalprice / $d->quantity, 4)
+                                    : $d->price,
                                 'cost'                => $d->cost,
                                 'remark'              => $d->remark,
                                 'product_name'        => $d->product_name,
@@ -154,8 +159,19 @@ class InvoiceController extends Controller
                     ];
                     $statusCode = 404; // Not Found
                 } else {
-                    // Perform Update
-                    $invoice->autocount_status  = $request->autocount_status;
+                    $incomingStatus = $request->autocount_status;
+
+                    // If the sync failed and this invoice has not been
+                    // auto-requeued before, flip it back to 'pending' so it
+                    // gets picked up again. This only happens once - a second
+                    // failure is left as 'failed'.
+                    if (strtolower($incomingStatus) === 'failed' && !$invoice->autocount_auto_retried) {
+                        $invoice->autocount_status       = 'pending';
+                        $invoice->autocount_auto_retried = true;
+                    } else {
+                        $invoice->autocount_status = $incomingStatus;
+                    }
+
                     $invoice->autocount_message = $request->all() ?? null; // Optional message field
                     $invoice->save();
 

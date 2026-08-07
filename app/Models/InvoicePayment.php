@@ -22,10 +22,16 @@ class InvoicePayment extends Model
 
     public $fillable = [
         'invoice_id',
+        'payment_batch_id',
         'type',
         'customer_id',
         'amount',
         'status',
+        'autocount_status',
+        'autocount_message',
+        'payment_no',
+        'doc_id',
+        'autocount_auto_retried',
         'attachment',
         'driver_id',
         'user_id',
@@ -44,6 +50,13 @@ class InvoicePayment extends Model
      *
      * @var array
      */
+    // AutoCount AR Payment sync states (autocount_status column).
+    const AC_PENDING = 'pending'; // queued for auto sync (non-credit)
+    const AC_HOLD    = 'hold';    // credit - waits for a manual web "Sync" click
+    const AC_SUCCESS = 'success';
+    const AC_FAILED  = 'failed';
+    const AC_SKIPPED = 'skipped';
+
     protected $casts = [
         'id' => 'integer',
         'invoice_id' => 'integer',
@@ -51,6 +64,8 @@ class InvoicePayment extends Model
         'customer_id' => 'integer',
         'amount' => 'float',
         'status' => 'integer',
+        'doc_id' => 'integer',
+        'autocount_auto_retried' => 'boolean',
         'attachment' => 'string',
         'driver_id' => 'integer',
         'user_id' => 'integer',
