@@ -477,29 +477,16 @@ class ReportController extends AppBaseController
         
         // Generate report data
         $reportData = $service->generateReportOptimized($filters);
-        
-        // Calculate dynamic height based on content
-        $totalRows = 0;
-        foreach ($reportData['warehouses'] as $warehouse) {
-            foreach ($warehouse['products'] as $product) {
-                $totalRows += count($product['batches']);
-            }
-        }
-        
-        // Base height + additional per row
-        $minHeight = 450;
-        $heightPerRow = 23;
-        $calculatedHeight = $minHeight + ($totalRows * $heightPerRow);
-        $paperHeight = max($calculatedHeight, 500); // Minimum 500 points
 
         try {
             $pdf = Pdf::loadView('reports.stock_balance', [
                 'reportData' => $reportData,
                 'filters' => $filters
             ]);
-            
-            // Set custom paper size
-            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait'); // 595 is A4 width in points
+
+            // Use standard A4 pages so DomPDF paginates content across multiple
+            // physical pages at full size (avoids "fit to page" shrinking the text).
+            $pdf->setPaper('a4', 'portrait');
             $pdf->setOptions([
                 'isPhpEnabled' => true,
                 'isRemoteEnabled' => true,
@@ -543,14 +530,7 @@ class ReportController extends AppBaseController
         
         $service = new \App\Services\StockReceivedReportService();
         $reportData = $service->generateReport($date_from, $date_to, $filters);
-        
-        // Calculate PDF height based on number of items
-        $totalItems = count($reportData['items']);
-        $minHeight = 450;
-        $heightPerRow = 25;
-        $calculatedHeight = $minHeight + ($totalItems * $heightPerRow);
-        $paperHeight = max($calculatedHeight, 500);
-        
+
         try {
             $pdf = Pdf::loadView('reports.stock_received', [
                 'reportData' => $reportData,
@@ -558,9 +538,10 @@ class ReportController extends AppBaseController
                 'date_from' => $date_from,
                 'date_to' => $date_to
             ]);
-            
-            // Set custom paper size
-            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+
+            // Use standard A4 pages so DomPDF paginates content across multiple
+            // physical pages at full size (avoids "fit to page" shrinking the text).
+            $pdf->setPaper('a4', 'portrait');
             $pdf->setOptions([
                 'isPhpEnabled' => true,
                 'isRemoteEnabled' => true,
@@ -595,29 +576,17 @@ class ReportController extends AppBaseController
         
         $service = new \App\Services\DailySalesReportService();
         $reportData = $service->generateReport($date, $filters);
-        
-        // Calculate PDF height based on content
-        // Count total invoice items across all trips
-        $totalInvoiceItems = 0;
-        foreach ($reportData['trips'] as $trip) {
-            $totalInvoiceItems += count($trip['invoices']);
-        }
-        $totalProductItems = count($reportData['products']);
-        
-        $minHeight = 500;
-        $heightPerRow = 30;
-        $calculatedHeight = $minHeight + (($totalInvoiceItems + $totalProductItems) * $heightPerRow);
-        $paperHeight = max($calculatedHeight, 600);
-        
+
         try {
             $pdf = Pdf::loadView('reports.daily_sales', [
                 'reportData' => $reportData,
                 'filters' => $filters,
                 'selected_date' => $date
             ]);
-            
-            // Set custom paper size
-            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+
+            // Use standard A4 pages so DomPDF paginates content across multiple
+            // physical pages at full size (avoids "fit to page" shrinking the text).
+            $pdf->setPaper('a4', 'portrait');
             $pdf->setOptions([
                 'isPhpEnabled' => true,
                 'isRemoteEnabled' => true,
@@ -668,14 +637,7 @@ class ReportController extends AppBaseController
         
         $service = new \App\Services\FinishedGoodsTraceabilityService();
         $reportData = $service->generateReport($date_from, $date_to, $filters);
-        
-        // Calculate PDF height based on number of items
-        $totalItems = count($reportData['items']);
-        $minHeight = 500;
-        $heightPerRow = 30;
-        $calculatedHeight = $minHeight + ($totalItems * $heightPerRow);
-        $paperHeight = max($calculatedHeight, 600);
-        
+
         try {
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.finished_goods_traceability', [
                 'reportData' => $reportData,
@@ -747,17 +709,6 @@ class ReportController extends AppBaseController
         if (!$reportData) {
             return back()->with('error', 'No products found');
         }
-        
-        // Calculate total transactions across all products for PDF height
-        $totalTransactions = 0;
-        foreach ($reportData['products'] as $product) {
-            $totalTransactions += count($product['transactions']);
-        }
-        
-        $minHeight = 550;
-        $heightPerRow = 35;
-        $calculatedHeight = $minHeight + ($totalTransactions * $heightPerRow);
-        $paperHeight = max($calculatedHeight, 700);
         
         try {
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.stock_card', [

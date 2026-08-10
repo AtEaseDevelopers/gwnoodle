@@ -22,6 +22,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('invoices:sync-default-driver-id')
         ->dailyAt('00:00')
         ->withoutOverlapping();
+
+        $schedule->command('assigns:auto-assign')
+        ->dailyAt('01:00')
+        ->timezone('Asia/Kuala_Lumpur')
+        ->withoutOverlapping();
     }
 
     /**

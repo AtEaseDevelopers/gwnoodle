@@ -182,18 +182,7 @@ class TripController extends AppBaseController
             // Generate the report
             $service = new \App\Services\DailySalesReportService();
             $reportData = $service->generateReport($date, $filters);
-            
-            // Calculate PDF height based on content
-            $totalInvoiceItems = 0;
-            foreach ($reportData['trips'] as $trips) {
-                $totalInvoiceItems += count($trips['invoices']);
-            }           
-            $totalProductItems = count($reportData['products']);
-            $minHeight = 500;
-            $heightPerRow = 30;
-            $calculatedHeight = $minHeight + (($totalInvoiceItems + $totalProductItems) * $heightPerRow);
-            $paperHeight = max($calculatedHeight, 600);
-            
+
             // Generate PDF
             $pdf = Pdf::loadView('reports.daily_sales', [
                 'reportData' => $reportData,
@@ -206,9 +195,10 @@ class TripController extends AppBaseController
                     'lorry_no' => $trip->lorry ? $trip->lorry->lorryno : 'N/A',
                 ]
             ]);
-            
-            // Set custom paper size
-            $pdf->setPaper([0, 0, 595, $paperHeight], 'portrait');
+
+            // Use standard A4 pages so DomPDF paginates content across multiple
+            // physical pages at full size (avoids "fit to page" shrinking the text).
+            $pdf->setPaper('a4', 'portrait');
             $pdf->setOptions([
                 'isPhpEnabled' => true,
                 'isRemoteEnabled' => true,

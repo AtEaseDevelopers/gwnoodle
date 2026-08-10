@@ -106,7 +106,6 @@
         
         .warehouse-section {
             margin-bottom: 20px;
-            page-break-inside: avoid;
         }
         
         .warehouse-title {
@@ -132,6 +131,14 @@
             font-size: 9px;
         }
         
+        thead {
+            display: table-header-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
         th {
             background-color: #d4d4d4;
             color: black;
@@ -140,7 +147,7 @@
             border: 1px solid #ddd;
             font-weight: bold;
         }
-        
+
         td {
             padding: 4px;
             border: 1px solid #ddd;
@@ -335,10 +342,6 @@
                 @endif
             </table>
         </div>
-        
-        @if(($warehouseIndex + 1) % 3 == 0 && !$loop->last)
-            <div class="page-break"></div>
-        @endif
     @endforeach
 
     <htmlpagefooter name="html_footer">

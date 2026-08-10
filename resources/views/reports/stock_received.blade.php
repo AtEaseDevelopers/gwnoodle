@@ -104,6 +104,14 @@
             font-size: 9px;
         }
         
+        thead {
+            display: table-header-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
         th {
             background-color: #c2c2c2;
             color: black;
@@ -112,7 +120,7 @@
             border: 1px solid #ddd;
             font-weight: bold;
         }
-        
+
         td {
             padding: 5px 4px;
             border: 1px solid #ddd;
