@@ -220,6 +220,76 @@ class AutocountArPaymentSyncTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_cancelling_a_payment_via_edit_drops_it_from_the_sync_queue(): void
+    {
+        $batch = (string) Str::uuid();
+        $inv = $this->makeInvoice(Invoice::PAYMENT_TERM_CASH);
+        $pid = $this->makePayment($batch, $inv, 100, 1, InvoicePayment::AC_PENDING);
+
+        // Edit the payment and flip its status to Cancelled (2).
+        $this->actingAs($this->makeAdmin())
+            ->patch(route('invoicePayments.update', encrypt($pid)), [
+                'customer_id' => $this->customerId,
+                'invoice_id'  => [$inv],
+                'type'        => 1,
+                'amount'      => 100,
+                'status'      => 2,
+                'remark'      => '',
+            ]);
+
+        $row = DB::table('invoice_payments')->where('id', $pid)->first();
+        $this->assertEquals(2, $row->status);
+        // No longer queued -> the plugin poll (which only takes 'pending') skips it.
+        $this->assertEquals(InvoicePayment::AC_SKIPPED, $row->autocount_status);
+
+        $res = $this->getJson('/api/payment/pending')->assertStatus(200);
+        $this->assertNull(collect($res->json('data'))->firstWhere('batch_id', $batch));
+    }
+
+    public function test_cancelling_a_payment_keeps_a_successful_autocount_sync_intact(): void
+    {
+        $batch = (string) Str::uuid();
+        $inv = $this->makeInvoice(Invoice::PAYMENT_TERM_CASH);
+        $pid = $this->makePayment($batch, $inv, 100, 1, InvoicePayment::AC_SUCCESS);
+
+        $this->actingAs($this->makeAdmin())
+            ->patch(route('invoicePayments.update', encrypt($pid)), [
+                'customer_id' => $this->customerId,
+                'invoice_id'  => [$inv],
+                'type'        => 1,
+                'amount'      => 100,
+                'status'      => 2,
+                'remark'      => '',
+            ]);
+
+        // Already in AutoCount -> keep the 'success' record rather than hiding it.
+        $this->assertEquals(
+            InvoicePayment::AC_SUCCESS,
+            DB::table('invoice_payments')->where('id', $pid)->value('autocount_status')
+        );
+    }
+
+    public function test_mass_cancel_drops_pending_rows_from_the_sync_queue(): void
+    {
+        $batch = (string) Str::uuid();
+        $inv = $this->makeInvoice(Invoice::PAYMENT_TERM_CASH);
+        $pending = $this->makePayment($batch, $inv, 100, 1, InvoicePayment::AC_PENDING);
+        $synced  = $this->makePayment($batch, $inv, 200, 1, InvoicePayment::AC_SUCCESS);
+
+        $this->actingAs($this->makeAdmin())
+            ->post('/invoicePayments/massupdatestatus', ['ids' => [$pending, $synced], 'status' => 2]);
+
+        $this->assertEquals(
+            InvoicePayment::AC_SKIPPED,
+            DB::table('invoice_payments')->where('id', $pending)->value('autocount_status')
+        );
+        // A row already synced to AutoCount keeps its 'success' record.
+        $this->assertEquals(
+            InvoicePayment::AC_SUCCESS,
+            DB::table('invoice_payments')->where('id', $synced)->value('autocount_status')
+        );
+    }
+
     public function test_manual_sync_endpoint_rejects_unapproved_payment(): void
     {
         $batch = (string) Str::uuid();

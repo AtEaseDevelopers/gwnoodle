@@ -277,6 +277,12 @@ class InvoicePaymentController extends AppBaseController
         } else {
             $input['approve_at'] = null;
             $input['approve_by'] = null;
+            // A cancelled payment must never sync to AutoCount. Drop it out of the
+            // sync queue - unless it already synced successfully, in which case we
+            // keep the 'success' record (the OR really is in AutoCount).
+            if ($invoicePayment->autocount_status !== InvoicePayment::AC_SUCCESS) {
+                $input['autocount_status'] = InvoicePayment::AC_SKIPPED;
+            }
         }
 
         if($request->file('attachment') != null){
@@ -308,18 +314,26 @@ class InvoicePaymentController extends AppBaseController
                 $firstId = array_shift($inv_ids);
                 $invoicePayment->invoice_id = $firstId;
                 $invoicePayment->amount = InvoiceDetail::where('invoice_id', $firstId)->sum("totalprice");
+                $invoicePayment->status = $input['status'];
+                if (array_key_exists('autocount_status', $input)) {
+                    $invoicePayment->autocount_status = $input['autocount_status'];
+                }
                 $invoicePayment->save();
 
                 // Create new payments for remaining invoices
                 foreach ($inv_ids as $inv_id) {
                     $amount = InvoiceDetail::where('invoice_id', $inv_id)->sum("totalprice");
-                    
+
                     $invoicepayment_new = new InvoicePayment();
                     $invoicepayment_new->invoice_id = $inv_id;
                     $invoicepayment_new->type = $input['type'];
                     $invoicepayment_new->customer_id = $input['customer_id'];
                     $invoicepayment_new->amount = $amount;
                     $invoicepayment_new->status = $input['status'];
+                    // A cancelled payment must never enter the AutoCount sync queue.
+                    if ((int) $input['status'] !== 1) {
+                        $invoicepayment_new->autocount_status = InvoicePayment::AC_SKIPPED;
+                    }
                     $invoicepayment_new->driver_id = $input['driver_id'] ?? $invoicePayment->driver_id;
                     $invoicepayment_new->approve_by = Auth::user()->name;
                     $invoicepayment_new->approve_at = $input['approve_at'];
@@ -333,6 +347,9 @@ class InvoicePaymentController extends AppBaseController
                 $invoicePayment->approve_by = $input['approve_by'];
                 $invoicePayment->approve_at = $input['approve_at'];
                 $invoicePayment->status = $input['status'];
+                if (array_key_exists('autocount_status', $input)) {
+                    $invoicePayment->autocount_status = $input['autocount_status'];
+                }
                 $invoicePayment->type = $input['type'];
                 $invoicePayment->customer_id = $input['customer_id'];
                 $invoicePayment->driver_id = $input['driver_id'] ?? $invoicePayment->driver_id;
@@ -465,6 +482,11 @@ class InvoicePaymentController extends AppBaseController
         if($status == 1){
             $count = InvoicePayment::whereIn('id',$ids)->update(['status'=>$status,'approve_by'=>Auth::user()->name,'approve_at'=>gmdate("Y-m-d H:i:s")]);
         }else{
+            // Cancelled payments must never sync to AutoCount. Drop queued rows out of
+            // the queue, but leave any row already synced ('success') untouched.
+            InvoicePayment::whereIn('id',$ids)
+                ->where('autocount_status', '!=', InvoicePayment::AC_SUCCESS)
+                ->update(['autocount_status' => InvoicePayment::AC_SKIPPED]);
             $count = InvoicePayment::whereIn('id',$ids)->update(['status'=>$status,'approve_by'=>null,'approve_at'=>null]);
         }
     

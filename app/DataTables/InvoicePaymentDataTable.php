@@ -247,7 +247,7 @@ class InvoicePaymentDataTable extends DataTable
                             }else if(columns[index].title == \'Group\'){
                                 var input = \'<select id="group" class="border-0" style="width: 100%;"><option value=""></option></select>\';
                             }else if(columns[index].title == \'Autocount Status\'){
-                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="pending">Pending</option><option value="hold">Hold</option><option value="success">Success</option><option value="failed">Failed</option></select>\';
+                                var input = \'<select class="border-0" style="width: 100%;"><option value=""></option><option value="pending">Pending</option><option value="hold">Hold</option><option value="success">Success</option><option value="failed">Failed</option><option value="skipped">Skipped</option></select>\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
                             }
