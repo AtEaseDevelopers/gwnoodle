@@ -224,7 +224,7 @@ class InventoryTransactionDataTable extends DataTable
             'date' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('inventory_transactions.date'),
                 'data' => 'date',
-                'name' => 'date',
+                'name' => 'inventory_transactions.date',
                 'width' => '150px',
                 'className' => 'text-left'
             ]),
@@ -267,7 +267,7 @@ class InventoryTransactionDataTable extends DataTable
             'quantity' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('inventory_transactions.quantity'),
                 'data' => 'quantity',
-                'name' => 'quantity',
+                'name' => 'inventory_transactions.quantity',
                 'width' => '100px',
                 'className' => 'text-center'
             ]),
@@ -286,7 +286,7 @@ class InventoryTransactionDataTable extends DataTable
             'remark' => new \Yajra\DataTables\Html\Column([
                 'title' => trans('inventory_transactions.remark'),
                 'data' => 'remark',
-                'name' => 'remark',
+                'name' => 'inventory_transactions.remark',
                 'defaultContent' => '-',
                 'width' => '200px',
                 'className' => 'text-left'

@@ -130,7 +130,7 @@ class servicedetailsDataTable extends DataTable
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Unactive</option></select>\';
                             }else if(columns[index].title == \'Date\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
-                            }else if(columns[index].title == \'Next Date\'){
+                            }else if(columns[index].title == \'Next date\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
                             }else{
                                 var input = \'<input type="text" placeholder="Search ">\';
@@ -166,12 +166,18 @@ class servicedetailsDataTable extends DataTable
             'type'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorry_service.type'),
             'data' => 'type',
             'name' => 'servicedetails.type']),
-            trans('lorry_service.date'),
+            'date'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorry_service.date'),
+            'data' => 'date',
+            'name' => 'servicedetails.date']),
             'nextdate'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorry_service.next_date'),
             'data' => 'nextdate',
             'name' => 'servicedetails.nextdate']),
-            trans('lorry_service.amount'),
-            trans('lorry_service.remark'),
+            'amount'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorry_service.amount'),
+            'data' => 'amount',
+            'name' => 'servicedetails.amount']),
+            'remark'=> new \Yajra\DataTables\Html\Column(['title' => trans('lorry_service.remark'),
+            'data' => 'remark',
+            'name' => 'servicedetails.remark']),
         ];
     }
 

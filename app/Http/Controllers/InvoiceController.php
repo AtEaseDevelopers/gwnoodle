@@ -245,6 +245,11 @@ class InvoiceController extends AppBaseController
             $invoice = $this->invoiceRepository->update($input, $id);
         }
 
+        // The customer may have been changed on the edit form - keep any
+        // linked payments pointing at the invoice's (new) customer, otherwise
+        // the AutoCount OR is issued against the old debtor.
+        $this->syncInvoicePaymentCustomer($invoice);
+
          if($old_payment != $input['paymentterm'])
         {
             $invoicePayment = InvoicePayment::where('invoice_id', $id)->first();
@@ -566,6 +571,34 @@ class InvoiceController extends AppBaseController
      * back to for non-cash payments, and no record of what it was before
      * cancellation, so those are left untouched.
      */
+    /**
+     * Keep linked invoice payments' customer in sync with the invoice after
+     * an edit. A payment already pushed (or attempted) to AutoCount under the
+     * old customer is re-queued so the plugin re-issues/edits the OR with the
+     * right debtor; 'hold' rows just get the customer fixed and still wait
+     * for their manual "Sync" click.
+     */
+    private function syncInvoicePaymentCustomer(Invoice $invoice): void
+    {
+        $payments = InvoicePayment::where('invoice_id', $invoice->id)
+            ->where('customer_id', '!=', $invoice->customer_id)
+            ->get();
+
+        foreach ($payments as $payment) {
+            $payment->customer_id = $invoice->customer_id;
+
+            if (in_array($payment->autocount_status, [InvoicePayment::AC_SUCCESS, InvoicePayment::AC_FAILED], true)) {
+                if (empty($payment->payment_batch_id)) {
+                    $payment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                }
+                $payment->autocount_status       = InvoicePayment::AC_PENDING;
+                $payment->autocount_auto_retried = false;
+            }
+
+            $payment->save();
+        }
+    }
+
     private function syncInvoicePaymentStatus(Invoice $invoice, int $newInvoiceStatus): void
     {
         $invoicePayment = InvoicePayment::where('invoice_id', $invoice->id)->first();
@@ -954,6 +987,9 @@ class InvoiceController extends AppBaseController
                     $invoicePayment->save();
                 } else {
                     // Amount changed -> re-queue so AutoCount edits the existing OR.
+                    // Also re-align the customer in case the invoice's customer
+                    // was changed while this payment still carried the old one.
+                    $existingPayment->customer_id = $invoice->customer_id;
                     $existingPayment->amount = $existingTotal;
                     if (empty($existingPayment->payment_batch_id)) {
                         $existingPayment->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
@@ -1159,6 +1195,9 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->save();
                 } else {
                     // Amount changed -> re-queue so AutoCount edits the existing OR.
+                    // Also re-align the customer in case the invoice's customer
+                    // was changed while this payment still carried the old one.
+                    $invoicePayment->customer_id = $invoice->customer_id;
                     $invoicePayment->status = 1;
                     $invoicePayment->amount = $totalAmount;
                     if (empty($invoicePayment->payment_batch_id)) {
@@ -1328,6 +1367,9 @@ class InvoiceController extends AppBaseController
                     $invoicepayment_new->save();
                 } else {
                     // Amount changed -> re-queue so AutoCount edits the existing OR.
+                    // Also re-align the customer in case the invoice's customer
+                    // was changed while this payment still carried the old one.
+                    $invoicePayment->customer_id = $invoice->customer_id;
                     $invoicePayment->status = 1;
                     $invoicePayment->amount = $totalAmount;
                     if (empty($invoicePayment->payment_batch_id)) {

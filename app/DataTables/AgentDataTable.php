@@ -121,7 +121,7 @@ class AgentDataTable extends DataTable
                     .every(function (index) {
                         var column = this;
                         if(columns[index].searchable){
-                            if(columns[index].title == \'Status\'){
+                            if(columns[index].name == \'agents.status\'){
                                 var input = \'<select class="border-0" style="width: 100%;"><option value="1">Active</option><option value="0">Unactive</option></select>\';
                             }else if(columns[index].title == \'1st Vaccine Date\'){
                                 var input = \'<input type="text" id="\'+index+\'Date" onclick="searchDateColumn(this);" placeholder="Search ">\';
@@ -163,8 +163,13 @@ class AgentDataTable extends DataTable
             'name'=> new \Yajra\DataTables\Html\Column(['title' => trans('agents.name'),
             'data' => 'name',
             'name' => 'agents.name']),
-             trans('agents.ic'),
-             trans('agents.phone'),
+            'ic'=> new \Yajra\DataTables\Html\Column(['title' => trans('agents.ic'),
+            'data' => 'ic',
+            'name' => 'agents.ic']),
+
+            'phone'=> new \Yajra\DataTables\Html\Column(['title' => trans('agents.phone'),
+            'data' => 'phone',
+            'name' => 'agents.phone']),
             // 'commissionrate'=> new \Yajra\DataTables\Html\Column(['title' => 'Commission Rate',
             // 'data' => 'commissionrate',
             // 'name' => 'commissionrate']),

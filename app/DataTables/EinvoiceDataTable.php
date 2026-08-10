@@ -90,7 +90,10 @@ class EinvoiceDataTable extends DataTable
 
             'customer'=> new \Yajra\DataTables\Html\Column(['title' => 'Customer',
             'data' => 'invoice.customer.company',
-            'name' => 'customer.company',
+            // Must match the eager-loaded relation key ('invoice.customer') so
+            // Yajra searches via whereHas instead of emitting a raw
+            // `customer.company` column that doesn't exist in this query.
+            'name' => 'invoice.customer.company',
             'orderable' => false]),
 
             'currency'=> new \Yajra\DataTables\Html\Column(['title' => 'Currency',

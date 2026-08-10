@@ -21,9 +21,6 @@ class ProductBatchDataTable extends DataTable
 
         return $dataTable
             ->addColumn('action', 'product_batches.datatables_actions')
-            ->editColumn('product_id', function($batch) {
-                return $batch->product ? $batch->product->name : 'N/A';
-            })
             ->editColumn('quantity', function($batch) {
                 return number_format($batch->quantity);
             })
@@ -57,7 +54,11 @@ class ProductBatchDataTable extends DataTable
      */
     public function query(ProductBatch $model)
     {
-        return $model->newQuery()->with('product');
+        // select() guards against the leftJoin Yajra adds when searching or
+        // sorting the product.name relation column - without it the joined
+        // products columns (id, status, created_at...) would overwrite the
+        // batch's own values in the result rows.
+        return $model->newQuery()->with('product')->select('product_batches.*');
     }
 
     /**
@@ -181,7 +182,15 @@ class ProductBatchDataTable extends DataTable
                 'exportable' => false,
                 'printable' => false
             ]),
-            'product_id' => ['title' => 'Product', 'data' => 'product_id', 'name' => 'product_id'],
+            // Point data/name at the relation (like the invoice table's
+            // customer column) so searching/sorting this column runs against
+            // products.name instead of the numeric product_id.
+            'product_id' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Product',
+                'data' => 'product.name',
+                'name' => 'product.name',
+                'defaultContent' => 'N/A',
+            ]),
             'batch_code' => ['title' => 'Batch Code', 'data' => 'batch_code', 'name' => 'batch_code'],
             'expiry_date' => ['title' => 'Expiry Date', 'data' => 'expiry_date', 'name' => 'expiry_date'],
             'quantity' => ['title' => 'Current Qty', 'data' => 'quantity', 'name' => 'quantity'],

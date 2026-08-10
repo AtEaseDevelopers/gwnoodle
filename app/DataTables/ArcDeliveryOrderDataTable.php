@@ -19,6 +19,20 @@ class ArcDeliveryOrderDataTable extends DataTable
     {
         $dataTable = new EloquentDataTable($query);
 
+        // source() and destinate() both point at the locations table; Yajra
+        // only joins a table once, so without these overrides a Destination
+        // search would silently run against the Source join instead.
+        $dataTable->filterColumn('source.code', function ($query, $keyword) {
+            $query->whereHas('source', function ($q) use ($keyword) {
+                $q->where('code', 'like', "%{$keyword}%");
+            });
+        });
+        $dataTable->filterColumn('destinate.code', function ($query, $keyword) {
+            $query->whereHas('destinate', function ($q) use ($keyword) {
+                $q->where('code', 'like', "%{$keyword}%");
+            });
+        });
+
         return $dataTable->addColumn('action', 'archived.delivery_orders.datatables_actions');
     }
 
@@ -204,10 +218,10 @@ class ArcDeliveryOrderDataTable extends DataTable
             'name' => 'arc_deliveryorders.shipweight']),
             'fees'=> new \Yajra\DataTables\Html\Column(['title' => 'Loading/Unloading Fees',
             'data' => 'fees',
-            'name' => 'fees']),
+            'name' => 'arc_deliveryorders.fees']),
             'tol'=> new \Yajra\DataTables\Html\Column(['title' => 'Tol',
             'data' => 'tol',
-            'name' => 'tol']),
+            'name' => 'arc_deliveryorders.tol']),
             'billingrate'=> new \Yajra\DataTables\Html\Column(['title' => 'Billing Rate',
             'data' => 'billingrate_data',
             'name' => 'arc_deliveryorders.billingrate']),
@@ -218,7 +232,11 @@ class ArcDeliveryOrderDataTable extends DataTable
             'data' => 'claims',
             'name' => 'claims',
             'searchable' => false]),
-            'status',
+            // Qualified: the joined claims table also has a `status` column,
+            // so a bare `status` in the WHERE clause is ambiguous (SQL 1052).
+            'status'=> new \Yajra\DataTables\Html\Column(['title' => 'Status',
+            'data' => 'status',
+            'name' => 'arc_deliveryorders.status']),
             'remark'=> new \Yajra\DataTables\Html\Column(['title' => 'Remark',
             'data' => 'remark',
             'name' => 'arc_deliveryorders.remark']),

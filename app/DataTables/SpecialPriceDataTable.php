@@ -164,8 +164,14 @@ class SpecialPriceDataTable extends DataTable
             'customer_id'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('special_prices.customer'),
             'data' => 'customer.company',
             'name' => 'customer.company']),
-            'price',
-            'status'
+            // Qualified: the products table (joined for the Product column's
+            // search/sort) also has price and status columns.
+            'price'=> new \Yajra\DataTables\Html\Column(['title' => 'Price',
+            'data' => 'price',
+            'name' => 'special_prices.price']),
+            'status'=> new \Yajra\DataTables\Html\Column(['title' => 'Status',
+            'data' => 'status',
+            'name' => 'special_prices.status'])
         ];
     }
 
