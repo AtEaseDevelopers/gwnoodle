@@ -1796,10 +1796,16 @@ class DriverController extends Controller
             ->first() ?? null;       
 
 
+            // DomPDF is memory-hungry rendering invoices with many detail rows,
+            // overrunning PHP's default 128MB limit and returning a bare 500
+            // (a memory FatalError is a \Error, not \Exception, so the catch
+            // below never sees it). Raise the ceiling for this request.
+            ini_set('memory_limit', '512M');
+
             $pdf = Pdf::loadView('invoices.print', [
                 'invoice' => $invoice
             ]);
-            
+
             $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
                 ->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
 
@@ -2662,10 +2668,16 @@ class DriverController extends Controller
             ->select('companies.*')
             ->first() ?? null;
             
+            // DomPDF is memory-hungry rendering invoices with many detail rows,
+            // overrunning PHP's default 128MB limit and returning a bare 500
+            // (a memory FatalError is a \Error, not \Exception, so the catch
+            // below never sees it). Raise the ceiling for this request.
+            ini_set('memory_limit', '512M');
+
               $pdf = Pdf::loadView('invoices.print', array(
                     'invoice' => $invoice
                 ));
-    
+
             $pdf->setPaper(array(0, 0, 300, $height), 'portrait')->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
     
             $invoiceFilename = 'invoice-' . $invoice->invoiceno . '.pdf';
@@ -3191,11 +3203,17 @@ class DriverController extends Controller
             ->select('companies.*')
             ->first() ?? null;
             
+            // DomPDF is memory-hungry rendering receipts, overrunning PHP's
+            // default 128MB limit and returning a bare 500 (a memory FatalError
+            // is a \Error, not \Exception, so the catch below never sees it).
+            // Raise the ceiling for this request.
+            ini_set('memory_limit', '512M');
+
             $pdf = Pdf::loadView('invoice_payments.print', array(
                 'invoice' => $invoice
             ));
 
-    
+
             $pdf->setPaper(array(0, 0, 300, $min), 'portrait')->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
             
             $invoiceFilename = 'payment-' . $invoice->id . '.pdf';
