@@ -112,6 +112,14 @@
             }
         }, cb);
 
+        // daterangepicker is initialised with today already selected, and its
+        // hide() only fires the callback when the range CHANGES. So clicking the
+        // "Today" preset (which equals the default) never populates the hidden
+        // date inputs, leaving them empty on Search - the "clicked Today but no
+        // date" bug. Prime the inputs with today up front so Today works out of
+        // the box; other presets differ from the default and fire cb normally.
+        cb(start, end);
+
         window.checkboxid = [];
         $(document).on("change", ".checkboxselect", function(e){
             if(this.checked){

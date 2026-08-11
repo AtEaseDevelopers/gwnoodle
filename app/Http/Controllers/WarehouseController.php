@@ -391,6 +391,7 @@ class WarehouseController extends Controller
                     'batch_count' => $items->count()
                 ];
             })
+            ->sortBy('product_code', SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
 
         return response()->json([
