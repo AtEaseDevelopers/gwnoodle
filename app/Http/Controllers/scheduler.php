@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Code;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use App\Models\Kelindan;
 
 class scheduler extends Controller
@@ -24,6 +25,10 @@ class scheduler extends Controller
     public function updateDoRate()
     {
         Log::error('Scheduler Job Started: updateDoRate');
+        if(!Schema::hasTable('deliveryorders')){
+            Log::error('updateDoRate skipped: deliveryorders table does not exist on this deployment');
+            return 'Delivery orders not available on this deployment....';
+        }
         $currentTimeStamp = date("Y-m-d H:i:s");
         $defaultemail = Code::where('code','emailreceiver')->select('value')->get()->toarray();
         $defaultemails = [];
@@ -44,6 +49,10 @@ class scheduler extends Controller
     public function archivedDeliveryOrder()
     {
         Log::error('Scheduler Job Started: archivedDeliveryOrder');
+        if(!Schema::hasTable('deliveryorders')){
+            Log::error('archivedDeliveryOrder skipped: deliveryorders table does not exist on this deployment');
+            return 'Delivery orders not available on this deployment....';
+        }
         $currentTimeStamp = date("Y-m-d H:i:s");
         $defaultemail = Code::where('code','emailreceiver')->select('value')->get()->toarray();
         $defaultemails = [];
