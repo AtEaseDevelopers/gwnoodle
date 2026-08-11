@@ -14,7 +14,8 @@
             font-family: 'Courier New', Courier, monospace;
             line-height: 1.3;
             margin: 0 8px;
-            padding: 0;
+            /* Top gap so the company name isn't clipped by the printer's top edge. */
+            padding: 6mm 0 0;
             width: auto;
         }
         table{

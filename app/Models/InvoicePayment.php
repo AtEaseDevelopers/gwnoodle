@@ -112,5 +112,19 @@ class InvoicePayment extends Model
         return Carbon::parse($value)->format('d-m-Y');
     }
 
-    
+    /**
+     * Serialize dates in the app timezone (MYT) instead of UTC.
+     *
+     * created_at is a TIMESTAMP column AND carries a `date:d-m-Y` cast. When a
+     * model is arrayed/JSONed (e.g. by the DataTable), Laravel first runs every
+     * getDates() attribute through serializeDate(), whose default collapses the
+     * Carbon to its true UTC instant (toJSON). The `date:d-m-Y` cast then reparses
+     * that UTC string, so a payment made at 05:28 MYT (21:28 UTC the day before)
+     * rendered as the previous day. Formatting in local time keeps the calendar
+     * date the user actually recorded.
+     */
+    protected function serializeDate(\DateTimeInterface $date)
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
 }

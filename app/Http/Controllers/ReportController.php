@@ -711,6 +711,11 @@ class ReportController extends AppBaseController
         }
         
         try {
+            // DomPDF is memory-hungry with large transaction tables (a ~230-row
+            // stock card peaks around 147MB), which overruns PHP's default 128MB
+            // limit and returns a blank 500. Raise the ceiling for this request.
+            ini_set('memory_limit', '512M');
+
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.stock_card', [
                 'reportData' => $reportData,
                 'filters' => $filters,

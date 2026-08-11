@@ -23,7 +23,9 @@
         body {
             font-family: "dejavu sans", "helvetica", "tahoma", sans-serif;
             margin: 0;
-            padding: 0 10mm;
+            /* @page margin-top is unreliable in dompdf, so add real top padding
+               so the company name isn't clipped by the printer's top edge. */
+            padding: 10mm 10mm 0;
         }
 
         /* Main invoice container */
@@ -270,7 +272,7 @@
         @media print {
             body {
                 background-color: white;
-                padding: 0;
+                padding: 10mm 10mm 0;
                 margin: 0;
             }
             .invoice-container {
