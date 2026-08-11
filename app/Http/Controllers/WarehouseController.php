@@ -385,6 +385,7 @@ class WarehouseController extends Controller
                 $firstItem = $items->first();
                 return [
                     'product_id' => $productId,
+                    'product_code' => $firstItem->product ? $firstItem->product->unit_code : '',
                     'product_name' => $firstItem->product ? $firstItem->product->name : 'Unknown',
                     'total_quantity' => $items->sum('quantity'),
                     'batch_count' => $items->count()

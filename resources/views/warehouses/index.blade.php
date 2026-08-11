@@ -1020,7 +1020,8 @@
                             
                             if (response.products && response.products.length > 0) {
                                 $.each(response.products, function(index, product) {
-                                    productSelect.append('<option value="' + product.product_id + '">' + product.product_name + ' (Total: ' + product.total_quantity + ' units)</option>');
+                                    var productLabel = (product.product_code ? '[' + product.product_code + '] ' : '') + product.product_name;
+                                    productSelect.append('<option value="' + product.product_id + '">' + productLabel + ' (Total: ' + product.total_quantity + ' units)</option>');
                                 });
                                 productSelect.prop('disabled', false);
                             } else {
@@ -1224,7 +1225,8 @@
 
                             if (response.products && response.products.length > 0) {
                                 $.each(response.products, function(index, product) {
-                                    productSelect.append('<option value="' + product.product_id + '">' + product.product_name + ' (Total: ' + product.total_quantity + ' units)</option>');
+                                    var productLabel = (product.product_code ? '[' + product.product_code + '] ' : '') + product.product_name;
+                                    productSelect.append('<option value="' + product.product_id + '">' + productLabel + ' (Total: ' + product.total_quantity + ' units)</option>');
                                 });
                                 productSelect.prop('disabled', false);
                             } else {
