@@ -207,7 +207,6 @@ $(function () {
         var oldUserId = "{{ old('user_id') }}";
         var oldGroup = "{{ old('group') }}";
         var oldProductId = "{{ old('product_id') }}";
-        var oldExpiryDate = "{{ old('expiry_date') }}";
         var oldAddOnFields = "{{ old('add_on_fields') }}";
 
         if (oldUserId) {
@@ -227,22 +226,12 @@ $(function () {
             $('#product_code_preview').val(unitCode);
         }
 
-        if (oldExpiryDate) {
-            var date = new Date(oldExpiryDate);
-            var year = date.getFullYear().toString().slice(-2);
-            var month = (date.getMonth() + 1).toString().padStart(2, '0');
-            var day = date.getDate().toString().padStart(2, '0');
-            
-            $('#year_display').val(year);
-            $('#month_display').val(month);
-            $('#day_display').val(day);
-        }
-
         if (oldAddOnFields) {
             $('#add_on_fields').val(oldAddOnFields);
         }
 
-        updateBarcodePreview();
+        // Derive the Y/M/D fields + barcode from the (re)populated expiry date.
+        syncExpiryToBarcode();
     }
 
     // Auto-fill unit code and update preview when product is selected
@@ -269,24 +258,27 @@ $(function () {
         updateBarcodePreview();
     });
 
-    // Handle expiry date change
-    $('#expiry_date').on('change', function() {
-        var expiryDate = $(this).val();
-        if (expiryDate) {
-            var date = new Date(expiryDate);
-            var year = date.getFullYear().toString().slice(-2);
-            var month = (date.getMonth() + 1).toString().padStart(2, '0');
-            var day = date.getDate().toString().padStart(2, '0');
-            
-            $('#year_display').val(year);
-            $('#month_display').val(month);
-            $('#day_display').val(day);
+    // Sync the hidden Y/M/D fields (which drive the barcode) from the expiry
+    // date. Parsed from the raw YYYY-MM-DD string, not `new Date()`, so it
+    // cannot drift by a day/year through timezone quirks.
+    function syncExpiryToBarcode() {
+        var expiryDate = $('#expiry_date').val();
+        var parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiryDate);
+        if (parts) {
+            $('#year_display').val(parts[1].slice(-2));
+            $('#month_display').val(parts[2]);
+            $('#day_display').val(parts[3]);
         } else {
             $('#year_display').val('');
             $('#month_display').val('');
             $('#day_display').val('');
         }
         updateBarcodePreview();
+    }
+
+    // Handle expiry date change
+    $('#expiry_date').on('change input', function() {
+        syncExpiryToBarcode();
     });
 
     // Handle add-on fields change
@@ -332,6 +324,11 @@ $(function () {
 
     // Form validation before submit
     $('#productBatchForm').on('submit', function(e) {
+        // Rebuild the barcode from the CURRENT expiry so a stale cached value
+        // (e.g. expiry changed via autofill without firing 'change') can never
+        // be submitted out of sync with the expiry date.
+        syncExpiryToBarcode();
+
         var group = $('#barcode_group').val();
         var userId = $('#user_id_input').val();
         var productId = $('#barcode_product_id').val();

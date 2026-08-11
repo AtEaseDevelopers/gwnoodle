@@ -37,6 +37,12 @@ class ProductBatch extends Model
     const STATUS_INACTIVE = 3;
 
     /**
+     * Fixed filler digit that separates the year from the day in a
+     * system-generated batch code (group+user+YY+FIXED+DD+MM+productCode).
+     */
+    const BATCH_CODE_FIXED_DIGIT = '8';
+
+    /**
      * Check if batch is expired
      */
     public function isExpired()
@@ -211,7 +217,7 @@ class ProductBatch extends Model
     public static function generateBatchCode($groupId, $userId, $productCode)
     {
         $year = date('y');
-        $fixedDigit = '8';
+        $fixedDigit = self::BATCH_CODE_FIXED_DIGIT;
         $day = date('d');
         $month = date('m');
         
@@ -244,6 +250,44 @@ class ProductBatch extends Model
         ];
     }
     
+    /**
+     * Decode the expiry date embedded in a system-generated batch code.
+     *
+     * Layout: group(1) user(2) YY(2) FIXED(1) DD(2) MM(2) productCode.
+     * Returns a 'Y-m-d' string, or null when the code is not date-encoded
+     * (legacy/imported codes) or the embedded date is not a real calendar date.
+     */
+    public static function expiryDateFromCode($batchCode)
+    {
+        if (!is_string($batchCode) || strlen($batchCode) < 10) {
+            return null;
+        }
+
+        // System codes carry the fixed filler digit right after the year;
+        // its absence means the code was not generated with an embedded date.
+        if (substr($batchCode, 5, 1) !== self::BATCH_CODE_FIXED_DIGIT) {
+            return null;
+        }
+
+        $yy = substr($batchCode, 3, 2);
+        $dd = substr($batchCode, 6, 2);
+        $mm = substr($batchCode, 8, 2);
+
+        if (!ctype_digit($yy . $dd . $mm)) {
+            return null;
+        }
+
+        $year = 2000 + (int) $yy;
+        $month = (int) $mm;
+        $day = (int) $dd;
+
+        if (!checkdate($month, $day, $year)) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d-%02d', $year, $month, $day);
+    }
+
     /**
      * Find product by batch code
      */

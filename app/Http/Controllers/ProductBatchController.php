@@ -91,6 +91,19 @@ class ProductBatchController extends AppBaseController
             'status' => 'sometimes|integer'
         ]);
 
+        // Guard: the expiry date must match the date encoded in the batch code.
+        // Catches data-entry slips (e.g. a mistyped year) before they are saved.
+        $validator->after(function ($validator) use ($request) {
+            $expected = ProductBatch::expiryDateFromCode($request->batch_code);
+            if ($expected && $request->filled('expiry_date')) {
+                $submitted = \Carbon\Carbon::parse($request->expiry_date)->format('Y-m-d');
+                if ($submitted !== $expected) {
+                    $validator->errors()->add('expiry_date',
+                        "Expiry date ({$submitted}) does not match the batch code date ({$expected}). Please check the year.");
+                }
+            }
+        });
+
         if ($validator->fails()) {
             return redirect()->back()
                 ->withErrors($validator)
