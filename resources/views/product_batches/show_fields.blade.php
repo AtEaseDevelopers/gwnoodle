@@ -6,11 +6,7 @@
         <div class="card-header">
             <h3 class="card-title" style="font-size: 1.5rem;">Batch Details: {{ $productBatch->batch_code }}</h3>
             <div class="card-tools">
-                <a href="{{ route('productBatches.edit', Crypt::encrypt($productBatch->id)) }}" 
-                class="btn btn-info btn-sm" style="font-size: 0.9rem;">
-                    <i class="fa fa-edit"></i> Edit
-                </a>
-                <a href="{{ route('productBatches.print-label', Crypt::encrypt($productBatch->id)) }}" 
+                <a href="{{ route('productBatches.print-label', Crypt::encrypt($productBatch->id)) }}"
                    class="btn btn-primary btn-sm" style="font-size: 0.9rem;">
                     <i class="fa fa-print"></i> Download Barcode
                 </a>
