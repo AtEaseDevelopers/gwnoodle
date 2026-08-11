@@ -143,6 +143,9 @@
                 'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
             }
         }, cb);
+        // Prime inputs with today so the "Today" preset (unchanged from the default
+        // selection) still populates them - daterangepicker skips cb when unchanged.
+        cb(start, end);
     </script>
 @endpush
 
