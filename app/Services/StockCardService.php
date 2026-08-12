@@ -253,6 +253,7 @@ class StockCardService
             InventoryTransaction::TYPE_STOCK_OUT => 'SO',
             InventoryTransaction::TYPE_RETURN => 'RET',
             InventoryTransaction::TYPE_TRANSFER => 'TRF',
+            InventoryTransaction::TYPE_STOCK_ADJUSTMENT => 'SA',
             default => 'N/A'
         };
     }
@@ -349,14 +350,14 @@ class StockCardService
      */
     public function generatePDF($reportData, $format = 'A4')
     {
-        $pdf = \PDF::loadView('reports.stock_card', compact('reportData'));
-        
-        if ($format == 'A4') {
-            $pdf->setPaper('A4', 'landscape');
-        } else {
-            $pdf->setPaper('A4', 'portrait');
-        }
-        
+        // Use wkhtmltopdf (Snappy) — far faster and lighter than DomPDF on the large
+        // transaction tables a stock card produces. Keep parity with stockCardReportView().
+        $pdf = \Barryvdh\Snappy\Facades\SnappyPdf::loadView('reports.stock_card', compact('reportData'));
+
+        $pdf->setPaper('a4')
+            ->setOrientation($format == 'A4' ? 'landscape' : 'portrait')
+            ->setOption('enable-local-file-access', true);
+
         return $pdf;
     }
 }

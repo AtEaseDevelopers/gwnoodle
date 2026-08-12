@@ -96,10 +96,13 @@ class InventoryCountController extends Controller
             // Get all batch IDs from the inventory
             $batchIds = array_keys($inventoryBalance->batches);
 
-            // Fetch batch details with product information
+            // Fetch batch details with product information. "Has stock" is
+            // decided by the lorry balance below (availableQty), NOT the global
+            // product_batches.quantity - that column is warehouse stock and can
+            // be 0 while the lorry still physically holds the batch, which would
+            // wrongly hide it from this driver stock-out screen.
             $batches = ProductBatch::with('product')
                 ->whereIn('id', $batchIds)
-                ->where('quantity', '>', 0) // Only batches with stock
                 ->where('status', ProductBatch::STATUS_ACTIVE) // Only active batches
                 ->get();
 
@@ -249,10 +252,11 @@ class InventoryCountController extends Controller
                 ]);
             }
 
-            // Get all batch IDs for this product
+            // Get all batch IDs for this product. Stock presence is the lorry
+            // balance (availableQty below), NOT global product_batches.quantity -
+            // that is warehouse stock and can be 0 while the lorry still holds it.
             $productBatches = ProductBatch::where('product_id', $productId)
                 ->whereIn('id', array_keys($inventoryBalance->batches))
-                ->where('quantity', '>', 0)
                 ->where('status', ProductBatch::STATUS_ACTIVE)
                 ->get();
 
