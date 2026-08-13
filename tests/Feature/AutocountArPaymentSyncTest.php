@@ -161,6 +161,65 @@ class AutocountArPaymentSyncTest extends TestCase
         $this->assertEquals('failed', DB::table('invoice_payments')->where('id', $pid)->value('autocount_status'));
     }
 
+    public function test_already_paid_failure_is_marked_skipped_not_failed_and_not_requeued(): void
+    {
+        $batch = (string) Str::uuid();
+        $inv = $this->makeInvoice(Invoice::PAYMENT_TERM_CASH);
+        $pid = $this->makePayment($batch, $inv, 100, 1, InvoicePayment::AC_PENDING, ['autocount_auto_retried' => 0]);
+
+        // The plugin reports a failure whose reason is "already fully paid" in
+        // AutoCount. There is nothing left to knock off, so this is terminal:
+        // it must NOT be requeued (a requeue creates a duplicate OR) and must
+        // drop off the "failed" badge.
+        $this->postJson('/api/payment/update', [
+            'batch_id'         => $batch,
+            'autocount_status' => 'failed',
+            'autocount_message' => 'FIX: ... | WHY: I2608/L6/0213: is already fully paid (nothing outstanding)',
+        ])->assertStatus(200);
+
+        $row = DB::table('invoice_payments')->where('id', $pid)->first();
+        $this->assertEquals('skipped', $row->autocount_status, 'Already-paid failure with no OR is terminal skipped.');
+    }
+
+    public function test_already_paid_failure_with_or_is_marked_success(): void
+    {
+        $batch = (string) Str::uuid();
+        $inv = $this->makeInvoice(Invoice::PAYMENT_TERM_CASH);
+        $pid = $this->makePayment($batch, $inv, 100, 1, InvoicePayment::AC_PENDING);
+
+        // An OR was actually created in AutoCount before the knock-off found
+        // nothing outstanding -> the receipt is real, so record success.
+        $this->postJson('/api/payment/update', [
+            'batch_id'          => $batch,
+            'payment_no'        => 'OR2608-775',
+            'autocount_status'  => 'failed',
+            'autocount_message' => 'WHY: already fully paid (nothing outstanding)',
+        ])->assertStatus(200);
+
+        $row = DB::table('invoice_payments')->where('id', $pid)->first();
+        $this->assertEquals('success', $row->autocount_status);
+        $this->assertEquals('OR2608-775', $row->payment_no);
+    }
+
+    public function test_doc_id_zero_does_not_overwrite_a_real_dockey(): void
+    {
+        $batch = (string) Str::uuid();
+        $inv = $this->makeInvoice(Invoice::PAYMENT_TERM_CASH);
+        $pid = $this->makePayment($batch, $inv, 100, 1, InvoicePayment::AC_PENDING, ['doc_id' => 555]);
+
+        // The plugin sends doc_id=0 (no real DocKey). It must not clobber the
+        // stored DocKey, otherwise a resync can no longer edit the existing OR
+        // and creates a duplicate.
+        $this->postJson('/api/payment/update', [
+            'batch_id'         => $batch,
+            'payment_no'       => 'OR-0001',
+            'doc_id'           => 0,
+            'autocount_status' => 'success',
+        ])->assertStatus(200);
+
+        $this->assertEquals(555, DB::table('invoice_payments')->where('id', $pid)->value('doc_id'));
+    }
+
     public function test_manual_sync_endpoint_releases_held_credit_batch(): void
     {
         $batch = (string) Str::uuid();

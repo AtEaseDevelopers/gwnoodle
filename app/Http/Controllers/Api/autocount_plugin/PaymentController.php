@@ -177,6 +177,27 @@ class PaymentController extends Controller
     }
 
     /**
+     * True when a failure message means the invoice already has nothing
+     * outstanding in AutoCount (so the payment is effectively recorded and the
+     * "failure" is not a real error). Shared with the reconcile command so both
+     * classify historical and live rows the same way.
+     */
+    public static function messageMeansAlreadyPaid(?string $message): bool
+    {
+        if ($message === null || $message === '') {
+            return false;
+        }
+
+        foreach (['already fully paid', 'nothing outstanding', 'outstanding is 0'] as $needle) {
+            if (stripos($message, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Update the AutoCount status of every payment row in a batch.
      */
     public function update(Request $request)
@@ -205,10 +226,22 @@ class PaymentController extends Controller
 
             $incomingStatus = strtolower($request->autocount_status);
 
+            // "Already fully paid / nothing outstanding" is NOT a real sync
+            // error: the invoice already has zero outstanding in AutoCount, so
+            // there is nothing to knock off. Requeuing it only creates a
+            // duplicate OR, so treat it as terminal - success if an OR was
+            // actually issued, otherwise skipped (drops off the failed badge).
+            $alreadyPaid = $incomingStatus === InvoicePayment::AC_FAILED
+                && self::messageMeansAlreadyPaid((string) $request->input('autocount_message'));
+
             foreach ($rows as $row) {
-                // On the FIRST failure auto-requeue the batch once; a second failure
-                // is left as 'failed' for manual handling.
-                if ($incomingStatus === InvoicePayment::AC_FAILED && !$row->autocount_auto_retried) {
+                $hasOr = $request->filled('payment_no') || !empty($row->payment_no);
+
+                if ($alreadyPaid) {
+                    $row->autocount_status = $hasOr ? InvoicePayment::AC_SUCCESS : InvoicePayment::AC_SKIPPED;
+                } elseif ($incomingStatus === InvoicePayment::AC_FAILED && !$row->autocount_auto_retried) {
+                    // On the FIRST genuine failure auto-requeue the batch once;
+                    // a second failure is left as 'failed' for manual handling.
                     $row->autocount_status       = InvoicePayment::AC_PENDING;
                     $row->autocount_auto_retried = true;
                 } else {
@@ -219,8 +252,11 @@ class PaymentController extends Controller
                 if ($request->filled('payment_no')) {
                     $row->payment_no = $request->payment_no;
                 }
-                if ($request->filled('doc_id')) {
-                    $row->doc_id = $request->doc_id;
+                // Only persist a real DocKey. The plugin sends 0 when it has no
+                // DocKey; saving that would wipe a previously stored key and
+                // force the next resync to create a duplicate OR.
+                if ($request->filled('doc_id') && (int) $request->doc_id > 0) {
+                    $row->doc_id = (int) $request->doc_id;
                 }
 
                 $row->autocount_message = json_encode($request->all());
