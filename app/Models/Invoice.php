@@ -180,26 +180,26 @@ class Invoice extends Model
         // Get the latest invoice number for current month and user code
         $prefix = "I{$year}{$month}/{$userCode}/";
 
-        // Find the latest invoice matching this exact prefix (not just the globally
-        // latest invoice, which may belong to a different driver/month/prefix).
-        // Excludes offline-marked running numbers (prefix + "A" + digits, e.g.
-        // I2608/AH1/A001 - see getOfflineCustomerList()), since those aren't
-        // numeric and would otherwise reset this online sequence back to 1
-        // (casting "A001" to int yields 0).
-        $latestInvoice = self::where('invoiceno', 'like', $prefix . '%')
+        // Compute the next sequence from the HIGHEST numeric suffix currently in
+        // use for this exact prefix - NOT the highest-id row. Offline invoices
+        // sync out of order, so the newest-id row can hold a lower number than
+        // one already saved; keying off id there would regenerate an
+        // already-used number (and retries would reproduce the same wrong value
+        // and exhaust). Rows are locked (lockForUpdate) so a concurrent request
+        // can't read the same max and race to the same next number. Offline-marked
+        // running numbers (prefix + "A" + digits, e.g. I2608/AH1/A001 - see
+        // getOfflineCustomerList()) are excluded since they aren't numeric and
+        // would otherwise reset this online sequence back to 1 (casting "A001"
+        // to int yields 0).
+        $maxNumber = self::where('invoiceno', 'like', $prefix . '%')
             ->where('invoiceno', 'not like', $prefix . 'A%')
-            ->orderBy('id', 'desc')
             ->lockForUpdate()
-            ->first();
-        if ($latestInvoice) {
-            // Extract the numeric part
-            $invoiceNumber = $latestInvoice->invoiceno;
-            $numericPart = (int) substr($invoiceNumber, strlen($prefix));
-            $nextNumber = $numericPart + 1;
-        } else {
-            // Start from 1 for new month/user combination
-            $nextNumber = 1;
-        }
+            ->pluck('invoiceno')
+            ->map(fn ($invoiceno) => (int) substr($invoiceno, strlen($prefix)))
+            ->max();
+
+        // Start from 1 for a new month/user combination, else continue the series.
+        $nextNumber = ($maxNumber ?? 0) + 1;
         
         // Format the number with leading zeros (minimum 4 digits, but can grow)
         $formattedNumber = str_pad($nextNumber, 4, '0', STR_PAD_LEFT);

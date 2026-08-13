@@ -1996,18 +1996,23 @@ class DriverController extends Controller
             
             DB::beginTransaction();
 
-            // Create invoice - retry with a freshly generated number if an auto-generated
-            // invoiceno collides with a concurrently-created one (race condition guard)
+            // Create invoice - retry with a freshly generated number if the
+            // invoiceno collides with a concurrently-created one (race condition guard).
+            // The app predicts the number client-side (offline / getNextInvoiceNumber),
+            // so two devices can submit the SAME requested invoiceno - use it only if
+            // it's still free, otherwise fall back to a freshly generated one.
             $invoice = null;
             $attempts = 0;
+            $requestedInvoiceNo = !empty($data['invoiceno']) ? $data['invoiceno'] : null;
+            $useRequestedInvoiceNo = true;
 
             while (!$invoice) {
                 $attempts++;
 
                 try {
-                    $invoice = DB::transaction(function () use ($data, $driver) {
-                        $invoiceno = !empty($data['invoiceno'])
-                            ? $data['invoiceno']
+                    $invoice = DB::transaction(function () use ($data, $driver, $requestedInvoiceNo, $useRequestedInvoiceNo) {
+                        $invoiceno = ($useRequestedInvoiceNo && $requestedInvoiceNo && !Invoice::where('invoiceno', $requestedInvoiceNo)->exists())
+                            ? $requestedInvoiceNo
                             : Invoice::generateInvoiceNumber($driver->id);
 
                         $newInvoice = new Invoice();
@@ -2025,11 +2030,13 @@ class DriverController extends Controller
                         return $newInvoice;
                     });
                 } catch (\Illuminate\Database\QueryException $e) {
-                    // Only retry auto-generated numbers - an explicitly provided invoiceno
-                    // colliding should surface as a real error, not be silently replaced
-                    if (!empty($data['invoiceno']) || $attempts >= 5 || !Invoice::isDuplicateInvoiceNumberException($e)) {
+                    // A unique-constraint collision (race between the existence check
+                    // above and the insert) - drop the requested number and retry
+                    // with a freshly generated one.
+                    if ($attempts >= 5 || !Invoice::isDuplicateInvoiceNumberException($e)) {
                         throw $e;
                     }
+                    $useRequestedInvoiceNo = false;
                 }
             }
 
