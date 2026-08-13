@@ -47,6 +47,7 @@
                                             <th>{{ __('Batch Code') }}</th>
                                             <th>{{ __('invoices.quantity') }}</th>
                                             <th>{{ __('invoices.price') }}</th>
+                                            <th>{{ __('invoice_details.discount') }}</th>
                                             <th>{{ __('invoices.total_price') }}</th>
                                             <th>{{ __('Remark') }}</th>
                                             <th>{{ __('invoices.action') }}</th>
@@ -65,6 +66,7 @@
                                                     <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
                                                     <td>{{ number_format($invoicedetail['price'], 3) }}</td>
+                                                    <td>{{ number_format($invoicedetail['discount'] ?? 0, 3) }}</td>
                                                     <td>{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
@@ -73,6 +75,7 @@
                                                                 data-url="{{ route('invoices.updatedetail', Crypt::encrypt($invoicedetail['id'])) }}"
                                                                 data-price="{{ $invoicedetail['price'] }}"
                                                                 data-quantity="{{ $invoicedetail['quantity'] }}"
+                                                                data-discount="{{ $invoicedetail['discount'] ?? 0 }}"
                                                                 title="Edit price / quantity">
                                                                 <i class="fa fa-pencil"></i>
                                                             </button>
@@ -92,6 +95,7 @@
                                                     <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
                                                     <td>{{ number_format($invoicedetail['price'], 3) }}</td>
+                                                    <td>{{ number_format($invoicedetail['discount'] ?? 0, 3) }}</td>
                                                     <td>{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
@@ -100,6 +104,7 @@
                                                                 data-url="{{ route('invoices.updatedetail', Crypt::encrypt($invoicedetail['id'])) }}"
                                                                 data-price="{{ $invoicedetail['price'] }}"
                                                                 data-quantity="{{ $invoicedetail['quantity'] }}"
+                                                                data-discount="{{ $invoicedetail['discount'] ?? 0 }}"
                                                                 title="Edit price / quantity">
                                                                 <i class="fa fa-pencil"></i>
                                                             </button>
@@ -183,28 +188,29 @@
                                         <th width="20%">{{ __('Batch Code') }}</th>
                                         <th width="25%">{{ __('Product') }}</th>
                                         <th width="10%" class="text-center">{{ __('Available') }}</th>
-                                        <th width="15%">{{ __('Quantity') }}</th>
-                                        <th width="15%">{{ __('Price (RM)') }}</th>
-                                        <th width="15%">{{ __('Total (RM)') }}</th>
-                                        <th width="10%" class="text-center">{{ __('Action') }}</th>
+                                        <th width="13%">{{ __('Quantity') }}</th>
+                                        <th width="13%">{{ __('Price (RM)') }}</th>
+                                        <th width="12%">{{ __('Discount (RM)') }}</th>
+                                        <th width="13%">{{ __('Total (RM)') }}</th>
+                                        <th width="9%" class="text-center">{{ __('Action') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr id="emptyRow">
-                                        <td colspan="7" class="text-center text-muted">
+                                        <td colspan="8" class="text-center text-muted">
                                             {{ __('No items added yet. Scan barcode to add items.') }}
                                         </td>
                                     </tr>
                                 </tbody>
                                 <tfoot>
                                     <tr style="background-color: #f8f9fa;">
-                                        <td colspan="5" class="text-right"><strong>{{ __('Total Items:') }}</strong></td>
+                                        <td colspan="6" class="text-right"><strong>{{ __('Total Items:') }}</strong></td>
                                         <td colspan="2">
                                             <strong id="totalItemsCount">0</strong> items
                                         </td>
                                     </tr>
                                     <tr style="background-color: #e9ecef;">
-                                        <td colspan="5" class="text-right"><strong>{{ __('Grand Total:') }}</strong></td>
+                                        <td colspan="6" class="text-right"><strong>{{ __('Grand Total:') }}</strong></td>
                                         <td colspan="2">
                                             <strong id="grandTotal">RM 0.00</strong>
                                             <input type="hidden" name="grand_total" id="grandTotalInput" value="0">
@@ -338,6 +344,11 @@
                         {!! Form::label('edit_price_input', 'Price') !!}<span class="asterisk"> *</span>
                         {!! Form::number('price', null, ['class' => 'form-control', 'id' => 'edit_price_input', 'step' => '0.001', 'min' => '0', 'required' => 'required']) !!}
                     </div>
+                    <div class="form-group">
+                        {!! Form::label('edit_discount_input', __('invoice_details.discount')) !!}
+                        {!! Form::number('discount', null, ['class' => 'form-control', 'id' => 'edit_discount_input', 'step' => '0.001', 'min' => '0']) !!}
+                        <small class="form-text text-muted">{{ __('invoice_details.discount_hint') }}</small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
@@ -448,6 +459,25 @@
         $(document).ready(function () {
             let warehouseBatches = {};
             let invoiceItems = [];
+
+            // Net line total for the add-items modal: quantity x price minus the
+            // optional, fixed-amount, whole-line discount. Single source of truth
+            // so every recalc path (scan, qty edit, price edit, discount edit)
+            // agrees with what the server stores.
+            function computeItemTotal(item) {
+                return (item.quantity * item.price) - (item.discount || 0);
+            }
+
+            // Keep a line's discount within [0, quantity x price] so the total
+            // never goes negative. Called whenever qty, price or discount change.
+            function clampItemDiscount(item) {
+                const subtotal = item.quantity * item.price;
+                if (!item.discount || item.discount < 0) {
+                    item.discount = 0;
+                } else if (item.discount > subtotal) {
+                    item.discount = subtotal;
+                }
+            }
             let invoiceCodeReader = null;
             let invoiceIsScanning = false;
             let invoiceActiveStream = null;
@@ -503,6 +533,7 @@
                 $('#editPriceForm').attr('action', $(this).data('url'));
                 $('#edit_price_input').val($(this).data('price'));
                 $('#edit_quantity_input').val($(this).data('quantity'));
+                $('#edit_discount_input').val($(this).data('discount'));
                 $('#editPriceModal').modal('show');
             });
 
@@ -760,7 +791,8 @@
                             
                             // Update the existing item
                             existingItem.quantity += 1;
-                            existingItem.total = existingItem.quantity * existingItem.price;
+                            clampItemDiscount(existingItem);
+                            existingItem.total = computeItemTotal(existingItem);
                             
                             // Update the UI
                             updateExistingItemRow(existingItem, existingIndex);
@@ -776,6 +808,7 @@
                                 available_quantity: batch.quantity,
                                 price: price,
                                 quantity: 1,
+                                discount: 0,
                                 total: price,
                                 expiry_date: batch.expiry_date
                             };
@@ -834,24 +867,31 @@
                         <small class="text-danger qty-error" id="qty-error-${index}" style="display: none; font-size: 11px;"></small>
                     </td>
                     <td class="price-cell">
-                        <input type="number" step="0.001" value="${item.price.toFixed(3)}" 
-                            class="form-control item-price" 
-                            data-index="${index}" 
+                        <input type="number" step="0.001" value="${item.price.toFixed(3)}"
+                            class="form-control item-price"
+                            data-index="${index}"
                             style="width: 100%; min-width: 100px; display: block !important; visibility: visible !important;">
+                    </td>
+                    <td class="discount-cell">
+                        <input type="number" step="0.001" min="0" value="${(item.discount || 0).toFixed(3)}"
+                            class="form-control item-discount"
+                            data-index="${index}"
+                            style="width: 100%; min-width: 90px; display: block !important; visibility: visible !important;">
                     </td>
                     <td class="text-right item-total">RM ${item.total.toFixed(3)}</td>
                     <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-item" data-index="${index}"><i class="fa fa-trash"></i></button></td>
                 `);
-                
+
                 tbody.append(row);
-                
+
                 // Add hidden inputs for form submission
                 const hiddenContainer = $('#itemsHiddenContainer');
                 hiddenContainer.append('<input type="hidden" name="items[' + index + '][product_batch_id]" value="' + item.batch_id + '">');
                 hiddenContainer.append('<input type="hidden" name="items[' + index + '][product_id]" value="' + item.product_id + '">');
                 hiddenContainer.append('<input type="hidden" name="items[' + index + '][quantity]" value="' + item.quantity + '" class="qty-hidden-' + index + '">');
                 hiddenContainer.append('<input type="hidden" name="items[' + index + '][price]" value="' + item.price + '" class="price-hidden-' + index + '">');
-                
+                hiddenContainer.append('<input type="hidden" name="items[' + index + '][discount]" value="' + (item.discount || 0) + '" class="discount-hidden-' + index + '">');
+
                 // Verify the input was created
                 console.log('Input created with value:', row.find('.item-qty').val());
             }
@@ -910,7 +950,8 @@
                     qtyInput.addClass('is-invalid');
                     errorSpan.html(`⚠️ Exceeds available stock (${maxQty} units)`).show();
                     item.quantity = quantity;
-                    item.total = quantity * item.price;
+                    clampItemDiscount(item);
+                    item.total = computeItemTotal(item);
                     
                     qtyInput.addClass('exceed-warning');
                     setTimeout(() => qtyInput.removeClass('exceed-warning'), 500);
@@ -918,20 +959,27 @@
                     qtyInput.addClass('is-warning');
                     errorSpan.html(`✓ Maximum quantity (${maxQty} units)`).show();
                     item.quantity = quantity;
-                    item.total = quantity * item.price;
+                    clampItemDiscount(item);
+                    item.total = computeItemTotal(item);
                 } else {
                     qtyInput.addClass('valid-feedback');
                     errorSpan.hide();
                     item.quantity = quantity;
-                    item.total = quantity * item.price;
+                    clampItemDiscount(item);
+                    item.total = computeItemTotal(item);
                 }
                 
                 // Update total cell
                 const totalCell = $(this).closest('tr').find('.item-total');
                 totalCell.text('RM ' + item.total.toFixed(3));
-                
+
                 // Update hidden input
                 $(`.qty-hidden-${index}`).val(item.quantity);
+
+                // A smaller quantity may have capped the discount - keep the
+                // discount input and its hidden field in sync.
+                $(`.discount-hidden-${index}`).val(item.discount || 0);
+                $(this).closest('tr').find('.item-discount').val((item.discount || 0).toFixed(3));
                 
                 // Update quantity status badge
                 const productCell = $(this).closest('tr').find('td:nth-child(2)');
@@ -973,15 +1021,41 @@
                 }
                 
                 item.price = price;
-                item.total = item.quantity * price;
-                
+                clampItemDiscount(item);
+                item.total = computeItemTotal(item);
+
                 // Update total cell
                 const totalCell = $(this).closest('tr').find('.item-total');
                 totalCell.text('RM ' + item.total.toFixed(3));
-                
-                // Update hidden input
+
+                // Update hidden inputs (price, and discount in case it was capped)
                 $(`.price-hidden-${index}`).val(price.toFixed(3));
-                
+                $(`.discount-hidden-${index}`).val(item.discount || 0);
+                $(this).closest('tr').find('.item-discount').val((item.discount || 0).toFixed(3));
+
+                updateTotalsAndSubmitButton();
+            });
+
+            // Handle discount change (optional, fixed amount off the whole line)
+            $(document).on('input', '.item-discount', function() {
+                const index = parseInt($(this).data('index'), 10);
+                const item = invoiceItems[index];
+                if (!item) return;
+
+                let discount = parseFloat($(this).val());
+                item.discount = isNaN(discount) ? 0 : discount;
+                clampItemDiscount(item);
+                item.total = computeItemTotal(item);
+
+                // Reflect any clamp back into the field
+                if ((item.discount || 0) !== discount) {
+                    $(this).val((item.discount || 0).toFixed(3));
+                }
+
+                // Update total cell + hidden input
+                $(this).closest('tr').find('.item-total').text('RM ' + item.total.toFixed(3));
+                $(`.discount-hidden-${index}`).val(item.discount || 0);
+
                 updateTotalsAndSubmitButton();
             });
             
@@ -1003,7 +1077,7 @@
                 hiddenContainer.empty();
                 
                 if (invoiceItems.length === 0) {
-                    tbody.append('<tr id="emptyRow"><td colspan="7" class="text-center text-muted">{{ __("No items added yet. Scan barcode to add items.") }}</td></tr>');
+                    tbody.append('<tr id="emptyRow"><td colspan="8" class="text-center text-muted">{{ __("No items added yet. Scan barcode to add items.") }}</td></tr>');
                     updateTotalsAndSubmitButton();
                     return;
                 }
@@ -1039,22 +1113,29 @@
                             <small class="text-danger qty-error" id="qty-error-${index}" style="display: none; font-size: 11px;"></small>
                         </td>
                         <td>
-                            <input type="number" step="0.001" value="${item.price.toFixed(3)}" 
-                                class="form-control item-price" 
-                                data-index="${index}" 
+                            <input type="number" step="0.001" value="${item.price.toFixed(3)}"
+                                class="form-control item-price"
+                                data-index="${index}"
                                 style="width: 100%; min-width: 100px;">
+                        </td>
+                        <td>
+                            <input type="number" step="0.001" min="0" value="${(item.discount || 0).toFixed(3)}"
+                                class="form-control item-discount"
+                                data-index="${index}"
+                                style="width: 100%; min-width: 90px;">
                         </td>
                         <td class="text-right item-total">RM ${item.total.toFixed(3)}</td>
                         <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-item" data-index="${index}"><i class="fa fa-trash"></i></button></td>
                     `);
-                    
+
                     tbody.append(row);
-                    
+
                     // Add hidden inputs for form submission
                     hiddenContainer.append('<input type="hidden" name="items[' + index + '][product_batch_id]" value="' + item.batch_id + '">');
                     hiddenContainer.append('<input type="hidden" name="items[' + index + '][product_id]" value="' + item.product_id + '">');
                     hiddenContainer.append('<input type="hidden" name="items[' + index + '][quantity]" value="' + item.quantity + '" class="qty-hidden-' + index + '">');
                     hiddenContainer.append('<input type="hidden" name="items[' + index + '][price]" value="' + item.price + '" class="price-hidden-' + index + '">');
+                    hiddenContainer.append('<input type="hidden" name="items[' + index + '][discount]" value="' + (item.discount || 0) + '" class="discount-hidden-' + index + '">');
                 });
                 
                 updateTotalsAndSubmitButton();

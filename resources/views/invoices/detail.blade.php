@@ -71,6 +71,13 @@
                                         {!! Form::text('price', null, ['class' => 'form-control', 'min' => 0, 'step' => 0.001, 'id' => 'price']) !!}
                                     </div>
 
+                                    <!-- Discount Field (optional, fixed amount off the whole line) -->
+                                    <div class="form-group col-sm-6">
+                                        {!! Form::label('discount', __('invoice_details.discount')) !!}
+                                        {!! Form::number('discount', 0, ['class' => 'form-control', 'min' => 0, 'step' => 0.001, 'id' => 'discount', 'placeholder' => '0.000']) !!}
+                                        <small class="text-muted">{{ __('invoice_details.discount_hint') }}</small>
+                                    </div>
+
                                     <!-- Remark Field -->
                                     <div class="form-group col-sm-6">
                                         {!! Form::label('remark', __('invoice_details.remark')) !!}

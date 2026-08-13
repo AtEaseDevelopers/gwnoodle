@@ -25,6 +25,7 @@ class InvoiceDetail extends Model
         'warehouse_id',
         'quantity',
         'price',
+        'discount',
         'totalprice',
         'remark',
         'deducted_from_inventory'
@@ -42,6 +43,7 @@ class InvoiceDetail extends Model
         'product_batch_id' => 'integer', // NEW: Cast to integer
         'quantity' => 'integer',
         'price' => 'float',
+        'discount' => 'float',
         'totalprice' => 'float',
         'remark' => 'string',
         'deducted_from_inventory' => 'boolean'
@@ -58,6 +60,7 @@ class InvoiceDetail extends Model
         'product_batch_id' => 'required|exists:product_batches,id', // NEW: Validation rule
         'quantity' => 'required|integer|min:1',
         'price' => 'required|numeric|min:0',
+        'discount' => 'nullable|numeric|min:0',
         'remark' => 'nullable|string|max:255',
         'created_at' => 'nullable',
         'updated_at' => 'nullable'
@@ -124,18 +127,33 @@ class InvoiceDetail extends Model
         parent::boot();
 
         static::creating(function ($model) {
-            // Auto-calculate total price if not set
-            if (!$model->totalprice) {
-                $model->totalprice = $model->quantity * $model->price;
-            }
+            // Line total is always authoritative here: (quantity x price) minus
+            // the optional fixed-amount, whole-line discount. Callers may still
+            // set totalprice, but this keeps the discount applied even if they
+            // forget it, and defaults to quantity x price when discount is 0/null.
+            $model->totalprice = static::computeTotalPrice($model);
         });
 
         static::updating(function ($model) {
-            // Recalculate total price if quantity or price changes
-            if ($model->isDirty('quantity') || $model->isDirty('price')) {
-                $model->totalprice = $model->quantity * $model->price;
+            // Recalculate when any input to the line total changes.
+            if ($model->isDirty('quantity') || $model->isDirty('price') || $model->isDirty('discount')) {
+                $model->totalprice = static::computeTotalPrice($model);
             }
         });
+    }
+
+    /**
+     * Compute the net line total: quantity x price - discount.
+     *
+     * `discount` is an optional, fixed-amount, whole-line RM discount. Returns
+     * the gross (quantity x price) when discount is 0/null.
+     *
+     * @param  \App\Models\InvoiceDetail  $model
+     * @return float
+     */
+    protected static function computeTotalPrice($model)
+    {
+        return ($model->quantity * $model->price) - ($model->discount ?? 0);
     }
 
     /**

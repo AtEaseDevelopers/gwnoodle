@@ -51,6 +51,37 @@ class EInvoiceThreeDecimalXmlTest extends TestCase
         $this->assertStringContainsString('>3.705</cbc:LineExtensionAmount>', $out);
     }
 
+    /**
+     * A discounted line is reported with the net-effective unit price
+     * (line total / qty) so PriceAmount x Quantity still equals
+     * LineExtensionAmount and MyInvois accepts it. Mirrors how the generator
+     * derives unitPrice when invoice_details.discount > 0.
+     */
+    public function test_discounted_line_reconciles_with_net_effective_unit_price(): void
+    {
+        $service = new EInvoiceXmlGenerateService();
+        $xml = new \DOMDocument('1.0', 'UTF-8');
+
+        // qty 100 x gross 0.15 - discount 1.50 = 13.500 net; net unit = 0.135.
+        $qty       = 100;
+        $lineTotal = 13.500;
+        $netUnit   = $lineTotal / $qty; // 0.135
+
+        $params = $this->lineParams($netUnit, $qty);
+        $params['lineExtensionAmount'] = $lineTotal;
+        $params['taxableAmount']       = $lineTotal;
+
+        $out = $xml->saveXML($service->createInvoiceLineElement($xml, $params));
+
+        $this->assertStringContainsString('>0.135</cbc:PriceAmount>', $out);
+        $this->assertStringContainsString('>13.500</cbc:LineExtensionAmount>', $out);
+        $this->assertSame(
+            number_format(0.135 * $qty, 3, '.', ''),
+            '13.500',
+            'Net-effective PriceAmount x Qty must equal the discounted LineExtensionAmount.'
+        );
+    }
+
     public function test_price_times_quantity_equals_line_extension_amount(): void
     {
         $service = new EInvoiceXmlGenerateService();

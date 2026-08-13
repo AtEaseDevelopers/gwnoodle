@@ -262,13 +262,22 @@ p{
                 @foreach ($invoice['invoicedetail'] as $invoicedetail)
 
                 <tr class="item-row">
-                    <td class="ta-l" style="width: 25%;">{{ number_format($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price'], 3) }}</td>
+                    {{-- When a line has a discount, show the GROSS unit price here and the
+                         discount on its own line below so gross x qty - discount = Amount.
+                         Un-discounted lines keep the net-derived unit price (handles
+                         fractional-sen rounding, same as the AutoCount sync). --}}
+                    <td class="ta-l" style="width: 25%;">{{ number_format(($invoicedetail['discount'] ?? 0) > 0 ? $invoicedetail['price'] : ($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price']), 3) }}</td>
                     <td class="ta-r" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
                     <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                 </tr>
                 <tr class="item-row">
                     <td colspan="3" class="item-name">{{ $invoicedetail['product']['name'] }} <br>({{$invoicedetail->batch->batch_code }})</td>
                 </tr>
+                @if(($invoicedetail['discount'] ?? 0) > 0)
+                <tr class="item-row">
+                    <td colspan="3" class="ta-r" style="font-size: 11px;">Less Discount: -{{ number_format($invoicedetail['discount'], 3) }}</td>
+                </tr>
+                @endif
                 @endforeach
             </tbody>
         </table>

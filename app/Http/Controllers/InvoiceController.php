@@ -940,7 +940,8 @@ class InvoiceController extends AppBaseController
                 $invoiceDetail->product_batch_id = $item['product_batch_id'];
                 $invoiceDetail->quantity = $item['quantity'];
                 $invoiceDetail->price = $item['price'];
-                $invoiceDetail->totalprice = $item['quantity'] * $item['price'];
+                $invoiceDetail->discount = $item['discount'] ?? 0;
+                $invoiceDetail->totalprice = ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
                 $invoiceDetail->remark = $item['remark'] ?? null;
                 $invoiceDetail->save();
                 
@@ -1140,7 +1141,8 @@ class InvoiceController extends AppBaseController
                 $existingDetail->product_batch_id = $input['product_batch_id'];
                 $existingDetail->quantity = $input['quantity'];
                 $existingDetail->price = $input['price'];
-                $existingDetail->totalprice = $input['quantity'] * $input['price'];
+                $existingDetail->discount = $input['discount'] ?? 0;
+                $existingDetail->totalprice = ($input['quantity'] * $input['price']) - ($input['discount'] ?? 0);
                 $existingDetail->remark = $input['remark'] ?? null;
                 $existingDetail->save();
                 
@@ -1154,7 +1156,8 @@ class InvoiceController extends AppBaseController
                 $invoicedetail->product_batch_id = $input['product_batch_id'];
                 $invoicedetail->quantity = $input['quantity'];
                 $invoicedetail->price = $input['price'];
-                $invoicedetail->totalprice = $input['quantity'] * $input['price'];
+                $invoicedetail->discount = $input['discount'] ?? 0;
+                $invoicedetail->totalprice = ($input['quantity'] * $input['price']) - ($input['discount'] ?? 0);
                 $invoicedetail->remark = $input['remark'] ?? null;
                 $invoicedetail->save();
             }
@@ -1308,7 +1311,8 @@ class InvoiceController extends AppBaseController
                 $existingDetail->product_batch_id = $input['product_batch_id'];
                 $existingDetail->quantity = $input['quantity'];
                 $existingDetail->price = $input['price'];
-                $existingDetail->totalprice = $input['quantity'] * $input['price'];
+                $existingDetail->discount = $input['discount'] ?? 0;
+                $existingDetail->totalprice = ($input['quantity'] * $input['price']) - ($input['discount'] ?? 0);
                 $existingDetail->remark = $input['remark'] ?? null;
                 // This function always deducts from the lorry above (line 986) -
                 // without this flag, editInvoice()'s later restoration step
@@ -1326,7 +1330,8 @@ class InvoiceController extends AppBaseController
                 $invoicedetail->product_batch_id = $input['product_batch_id'];
                 $invoicedetail->quantity = $input['quantity'];
                 $invoicedetail->price = $input['price'];
-                $invoicedetail->totalprice = $input['quantity'] * $input['price'];
+                $invoicedetail->discount = $input['discount'] ?? 0;
+                $invoicedetail->totalprice = ($input['quantity'] * $input['price']) - ($input['discount'] ?? 0);
                 $invoicedetail->remark = $input['remark'] ?? null;
                 $invoicedetail->deducted_from_inventory = true;
                 $invoicedetail->save();
@@ -1659,7 +1664,8 @@ class InvoiceController extends AppBaseController
 
             $invoicedetail->quantity = $newQuantity;
             $invoicedetail->price = $request->input('price');
-            $invoicedetail->totalprice = $newQuantity * $invoicedetail->price;
+            $invoicedetail->discount = $request->input('discount', $invoicedetail->discount ?? 0);
+            $invoicedetail->totalprice = ($newQuantity * $invoicedetail->price) - ($invoicedetail->discount ?? 0);
             $invoicedetail->save();
 
             // Keep the cash-payment amount in sync with the new line total

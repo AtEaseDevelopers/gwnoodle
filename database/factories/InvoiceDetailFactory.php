@@ -26,6 +26,7 @@ class InvoiceDetailFactory extends Factory
         'product_id' => $this->faker->randomDigitNotNull,
         'quantity' => $this->faker->randomDigitNotNull,
         'price' => $this->faker->randomDigitNotNull,
+        'discount' => 0,
         'remark' => $this->faker->word,
         'created_at' => $this->faker->date('Y-m-d H:i:s'),
         'updated_at' => $this->faker->date('Y-m-d H:i:s')

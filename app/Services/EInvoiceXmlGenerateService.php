@@ -307,7 +307,13 @@ class EInvoiceXmlGenerateService
 
             $lineTotal = $detail->totalprice ?? ($detail->price * $detail->quantity);
             $taxAmount = $lineTotal * $gstRate;
-            $unitPrice = $detail->price ?? 0;
+            // When the line carries a discount, report the net-effective unit
+            // price (line total / qty) so MyInvois' PriceAmount x Quantity ==
+            // LineExtensionAmount check holds with the discount folded in.
+            // Un-discounted lines keep the stored unit price unchanged.
+            $unitPrice = ($detail->discount ?? 0) > 0
+                ? ($detail->quantity > 0 ? $detail->totalprice / $detail->quantity : ($detail->price ?? 0))
+                : ($detail->price ?? 0);
 
             $codes = [];
             $classificationCode = $detail->product->classification_code ?? '003';
@@ -525,7 +531,11 @@ class EInvoiceXmlGenerateService
 
                 $lineTotal = $detail->totalprice ?? ($detail->price * $detail->quantity);
                 $taxAmount = $lineTotal * $gstRate;
-                $unitPrice = $detail->price ?? 0;
+                // Net-effective unit price when discounted (see individual-invoice
+                // loop above); un-discounted lines keep the stored unit price.
+                $unitPrice = ($detail->discount ?? 0) > 0
+                    ? ($detail->quantity > 0 ? $detail->totalprice / $detail->quantity : ($detail->price ?? 0))
+                    : ($detail->price ?? 0);
 
                 // For consolidated e-invoices, ALL items MUST use Classification Code 004
                 // General TIN (010) EI00000000010 with BRN/NRIC = NA is ONLY allowed for Classification Code 004

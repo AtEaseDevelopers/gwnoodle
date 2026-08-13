@@ -1885,6 +1885,7 @@ class DriverController extends Controller
                 'invoicedetail.*.product_batch_id' => 'required|numeric',
                 'invoicedetail.*.quantity' => 'required|numeric|min:1',
                 'invoicedetail.*.price' => 'required|numeric|min:0',
+                'invoicedetail.*.discount' => 'nullable|numeric|min:0',
             ]);
             
             if ($validator->fails()) {
@@ -1958,6 +1959,7 @@ class DriverController extends Controller
                         'batch_code' => $productBatch->batch_code,
                         'quantity' => $item['quantity'],
                         'price' => $item['price'],
+                        'discount' => $item['discount'] ?? 0,
                         'available_quantity' => $availableQuantity,
                         'reason' => 'Product not found in driver inventory'
                     ];
@@ -2045,7 +2047,8 @@ class DriverController extends Controller
                 $invoicedetail->product_batch_id = $item['product_batch_id'];
                 $invoicedetail->quantity = $item['quantity'];
                 $invoicedetail->price = $item['price'];
-                $invoicedetail->totalprice = $item['quantity'] * $item['price'];
+                $invoicedetail->discount = $item['discount'] ?? 0;
+                $invoicedetail->totalprice = ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
                 $invoicedetail->remark = $item['remark'] ?? null;
                 $invoicedetail->deducted_from_inventory = true;
                 $invoicedetail->save();
@@ -2083,7 +2086,8 @@ class DriverController extends Controller
                 $invoicedetail->product_batch_id = $ignoredItem['product_batch_id'];
                 $invoicedetail->quantity = $ignoredItem['quantity'];
                 $invoicedetail->price = $ignoredItem['price'];
-                $invoicedetail->totalprice = $ignoredItem['quantity'] * $ignoredItem['price'];
+                $invoicedetail->discount = $ignoredItem['discount'] ?? 0;
+                $invoicedetail->totalprice = ($ignoredItem['quantity'] * $ignoredItem['price']) - ($ignoredItem['discount'] ?? 0);
                 $invoicedetail->remark = $ignoredItem['remark'] ?? null;
                 $invoicedetail->deducted_from_inventory = false;
                 $invoicedetail->save();
@@ -2213,6 +2217,7 @@ class DriverController extends Controller
                 'invoicedetail.*.product_batch_id' => 'required|numeric',
                 'invoicedetail.*.quantity' => 'required|numeric|min:1',
                 'invoicedetail.*.price' => 'required|numeric|min:0',
+                'invoicedetail.*.discount' => 'nullable|numeric|min:0',
                 'invoicedetail.*.id' => 'nullable|numeric'
             ]);
             
@@ -2340,6 +2345,7 @@ class DriverController extends Controller
                         'batch_code' => $productBatch->batch_code,
                         'quantity' => $item['quantity'],
                         'price' => $item['price'],
+                        'discount' => $item['discount'] ?? 0,
                         'available_quantity' => $availableQuantity,
                         'reason' => $availableQuantity > 0 ? 'Insufficient stock' : 'Product not found in driver inventory'
                     ];
@@ -2408,7 +2414,8 @@ class DriverController extends Controller
                 $invoicedetail->product_batch_id = $item['product_batch_id'];
                 $invoicedetail->quantity = $item['quantity'];
                 $invoicedetail->price = $item['price'];
-                $invoicedetail->totalprice = $item['quantity'] * $item['price'];
+                $invoicedetail->discount = $item['discount'] ?? 0;
+                $invoicedetail->totalprice = ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
                 $invoicedetail->remark = $item['remark'] ?? null;
                 $invoicedetail->deducted_from_inventory = true;
                 $invoicedetail->save();
@@ -2446,7 +2453,8 @@ class DriverController extends Controller
                 $invoicedetail->product_batch_id = $ignoredItem['product_batch_id'];
                 $invoicedetail->quantity = $ignoredItem['quantity'];
                 $invoicedetail->price = $ignoredItem['price'];
-                $invoicedetail->totalprice = $ignoredItem['quantity'] * $ignoredItem['price'];
+                $invoicedetail->discount = $ignoredItem['discount'] ?? 0;
+                $invoicedetail->totalprice = ($ignoredItem['quantity'] * $ignoredItem['price']) - ($ignoredItem['discount'] ?? 0);
                 $invoicedetail->remark = $ignoredItem['remark'] ?? null;
                 $invoicedetail->deducted_from_inventory = false;
                 $invoicedetail->save();
@@ -8509,6 +8517,7 @@ class DriverController extends Controller
                     'invoicedetail.*.product_batch_id'   => 'required|numeric',
                     'invoicedetail.*.quantity'           => 'required|numeric|min:1',
                     'invoicedetail.*.price'              => 'required|numeric|min:0',
+                    'invoicedetail.*.discount'           => 'nullable|numeric|min:0',
                 ]);
 
                 if ($validator->fails()) {
@@ -8619,7 +8628,8 @@ class DriverController extends Controller
                     $invoiceDetail->product_batch_id = $item['product_batch_id'];
                     $invoiceDetail->quantity         = $item['quantity'];
                     $invoiceDetail->price            = $item['price'];
-                    $invoiceDetail->totalprice       = $item['quantity'] * $item['price'];
+                    $invoiceDetail->discount         = $item['discount'] ?? 0;
+                    $invoiceDetail->totalprice       = ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
                     $invoiceDetail->remark           = $item['remark'] ?? null;
                     // Stock is deducted from the lorry below - without this
                     // flag, a later editInvoice() call has no way to know
@@ -8655,7 +8665,8 @@ class DriverController extends Controller
                     $invoiceDetail->product_batch_id = $item['product_batch_id'];
                     $invoiceDetail->quantity         = $item['quantity'];
                     $invoiceDetail->price            = $item['price'];
-                    $invoiceDetail->totalprice       = $item['quantity'] * $item['price'];
+                    $invoiceDetail->discount         = $item['discount'] ?? 0;
+                    $invoiceDetail->totalprice       = ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
                     $invoiceDetail->remark           = $item['remark'] ?? null;
                     $invoiceDetail->deducted_from_inventory = false;
                     $invoiceDetail->save();

@@ -86,18 +86,30 @@ class InvoiceController extends Controller
                     'is_testing'            => self::is_testing,
                     'details' => isset($details[$inv->id])
                         ? $details[$inv->id]->map(function ($d) {
+                            $discount = round($d->discount ?? 0, 3);
+
+                            // Un-discounted line: send the unit price derived from the
+                            // authoritative line total so AutoCount's Qty x UnitPrice
+                            // equals VMS totalprice. The stored `price` column is
+                            // double(10,3) and rounds fractional-sen prices
+                            // (e.g. 0.025 -> 0.02), which would undercharge AutoCount.
+                            //
+                            // Discounted line: send the GROSS stored unit price plus the
+                            // whole-line discount amount, and let AutoCount compute
+                            // (Qty x UnitPrice) - Discount. Qty is integer and both
+                            // values are 3dp, so this reproduces totalprice exactly and
+                            // shows the discount natively on the AutoCount invoice.
+                            $price = ($discount <= 0 && $d->quantity > 0)
+                                ? round($d->totalprice / $d->quantity, 4)
+                                : $d->price;
+
                             return [
                                 'id'                  => $d->id,
                                 'invoice_id'          => $d->invoice_id,
                                 'product_id'          => $d->product_id,
                                 'quantity'            => $d->quantity,
-                                // Send unit price derived from the authoritative line total so
-                                // AutoCount's Qty x UnitPrice equals VMS totalprice. The stored
-                                // `price` column is double(10,3) and rounds fractional-sen prices
-                                // (e.g. 0.025 -> 0.02), which would undercharge AutoCount.
-                                'price'               => $d->quantity > 0
-                                    ? round($d->totalprice / $d->quantity, 4)
-                                    : $d->price,
+                                'price'               => $price,
+                                'discount'            => $discount,
                                 'cost'                => $d->cost,
                                 'remark'              => $d->remark,
                                 'product_name'        => $d->product_name,

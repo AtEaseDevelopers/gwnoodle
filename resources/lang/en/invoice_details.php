@@ -20,6 +20,8 @@ return [
     'invoice_details' => 'Invoice Details',
     'invoice_no' => 'Invoice No',
     'price' => 'Price',
+    'discount' => 'Discount',
+    'discount_hint' => 'Optional. Fixed amount off the whole line.',
     'product' => 'Product',
     'quantity' => 'Quantity',
     'remark' => 'Remark',
