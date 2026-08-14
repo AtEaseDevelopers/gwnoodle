@@ -286,27 +286,20 @@
                             $batchCount = count($product['batches']);
                             $productCounter++;
                         @endphp
-                        
+
+                        {{-- Shared columns (Item Code / Description / Location / Avg. Cost / Total Cost)
+                             are repeated on every batch row rather than merged with rowspan. DomPDF
+                             drops rowspanned cells when a product's rows spill onto a new page, which
+                             left the right-hand columns blank; repeating keeps every row self-contained. --}}
                         @foreach($product['batches'] as $batchIndex => $batch)
                             <tr>
-                                @if($batchIndex == 0)
-                                    <td rowspan="{{ $batchCount }}">{{ $product['product_code'] }}</td>
-                                    <td rowspan="{{ $batchCount }}">{{ $product['product_name'] }}</td>
-                                    <td rowspan="{{ $batchCount }}">{{ $warehouseData['warehouse']['location'] ?? 'HQ' }}</td>
-                                @endif
-                                
+                                <td>{{ $product['product_code'] }}</td>
+                                <td>{{ $product['product_name'] }}</td>
+                                <td>{{ $warehouseData['warehouse']['location'] ?? 'HQ' }}</td>
                                 <td>{{ $batch['batch_no'] }}</td>
-                                
                                 <td class="text-right">{{ number_format($batch['quantity']) }}</td>
-                                
-                                @if($batchIndex == 0)
-                                    <td rowspan="{{ $batchCount }}" class="text-right">
-                                        RM {{ number_format($product['average_cost'], 2) }}
-                                    </td>
-                                    <td rowspan="{{ $batchCount }}" class="text-right">
-                                        RM {{ number_format($product['total_value'], 2) }}
-                                    </td>
-                                @endif
+                                <td class="text-right">RM {{ number_format($product['average_cost'], 2) }}</td>
+                                <td class="text-right">RM {{ number_format($batch['quantity'] * $product['average_cost'], 2) }}</td>
                             </tr>
                         @endforeach
                         
@@ -317,16 +310,15 @@
                                 <td>{{ $warehouseData['warehouse']['location'] ?? 'HQ' }}</td>
                                 <td>N/A</td>
                                 <td class="text-right">0</td>
-                                <td class="text-right">0</td>
-                                <td class="text-right">RM 0.000</td>
-                                <td class="text-right">RM 0.000</td>
+                                <td class="text-right">RM {{ number_format($product['average_cost'], 2) }}</td>
+                                <td class="text-right">RM 0.00</td>
                             </tr>
                         @endif
                     @endforeach
                     
                     @if(empty($warehouseData['products']))
                         <tr>
-                            <td colspan="10" class="text-center">No products found with stock in this warehouse</td>
+                            <td colspan="7" class="text-center">No products found with stock in this warehouse</td>
                         </tr>
                     @endif
                 </tbody>

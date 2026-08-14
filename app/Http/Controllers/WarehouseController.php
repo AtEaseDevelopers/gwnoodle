@@ -94,6 +94,16 @@ class WarehouseController extends Controller
             $query->with(['product', 'batch']);
         }])->findOrFail($id);
 
+        // Sort inventory balances by product (unit code then name) to match the Product column
+        $warehouse->setRelation('inventoryBalances', $warehouse->inventoryBalances
+            ->sortBy(function($inventory) {
+                $product = $inventory->product;
+                return $product
+                    ? strtolower(($product->unit_code ?? '') . ' ' . ($product->name ?? ''))
+                    : 'zzz';
+            })
+            ->values());
+
         // Calculate totals
         $totalProducts = $warehouse->inventoryBalances->groupBy('product_id')->count();
         $totalBatches = $warehouse->inventoryBalances->count();

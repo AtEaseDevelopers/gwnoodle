@@ -99,7 +99,10 @@ class StockBalanceReportService
                     ->join('warehouse_inventory_balances', 'product_batches.id', '=', 'warehouse_inventory_balances.batch_id')
                     ->whereColumn('product_batches.product_id', 'products.id')
                     ->where('product_batches.quantity', '>', 0)
-                    ->where('product_batches.expiry_date', '>', now())
+                    ->where(function ($q) {
+                        $q->whereNull('product_batches.expiry_date')
+                          ->orWhere('product_batches.expiry_date', '>', now());
+                    })
                     ->where('product_batches.status', ProductBatch::STATUS_ACTIVE)
                     ->where('warehouse_inventory_balances.quantity', '>', 0);
             });
@@ -117,7 +120,9 @@ class StockBalanceReportService
             ->where('product_id', $productId)
             ->where('status', ProductBatch::STATUS_ACTIVE)
             ->where('quantity', '>', 0)
-            ->where('expiry_date', '>', now())
+            ->where(function ($q) {
+                $q->whereNull('expiry_date')->orWhere('expiry_date', '>', now());
+            })
             ->whereHas('warehouseInventoryBalances', function($q) use ($warehouseId) {
                 $q->where('warehouse_id', $warehouseId)
                   ->where('quantity', '>', 0);
@@ -169,7 +174,7 @@ class StockBalanceReportService
                 $totalQuantity += $quantity;
                 $batchesData[] = [
                     'batch_no' => $batch->batch_code,
-                    'expiry_date' => $batch->expiry_date ? Carbon::parse($batch->expiry_date)->format('d-m-Y') : 'N/A',
+                    'expiry_date' => $batch->expiry_date ? Carbon::parse($batch->expiry_date)->format('d-m-Y') : '-',
                     'quantity' => $quantity,
                     'smallest_bal_qty' => $this->getSmallestBalanceQuantity($product, $quantity)
                 ];
@@ -285,9 +290,14 @@ class StockBalanceReportService
                 DB::raw('SUM(wib.quantity) as total_quantity')
             )
             ->where('pb.status', ProductBatch::STATUS_ACTIVE)
-            ->where('pb.quantity', '>', 0)
-            ->where('pb.expiry_date', '>', now())
-            ->where('wib.quantity', '>', 0);
+            ->where('pb.quantity', '>=', 0)
+            ->where(function ($q) {
+                $q->whereNull('pb.expiry_date')->orWhere('pb.expiry_date', '>', now());
+            })
+            // Include zero-balance batches (>= 0). Depleted batches keep their
+            // warehouse_inventory_balances row at quantity 0, so relaxing this
+            // filter surfaces them in the report instead of hiding them.
+            ->where('wib.quantity', '>=', 0);
 
         // Apply filters
         if (isset($filters['product_id']) && $filters['product_id']) {
@@ -327,7 +337,7 @@ class StockBalanceReportService
             
             $groupedByWarehouse[$warehouseId][$productId]['batches'][] = [
                 'batch_no' => $row->batch_code,
-                'expiry_date' => $row->expiry_date ? Carbon::parse($row->expiry_date)->format('d-m-Y') : 'N/A',
+                'expiry_date' => $row->expiry_date ? Carbon::parse($row->expiry_date)->format('d-m-Y') : '-',
                 'quantity' => $quantity,
                 'smallest_bal_qty' => $this->getSmallestBalanceQuantityFromRow($row, $quantity)
             ];
