@@ -54,7 +54,7 @@ class InvoiceController extends Controller
                     'invoice_details.*',
                     'products.name as product_name',
                     'products.unit_code',
-                    'products.classification_code',
+                    'products.uom',
                     'products.cost as cost',
                 ])->get()->groupBy('invoice_id'); // 🔥 important
 
@@ -114,7 +114,7 @@ class InvoiceController extends Controller
                                 'remark'              => $d->remark,
                                 'product_name'        => $d->product_name,
                                 'unit_code'           => $d->unit_code,
-                                'classification_code' => $d->classification_code,
+                                'uom'                 => $d->uom,
                             ];
                         })
                         : [],

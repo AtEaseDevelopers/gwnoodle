@@ -74,7 +74,7 @@ class ProductController extends Controller
                         'name'                => $record['Description'] ?? null,
                         'price'               => $record['Price'] ?? 0,
                         'cost'                => $record['Cost'] ?? 0,
-                        'classification_code' => $record['UOM'] ?? null,
+                        'uom'                 => $record['UOM'] ?? null,
                         'status'              => !empty($record['IsActive']) ? 1 : 0,
                         'type'                => 1,
                     ]

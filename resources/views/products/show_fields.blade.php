@@ -41,6 +41,10 @@
                             <td>{{ $product->unit_code ?? '-' }}</td>
                         </tr>
                         <tr>
+                            <th>UOM</th>
+                            <td>{{ $product->uom ?? '-' }}</td>
+                        </tr>
+                        <tr>
                             <th>{{ __('products.type') }}</th>
                             <td>
                                 @switch($product->type)
