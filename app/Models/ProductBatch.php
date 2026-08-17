@@ -350,10 +350,12 @@ class ProductBatch extends Model
         if ($amount <= 0) {
             throw new \InvalidArgumentException('Amount must be positive');
         }
-        
-        $this->quantity += $amount;
+
+        // Treat an un-initialized (NULL) master quantity as 0 so batches seeded
+        // straight into a warehouse balance don't break on the first stock-in.
+        $this->quantity = ($this->quantity ?? 0) + $amount;
         $this->save();
-        
+
     }
 
     /**
@@ -364,13 +366,18 @@ class ProductBatch extends Model
         if ($amount <= 0) {
             throw new \InvalidArgumentException('Amount must be positive');
         }
-        
-        if ($amount > $this->quantity) {
+
+        // A NULL master quantity is an un-initialized batch, not "0 in stock".
+        // Coerce to 0 so the check below reports the real shortfall instead of
+        // failing NULL arithmetic with a misleading generic message.
+        $current = $this->quantity ?? 0;
+
+        if ($amount > $current) {
             throw new \InvalidArgumentException('Insufficient stock');
         }
 
-        $this->quantity -= $amount;
+        $this->quantity = $current - $amount;
         $this->save();
-        
+
     }
 }
