@@ -15,6 +15,17 @@
     {!! Form::text('name', null, ['class' => 'form-control', 'maxlength' => 255]) !!}
 </div>
 
+<!-- UOM Field -->
+<div class="form-group col-sm-6">
+    {!! Form::label('uom', 'UOM (Unit of Measure)') !!}
+    {!! Form::text('uom', null, [
+        'class' => 'form-control',
+        'id' => 'uom',
+        'maxlength' => 255,
+        'placeholder' => __('Enter unit of measure, e.g. PCS, KG, BOX')
+    ]) !!}
+</div>
+
 <!-- Price Field (Selling Price) -->
 <div class="form-group col-sm-6">
     {!! Form::label('price', __('products.price') . ' (Selling Price)') !!}<span class="asterisk"> *</span>

@@ -40,6 +40,7 @@ class UpdateProductRequest extends FormRequest
             'name' => 'required|string|max:255|string|max:255',
             'price' => 'required|numeric|numeric',
             'status' => 'required',
+            'uom' => 'nullable|string|max:255',
             'created_at' => 'nullable|nullable',
             'updated_at' => 'nullable|nullable'
         ];
