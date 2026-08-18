@@ -9094,27 +9094,33 @@ class DriverController extends Controller
                 <!-- Items Detail -->
                 <div class="itemize-header">Items :</div>
                 
+                <!-- Item table. Columns: gross unit Price | per-line Disc | Qty | Amount,
+                     so Price x Qty - Disc = Amount. The app fills @items with one
+                     row per line (matching this 4-column layout) - un-discounted
+                     lines show "-" in the Disc column. -->
                 <table style="margin-bottom: 5px;">
                     <thead>
                         <tr style="font-weight: bold;">
-                            <td class="ta-l">Price</td>
-                            <td class="ta-r">Qty</td>
-                            <td class="ta-r">Amount</td>
+                            <td class="ta-l" style="width: 22%;">Price</td>
+                            <td class="ta-r" style="width: 22%;">Disc</td>
+                            <td class="ta-r" style="width: 30%;">Qty</td>
+                            <td class="ta-r" style="width: 26%;">Amount</td>
                         </tr>
                     </thead>
                     <tbody>
-                        
+
                         @items
-                        
+
                     </tbody>
                 </table>
                 <div class="divider"></div>
                 <table>
                     <tbody>
                         <tr class="item-row">
-                            <td class="ta-l" style="width: 25%;"></td>
+                            <td class="ta-l" style="width: 22%;"></td>
+                            <td class="ta-r" style="width: 22%;">@totalDiscount</td>
                             <td class="ta-r" style="width: 30%;">@totalQuantity</td>
-                            <td class="ta-r" style="width: 20%;">@totalAmount</td>
+                            <td class="ta-r" style="width: 26%;">@totalAmount</td>
                         </tr>
                     </tbody>
                 </table>
