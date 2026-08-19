@@ -24,7 +24,7 @@ class Kernel extends ConsoleKernel
         ->withoutOverlapping();
 
         $schedule->command('assigns:auto-assign')
-        ->dailyAt('01:00')
+        ->everyFifteenMinutes()
         ->timezone('Asia/Kuala_Lumpur')
         ->withoutOverlapping();
     }
