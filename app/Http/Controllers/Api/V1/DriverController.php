@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Datetime;
@@ -1784,38 +1785,47 @@ class DriverController extends Controller
                     'data' => null
                 ], 200);
             }
-            
-            $min = 450;
-            $each = 23;
-            $height = (count($invoice['invoicedetail']) * $each) + $min;
-            $creditData = $this->calculateCustomerCredit(
-                $invoice->customer_id, 
-                $invoice->updated_at
-            );
-            
-            $invoice->newcredit = round($creditData['credit'] ?? 0, 2);
 
-            $invoice->customer->groupcompany = DB::table('companies')
-            ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
-            ->select('companies.*')
-            ->first() ?? null;       
+            // Rendering this PDF (DomPDF + a credit calculation + a companies
+            // lookup) is expensive and was being redone on every single call,
+            // including once per invoice in list endpoints. An invoice's PDF
+            // never changes unless the invoice itself does, so cache it keyed
+            // on updated_at - any edit naturally invalidates the cached copy.
+            $cacheKey = 'invoice_pdf_' . $invoice->id . '_' . $invoice->updated_at->timestamp;
+
+            return Cache::remember($cacheKey, now()->addDays(30), function () use ($invoice) {
+                $min = 450;
+                $each = 23;
+                $height = (count($invoice['invoicedetail']) * $each) + $min;
+                $creditData = $this->calculateCustomerCredit(
+                    $invoice->customer_id,
+                    $invoice->updated_at
+                );
+
+                $invoice->newcredit = round($creditData['credit'] ?? 0, 2);
+
+                $invoice->customer->groupcompany = DB::table('companies')
+                ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
+                ->select('companies.*')
+                ->first() ?? null;
 
 
-            // DomPDF is memory-hungry rendering invoices with many detail rows,
-            // overrunning PHP's default 128MB limit and returning a bare 500
-            // (a memory FatalError is a \Error, not \Exception, so the catch
-            // below never sees it). Raise the ceiling for this request.
-            ini_set('memory_limit', '512M');
+                // DomPDF is memory-hungry rendering invoices with many detail rows,
+                // overrunning PHP's default 128MB limit and returning a bare 500
+                // (a memory FatalError is a \Error, not \Exception, so the catch
+                // below never sees it). Raise the ceiling for this request.
+                ini_set('memory_limit', '512M');
 
-            $pdf = Pdf::loadView('invoices.print', [
-                'invoice' => $invoice
-            ]);
+                $pdf = Pdf::loadView('invoices.print', [
+                    'invoice' => $invoice
+                ]);
 
-            $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
-                ->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
+                $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
+                    ->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
 
-            return base64_encode($pdf->output());
-            
+                return base64_encode($pdf->output());
+            });
+
         } catch (Exception $e) {
             return response()->json([
                 'result' => false,
