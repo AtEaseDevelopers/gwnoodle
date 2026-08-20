@@ -1793,7 +1793,7 @@ class DriverController extends Controller
             // on updated_at - any edit naturally invalidates the cached copy.
             $cacheKey = 'invoice_pdf_' . $invoice->id . '_' . $invoice->updated_at->timestamp;
 
-            return Cache::remember($cacheKey, now()->addDays(30), function () use ($invoice) {
+            $generatePdf = function () use ($invoice) {
                 $min = 450;
                 $each = 23;
                 $height = (count($invoice['invoicedetail']) * $each) + $min;
@@ -1824,9 +1824,18 @@ class DriverController extends Controller
                     ->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
 
                 return base64_encode($pdf->output());
-            });
+            };
 
-        } catch (Exception $e) {
+            try {
+                return Cache::remember($cacheKey, now()->addDays(30), $generatePdf);
+            } catch (\Throwable $cacheError) {
+                // Cache layer unavailable (e.g. storage/framework/cache not
+                // writable) - still return the PDF, just without caching it,
+                // instead of letting the whole request fail.
+                return $generatePdf();
+            }
+
+        } catch (\Throwable $e) {
             return response()->json([
                 'result' => false,
                 'message' => __LINE__ . $this->message_separator . $e->getMessage(),
