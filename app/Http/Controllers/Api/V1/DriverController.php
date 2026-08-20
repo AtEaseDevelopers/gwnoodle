@@ -1571,7 +1571,9 @@ class DriverController extends Controller
 
         try {
             // Start building the query
-            $query = Invoice::where('driver_id', $driver->id);
+            $query = Invoice::where('driver_id', $driver->id)
+                ->whereYear('date', now()->year)
+                ->whereMonth('date', now()->month);
 
             // Apply customer filter if customer_id is provided
             if ($customer_id) {
