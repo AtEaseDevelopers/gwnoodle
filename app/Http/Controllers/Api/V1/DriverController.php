@@ -4277,9 +4277,11 @@ class DriverController extends Controller
                     // settled in cash via addpayment(), which caused this dashboard
                     // to disagree with the Daily Sales Report (which already sums
                     // invoice_payments) by the amount of any such invoice.
+                    // Only approved payments (status == 1) count - a pending or
+                    // rejected row was never actually collected.
                     $payments = $invoices->flatMap(function($invoice) {
                         return $invoice->invoicepayment;
-                    });
+                    })->where('status', 1);
 
                     $sumByType = function($type) use ($payments) {
                         return round($payments->where('type', $type)->sum('amount'), 2);
