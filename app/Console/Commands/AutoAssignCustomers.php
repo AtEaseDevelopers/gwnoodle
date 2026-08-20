@@ -6,15 +6,15 @@ use App\Models\Assign;
 use App\Models\Customer;
 use App\Models\Driver;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Daily job that finds active customers who are not currently assigned to any
- * driver and auto-assigns them to their designated driver (customers.driver_id).
+ * Daily job that makes sure every active customer has an active assign row for
+ * every active driver. For each active customer x active driver pair that has
+ * no active assign, one is created (or a previously deactivated/soft-deleted
+ * row for that pair is reactivated instead of duplicating).
  *
- * "Not assigned" means the customer has no active assign row (status = 1 and
- * not soft-deleted). Customers without a driver_id, or whose driver_id points
- * to a missing/deleted driver, are skipped (they can't be inferred).
+ * "Active driver" = drivers.status != STATUS_DELETED. customers.driver_id is
+ * NOT used here - customers are assigned to all drivers, not a designated one.
  *
  * The Assign model has SoftDeletes disabled, so deleted_at is filtered manually.
  */
@@ -32,7 +32,7 @@ class AutoAssignCustomers extends Command
      *
      * @var string
      */
-    protected $description = 'Auto-assign active customers with no active assign to their designated driver (customers.driver_id)';
+    protected $description = 'Ensure every active customer has an active assign for every active driver (creates/reactivates any missing pair)';
 
     /**
      * Execute the console command.
@@ -45,82 +45,84 @@ class AutoAssignCustomers extends Command
 
         $created = 0;
         $reactivated = 0;
-        $skipped = 0;
 
         // Cache the next sequence per driver so multiple new assigns in the same
         // run don't collide on the same sequence number.
         $nextSequence = [];
 
+        // Every active customer should be assigned to every active driver.
+        $driverIds = Driver::where('status', '!=', Driver::STATUS_DELETED)
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        if (empty($driverIds)) {
+            $this->warn('No active drivers found; nothing to assign.');
+            return 0;
+        }
+
         Customer::query()
             ->where('status', 1)
-            ->whereNotNull('driver_id')
-            ->where('driver_id', '>', 0)
-            ->whereNotExists(function ($q) {
-                $q->select(DB::raw(1))
-                    ->from('assigns')
-                    ->whereColumn('assigns.customer_id', 'customers.id')
-                    ->where('assigns.status', Assign::STATUS_ACTIVE)
-                    ->whereNull('assigns.deleted_at');
-            })
             ->orderBy('id')
             ->chunkById(500, function ($customers) use (
-                &$created, &$reactivated, &$skipped, &$nextSequence, $dryRun
+                &$created, &$reactivated, &$nextSequence, $dryRun, $driverIds
             ) {
                 foreach ($customers as $customer) {
-                    $driverId = (int) $customer->driver_id;
+                    foreach ($driverIds as $driverId) {
+                        $driverId = (int) $driverId;
 
-                    $driver = Driver::find($driverId);
-                    if (! $driver || (string) $driver->status === Driver::STATUS_DELETED) {
-                        $this->warn("Skip customer #{$customer->id} ({$customer->code}): driver #{$driverId} missing or deleted.");
-                        $skipped++;
-                        continue;
-                    }
+                        // Reuse an existing assign row for this driver+customer if
+                        // one exists (e.g. previously deactivated/soft-deleted)
+                        // instead of creating a duplicate.
+                        $existing = Assign::where('driver_id', $driverId)
+                            ->where('customer_id', $customer->id)
+                            ->orderBy('id')
+                            ->first();
 
-                    // Reuse an existing assign row for this driver+customer if one
-                    // exists (e.g. previously deactivated/soft-deleted) instead of
-                    // creating a duplicate.
-                    $existing = Assign::where('driver_id', $driverId)
-                        ->where('customer_id', $customer->id)
-                        ->orderBy('id')
-                        ->first();
+                        if ($existing) {
+                            // Already active and not soft-deleted - nothing to do.
+                            if ((int) $existing->status === Assign::STATUS_ACTIVE
+                                && empty($existing->deleted_at)) {
+                                continue;
+                            }
 
-                    if ($existing) {
-                        if ($dryRun) {
-                            $this->line("[dry-run] Reactivate assign #{$existing->id}: driver #{$driverId} -> customer #{$customer->id} ({$customer->code})");
+                            if ($dryRun) {
+                                $this->line("[dry-run] Reactivate assign #{$existing->id}: driver #{$driverId} -> customer #{$customer->id} ({$customer->code})");
+                                $reactivated++;
+                                continue;
+                            }
+
+                            $existing->status = Assign::STATUS_ACTIVE;
+                            $existing->deleted_at = null;
+                            if (empty($existing->sequence)) {
+                                $existing->sequence = $this->pullNextSequence($driverId, $nextSequence);
+                            }
+                            $existing->save();
                             $reactivated++;
                             continue;
                         }
 
-                        $existing->status = Assign::STATUS_ACTIVE;
-                        $existing->deleted_at = null;
-                        if (empty($existing->sequence)) {
-                            $existing->sequence = $this->pullNextSequence($driverId, $nextSequence);
+                        $sequence = $this->pullNextSequence($driverId, $nextSequence);
+
+                        if ($dryRun) {
+                            $this->line("[dry-run] Create assign: driver #{$driverId} -> customer #{$customer->id} ({$customer->code}) seq {$sequence}");
+                            $created++;
+                            continue;
                         }
-                        $existing->save();
-                        $reactivated++;
-                        continue;
-                    }
 
-                    $sequence = $this->pullNextSequence($driverId, $nextSequence);
-
-                    if ($dryRun) {
-                        $this->line("[dry-run] Create assign: driver #{$driverId} -> customer #{$customer->id} ({$customer->code}) seq {$sequence}");
+                        $assign = new Assign();
+                        $assign->driver_id = $driverId;
+                        $assign->customer_id = $customer->id;
+                        $assign->sequence = $sequence;
+                        $assign->status = Assign::STATUS_ACTIVE;
+                        $assign->save();
                         $created++;
-                        continue;
                     }
-
-                    $assign = new Assign();
-                    $assign->driver_id = $driverId;
-                    $assign->customer_id = $customer->id;
-                    $assign->sequence = $sequence;
-                    $assign->status = Assign::STATUS_ACTIVE;
-                    $assign->save();
-                    $created++;
                 }
             });
 
         $prefix = $dryRun ? '[dry-run] ' : '';
-        $this->info("{$prefix}Auto-assign done. Created: {$created}, Reactivated: {$reactivated}, Skipped: {$skipped}.");
+        $this->info("{$prefix}Auto-assign done. Created: {$created}, Reactivated: {$reactivated}.");
 
         return 0;
     }

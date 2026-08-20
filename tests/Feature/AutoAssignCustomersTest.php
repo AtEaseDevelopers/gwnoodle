@@ -8,9 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Covers the `assigns:auto-assign` command, which finds active customers with
- * no active assign row and assigns them to their designated driver
- * (customers.driver_id).
+ * Covers the `assigns:auto-assign` command, which ensures every active customer
+ * has an active assign row for every active driver (creating or reactivating any
+ * missing pair). customers.driver_id is not used.
  *
  * Runs against the shared dev database (DatabaseTransactions), so assertions
  * target the specific rows created in each test rather than global counts.
@@ -78,21 +78,23 @@ class AutoAssignCustomersTest extends TestCase
         $this->assertSame(1, $this->activeAssignCount($driverId, $customerId));
     }
 
-    public function test_gives_new_assign_next_sequence_for_the_driver(): void
+    public function test_gives_new_assigns_distinct_incrementing_sequences_per_driver(): void
     {
         $driverId = $this->makeDriver();
-        $other = $this->makeCustomer(1, $driverId);
-        $this->makeAssign($driverId, $other, 1);            // existing seq 1, active
-        DB::table('assigns')->where('driver_id', $driverId)->where('customer_id', $other)->update(['sequence' => 5]);
+        $custA = $this->makeCustomer(1, null);
+        $custB = $this->makeCustomer(1, null);
 
-        $customerId = $this->makeCustomer(1, $driverId);
         $this->runCommand();
 
-        $sequence = DB::table('assigns')
-            ->where('driver_id', $driverId)->where('customer_id', $customerId)
-            ->value('sequence');
+        $seqA = (int) DB::table('assigns')
+            ->where('driver_id', $driverId)->where('customer_id', $custA)->value('sequence');
+        $seqB = (int) DB::table('assigns')
+            ->where('driver_id', $driverId)->where('customer_id', $custB)->value('sequence');
 
-        $this->assertSame(6, (int) $sequence);
+        // Both get a real sequence and the per-run cache keeps them from colliding.
+        $this->assertGreaterThan(0, $seqA);
+        $this->assertGreaterThan(0, $seqB);
+        $this->assertNotSame($seqA, $seqB);
     }
 
     public function test_does_not_duplicate_when_customer_already_actively_assigned(): void
@@ -128,25 +130,37 @@ class AutoAssignCustomersTest extends TestCase
         $this->assertSame(0, $this->activeAssignCount($driverId, $customerId));
     }
 
-    public function test_skips_customer_without_driver_id(): void
+    public function test_assigns_customer_even_without_driver_id(): void
     {
+        // driver_id on the customer is irrelevant now - it still gets assigned
+        // to every active driver.
+        $driverId = $this->makeDriver();
         $customerId = $this->makeCustomer(1, null);
 
         $this->runCommand();
 
-        $this->assertSame(
-            0,
-            DB::table('assigns')->where('customer_id', $customerId)->count()
-        );
+        $this->assertSame(1, $this->activeAssignCount($driverId, $customerId));
     }
 
-    public function test_skips_customer_whose_driver_is_deleted(): void
+    public function test_assigns_active_customer_to_all_active_drivers(): void
     {
-        $driverId = $this->makeDriver(3); // STATUS_DELETED
-        $customerId = $this->makeCustomer(1, $driverId);
+        $driverA = $this->makeDriver();
+        $driverB = $this->makeDriver();
+        $customerId = $this->makeCustomer(1, null);
 
         $this->runCommand();
 
-        $this->assertSame(0, $this->activeAssignCount($driverId, $customerId));
+        $this->assertSame(1, $this->activeAssignCount($driverA, $customerId));
+        $this->assertSame(1, $this->activeAssignCount($driverB, $customerId));
+    }
+
+    public function test_does_not_assign_to_a_deleted_driver(): void
+    {
+        $deletedDriverId = $this->makeDriver(3); // STATUS_DELETED
+        $customerId = $this->makeCustomer(1, null);
+
+        $this->runCommand();
+
+        $this->assertSame(0, $this->activeAssignCount($deletedDriverId, $customerId));
     }
 }
