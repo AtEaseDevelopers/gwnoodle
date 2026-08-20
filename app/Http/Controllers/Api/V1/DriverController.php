@@ -1572,8 +1572,7 @@ class DriverController extends Controller
         try {
             // Start building the query
             $query = Invoice::where('driver_id', $driver->id)
-                ->whereYear('date', now()->year)
-                ->whereMonth('date', now()->month);
+                ->whereDate('date', '>=', now()->subDays(6)->startOfDay());
 
             // Apply customer filter if customer_id is provided
             if ($customer_id) {
@@ -1581,7 +1580,11 @@ class DriverController extends Controller
             }
 
             // Get sales invoices
-            $invoices = $query->with(['customer:id,company,phone,paymentterm', 'invoicedetail.product:id,name'])
+            $invoices = $query->with([
+                    'customer:id,company,phone,paymentterm',
+                    'invoicedetail.product:id,name',
+                    'invoicedetail.batch:id,batch_code',
+                ])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
