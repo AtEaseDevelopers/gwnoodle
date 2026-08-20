@@ -87,7 +87,7 @@ class AutoAssignCustomers extends Command
                             }
 
                             if ($dryRun) {
-                                $this->line("[dry-run] Reactivate assign #{$existing->id}: driver #{$driverId} -> customer #{$customer->id} ({$customer->code})");
+                                $this->line("[dry-run] Reactivate assign #{$existing->id}: driver #{$driverId} -> customer #{$customer->id} ({$customer->code}) {$customer->company}");
                                 $reactivated++;
                                 continue;
                             }
@@ -105,7 +105,7 @@ class AutoAssignCustomers extends Command
                         $sequence = $this->pullNextSequence($driverId, $nextSequence);
 
                         if ($dryRun) {
-                            $this->line("[dry-run] Create assign: driver #{$driverId} -> customer #{$customer->id} ({$customer->code}) seq {$sequence}");
+                            $this->line("[dry-run] Create assign: driver #{$driverId} -> customer #{$customer->id} ({$customer->code}) {$customer->company} seq {$sequence}");
                             $created++;
                             continue;
                         }
