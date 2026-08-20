@@ -4264,41 +4264,31 @@ class DriverController extends Controller
             if($driver->trip_id != null){
                 $invoices = Invoice::where('trip_uuid', $driver->trip_id)
                     ->where('status', Invoice::STATUS_COMPLETED)
-                    ->with(['invoicedetail.product'])
-                    ->get(); 
+                    ->with(['invoicedetail.product', 'invoicepayment'])
+                    ->get();
 
                 // Only calculate if invoices collection is not empty
                 if($invoices->isNotEmpty()) {
+                    // Bucket by the actual payment ledger (invoice_payments), not
+                    // invoices.paymentterm - that field is set once at invoice
+                    // creation and is never updated when a Credit invoice is later
+                    // settled in cash via addpayment(), which caused this dashboard
+                    // to disagree with the Daily Sales Report (which already sums
+                    // invoice_payments) by the amount of any such invoice.
+                    $payments = $invoices->flatMap(function($invoice) {
+                        return $invoice->invoicepayment;
+                    });
+
+                    $sumByType = function($type) use ($payments) {
+                        return round($payments->where('type', $type)->sum('amount'), 2);
+                    };
+
                     $salesByPaymentTerm = [
-                        'cash' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CASH;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'credit' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CREDIT;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'online_payment' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_ONLINE;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'tng' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_TNG;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'cheque' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CHEQUE;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
+                        'cash' => $sumByType(Invoice::PAYMENT_TERM_CASH),
+                        'credit' => $sumByType(Invoice::PAYMENT_TERM_CREDIT),
+                        'online_payment' => $sumByType(Invoice::PAYMENT_TERM_ONLINE),
+                        'tng' => $sumByType(Invoice::PAYMENT_TERM_TNG),
+                        'cheque' => $sumByType(Invoice::PAYMENT_TERM_CHEQUE),
                     ];
 
                     $productsSold = $invoices->flatMap(function($invoice) {
