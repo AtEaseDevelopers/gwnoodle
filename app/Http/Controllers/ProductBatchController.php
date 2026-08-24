@@ -13,7 +13,6 @@ use App\Models\WarehouseInventoryBalance;
 use App\Models\InventoryTransaction;
 use App\Models\ProductBatch;
 use App\Models\StockInRequest;
-use App\Models\InvoiceDetail;
 use Flash;
 use App\Http\Controllers\AppBaseController;
 use Response;
@@ -259,18 +258,13 @@ class ProductBatchController extends AppBaseController
         unset($input['quantity']);
 
         // Validate batch code uniqueness for the same product (excluding current batch)
-        $existingBatch = ProductBatch::with('product')
-            ->where('product_id', $input['product_id'])
+        $existingBatch = ProductBatch::where('product_id', $input['product_id'])
             ->where('batch_code', $input['batch_code'])
             ->where('id', '!=', $id)
             ->first();
 
         if ($existingBatch) {
-            Flash::error(
-                "Batch code '{$input['batch_code']}' is already used by Product Batch #{$existingBatch->id}"
-                . ($existingBatch->product ? " ({$existingBatch->product->name})" : '')
-                . '. Please use a different batch code.'
-            );
+            Flash::error('Batch code already exists for this product.');
             return redirect()->back()->withInput($input);
         }
 
@@ -321,24 +315,6 @@ class ProductBatchController extends AppBaseController
             return redirect(route('productBatches.index'));
         }
 
-        // Check if batch has ever been sold on an invoice
-        $hasInvoiceUsage = InvoiceDetail::where('product_batch_id', $id)->exists();
-
-        if ($hasInvoiceUsage) {
-            Flash::error('Cannot delete batch because it has been used on one or more invoices.');
-            return redirect(route('productBatches.index'));
-        }
-
-        // Check if batch has a pending stock-in request awaiting approval
-        $hasPendingStockIn = StockInRequest::where('batch_id', $id)
-            ->where('status', StockInRequest::STATUS_PENDING)
-            ->exists();
-
-        if ($hasPendingStockIn) {
-            Flash::error('Cannot delete batch because it has a pending stock-in request. Reject or cancel it first.');
-            return redirect(route('productBatches.index'));
-        }
-
         $this->productBatchRepository->delete($id);
 
         Flash::success('Product Batch deleted successfully.');
@@ -366,13 +342,8 @@ class ProductBatchController extends AppBaseController
                 // Check if batch has transactions
                 $hasTransactions = InventoryTransaction::where('batch_id', $id)->exists();
                 $hasWarehouseStock = WarehouseInventoryBalance::where('batch_id', $id)->exists();
-                $hasInvoiceUsage = InvoiceDetail::where('product_batch_id', $id)->exists();
-                $hasPendingStockIn = StockInRequest::where('batch_id', $id)
-                    ->where('status', StockInRequest::STATUS_PENDING)
-                    ->exists();
-
-                if (!$hasTransactions && !$hasWarehouseStock && !$hasInvoiceUsage
-                    && !$hasPendingStockIn && $productBatch->quantity == 0) {
+                
+                if (!$hasTransactions && !$hasWarehouseStock && $productBatch->quantity == 0) {
                     $productBatch->delete();
                     $count++;
                 }

@@ -381,19 +381,20 @@ Route::group(['middleware' => ['auth']], function() {
     Route::group(['middleware' => ['permission:product_batch']], function() {
         
         // Override resource parameter to use 'id' instead of 'productBatch'
-        // Quantity changes still go through the stock-in/out/adjust actions
-        // below, not edit/update - update() explicitly strips quantity.
+        // Product batches are immutable once created: no edit/update/destroy.
+        // A wrong batch can't be silently changed or deleted, so any "why is
+        // this batch code missing" question can only ever be answered by
+        // "it was never actually created" - never by an edit or removal.
+        // Stock changes go through the stock-in/out/adjust actions below.
         Route::resource('productBatches', App\Http\Controllers\ProductBatchController::class)->parameters([
             'productBatches' => 'id'
-        ]);
-        
+        ])->except(['edit', 'update', 'destroy']);
+
         Route::post('/productBatches/stock-in/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
         Route::post('/productBatches/stock-in-bulk', [App\Http\Controllers\ProductBatchController::class, 'stockInBulk'])->name('productBatches.stock-in-bulk');
         Route::post('/productBatches/stock-out/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockOut'])->name('productBatches.stock-out');
         Route::post('/productBatches/adjust-stock/{id}', [App\Http\Controllers\ProductBatchController::class, 'adjustStock'])->name('productBatches.adjust-stock');
-        // Mass actions
-        Route::post('/productBatches/massdestroy', [App\Http\Controllers\ProductBatchController::class, 'massdestroy'])->name('productBatches.massdestroy');
-        
+
         // Utility routes
         Route::get('/productBatches/check-expiry', [App\Http\Controllers\ProductBatchController::class, 'checkExpiry'])->name('productBatches.check-expiry');
         Route::get('/productBatches/{id}/print-label', [App\Http\Controllers\ProductBatchController::class, 'printLabel'])->name('productBatches.print-label');
