@@ -472,19 +472,25 @@ class ReportController extends AppBaseController
     
     public function generateStockBalanceReport(Request $request)
     {
-        $service = new \App\Services\StockBalanceReportService();
-        
-        $filters = [
-            'warehouse_id' => $request->warehouse_id,
-            'product_id' => $request->product_id,
-            'batch_no' => $request->batch_no,
-            'show_zero_stock' => $request->show_zero_stock
-        ];
-        
-        // Generate report data
-        $reportData = $service->generateReportOptimized($filters);
+        // This report can span every warehouse x product x batch - far more
+        // data than a single invoice PDF. DomPDF is memory-hungry and can
+        // exceed PHP's default 128MB limit, which is a fatal \Error (not an
+        // \Exception) and was crashing this whole request with a bare 500.
+        ini_set('memory_limit', '512M');
 
         try {
+            $service = new \App\Services\StockBalanceReportService();
+
+            $filters = [
+                'warehouse_id' => $request->warehouse_id,
+                'product_id' => $request->product_id,
+                'batch_no' => $request->batch_no,
+                'show_zero_stock' => $request->show_zero_stock
+            ];
+
+            // Generate report data
+            $reportData = $service->generateReportOptimized($filters);
+
             $pdf = Pdf::loadView('reports.stock_balance', [
                 'reportData' => $reportData,
                 'filters' => $filters
@@ -502,11 +508,11 @@ class ReportController extends AppBaseController
                 'margin_top' => 10,
                 'margin_bottom' => 10
             ]);
-            
+
             // Stream to browser (view in browser)
             return $pdf->stream('stock_balance_report_' . date('Y-m-d_H-i-s') . '.pdf');
-            
-        } catch(Exception $e) {
+
+        } catch(\Throwable $e) {
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
     }
