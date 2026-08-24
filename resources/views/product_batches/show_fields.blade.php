@@ -30,10 +30,10 @@
                         <span class="info-box-icon" style="font-size: 2rem;"><i class="fa fa-calendar"></i></span>
                         <div class="info-box-content">
                             <span class="info-box-text" style="font-size: 1rem;">Expiry Date</span>
-                            <span class="info-box-number" style="font-size: 1.4rem; font-weight: bold;">{{ $productBatch->expiry_date }}</span>
+                            <span class="info-box-number" style="font-size: 1.4rem; font-weight: bold;">{{ $productBatch->expiry_date ?? 'No Expiry' }}</span>
                             @if($productBatch->isExpired())
                                 <span class="badge badge-danger" style="font-size: 0.9rem;">Expired</span>
-                            @else
+                            @elseif($productBatch->expiry_date)
                                 @php
                                     $daysToExpiry = now()->diffInDays($productBatch->expiry_date, false);
                                 @endphp
@@ -82,7 +82,7 @@
                                 <tr>
                                     <th style="font-size: 1rem;">Expiry Date</th>
                                     <td style="font-size: 1rem;">
-                                        <span style="font-size: 1.1rem;">{{ $productBatch->expiry_date }}</span>
+                                        <span style="font-size: 1.1rem;">{{ $productBatch->expiry_date ?? 'No Expiry' }}</span>
                                         @if($productBatch->isExpired())
                                             <span class="badge badge-danger ml-2" style="font-size: 0.9rem;">Expired</span>
                                         @endif

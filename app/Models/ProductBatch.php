@@ -43,11 +43,12 @@ class ProductBatch extends Model
     const BATCH_CODE_FIXED_DIGIT = '8';
 
     /**
-     * Check if batch is expired
+     * Check if batch is expired. No expiry date recorded means it never
+     * expires, not that it's already expired.
      */
     public function isExpired()
     {
-        return $this->expiry_date < now();
+        return $this->expiry_date !== null && $this->expiry_date < now();
     }
 
     /**
@@ -149,13 +150,16 @@ class ProductBatch extends Model
     }
 
     /**
-     * Scope a query to only include active batches
+     * Scope a query to only include active batches. A NULL expiry date
+     * means the batch never expires, not that it's excluded.
      */
     public function scopeActive($query)
     {
         return $query->where('status', self::STATUS_ACTIVE)
                      ->where('quantity', '>', 0)
-                     ->where('expiry_date', '>', now());
+                     ->where(function ($q) {
+                         $q->whereNull('expiry_date')->orWhere('expiry_date', '>', now());
+                     });
     }
 
     /**
@@ -187,11 +191,15 @@ class ProductBatch extends Model
     }
 
     /**
-     * Scope a query to order by expiry date (FEFO - First Expiry First Out)
+     * Scope a query to order by expiry date (FEFO - First Expiry First Out).
+     * Batches with no expiry date sort last - nothing to prioritize using up,
+     * so they shouldn't jump ahead of batches that actually have a near-term
+     * expiry (MySQL's default ASC order otherwise sorts NULL first).
      */
     public function scopeFefo($query)
     {
-        return $query->orderBy('expiry_date', 'asc');
+        return $query->orderByRaw('expiry_date IS NULL')
+                     ->orderBy('expiry_date', 'asc');
     }
 
     public function warehouseInventoryBalances()

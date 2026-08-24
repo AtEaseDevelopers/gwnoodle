@@ -87,7 +87,7 @@ class ProductBatchController extends AppBaseController
             'product_id' => 'required|exists:products,id',
             //'warehouse_id' => 'required|exists:warehouses,id',
             'batch_code' => 'required|string|unique:product_batches,batch_code',
-            'expiry_date' => 'required|date',
+            'expiry_date' => 'nullable|date',
             'quantity' => 'nullable|integer|min:1',
             'status' => 'sometimes|integer'
         ]);

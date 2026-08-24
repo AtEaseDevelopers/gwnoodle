@@ -75,12 +75,12 @@
 
                                                         <!-- Expiry Date -->
                                                         <div class="form-group">
-                                                            {!! Form::label('expiry_date', 'Expiry Date') !!} <span class="text-danger">*</span>
+                                                            {!! Form::label('expiry_date', 'Expiry Date') !!} <span class="text-muted">(Optional)</span>
                                                             {!! Form::date('expiry_date', null, [
                                                                 'class' => 'form-control',
-                                                                'required',
                                                                 'id' => 'expiry_date'
                                                             ]) !!}
+                                                            <small class="form-text text-muted">Leave blank if this product doesn't expire.</small>
                                                         </div>
 
                                                         <!-- Status -->
@@ -180,16 +180,6 @@ $(function () {
     $('.select2').select2({
         placeholder: 'Select Product',
         width: '100%'
-    });
-
-    // Form validation
-    $('#productBatchEditForm').on('submit', function(e) {
-        var expiryDate = $('#expiry_date').val();
-        if (!expiryDate) {
-            e.preventDefault();
-            toastr.error('Please select an expiry date', 'Validation Error');
-            return false;
-        }
     });
 
     // Keyboard shortcut for cancel
