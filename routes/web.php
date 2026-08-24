@@ -381,11 +381,11 @@ Route::group(['middleware' => ['auth']], function() {
     Route::group(['middleware' => ['permission:product_batch']], function() {
         
         // Override resource parameter to use 'id' instead of 'productBatch'
-        // Product batches are immutable once created: no edit/update. Stock
-        // changes go through the stock-in/out/adjust actions below instead.
+        // Quantity changes still go through the stock-in/out/adjust actions
+        // below, not edit/update - update() explicitly strips quantity.
         Route::resource('productBatches', App\Http\Controllers\ProductBatchController::class)->parameters([
             'productBatches' => 'id'
-        ])->except(['edit', 'update']);
+        ]);
         
         Route::post('/productBatches/stock-in/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
         Route::post('/productBatches/stock-in-bulk', [App\Http\Controllers\ProductBatchController::class, 'stockInBulk'])->name('productBatches.stock-in-bulk');

@@ -15,6 +15,7 @@
                          <div class="card">
                              <div class="card-header">
                                  <strong>{{ __('Product Batch Detail')}}</strong>
+                                  <a href="{{ route('productBatches.edit', encrypt($productBatch->id)) }}" class="btn btn-primary">Edit</a>
                                   <a href="{{ route('productBatches.index') }}" class="btn btn-light">Back</a>
                              </div>
                              <div class="card-body">
