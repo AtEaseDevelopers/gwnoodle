@@ -13,6 +13,7 @@ use App\Models\WarehouseInventoryBalance;
 use App\Models\InventoryTransaction;
 use App\Models\ProductBatch;
 use App\Models\StockInRequest;
+use App\Models\InvoiceDetail;
 use Flash;
 use App\Http\Controllers\AppBaseController;
 use Response;
@@ -284,6 +285,13 @@ class ProductBatchController extends AppBaseController
      */
     public function destroy($id)
     {
+        // Route already gates this with role:admin middleware; check again
+        // here for a clear message instead of relying solely on a bare 403.
+        if (!auth()->check() || !auth()->user()->hasRole('admin')) {
+            Flash::error('Only an admin can delete a product batch.');
+            return redirect(route('productBatches.index'));
+        }
+
         $id = Crypt::decrypt($id);
         $productBatch = $this->productBatchRepository->find($id);
 
@@ -293,9 +301,9 @@ class ProductBatchController extends AppBaseController
             return redirect(route('productBatches.index'));
         }
 
-        // Check if batch has any transactions
+        // Check if batch has any transactions (already stocked in/out)
         $hasTransactions = InventoryTransaction::where('batch_id', $id)->exists();
-        
+
         if ($hasTransactions) {
             Flash::error('Cannot delete batch because it has inventory transactions.');
             return redirect(route('productBatches.index'));
@@ -303,7 +311,7 @@ class ProductBatchController extends AppBaseController
 
         // Check if batch has stock in any warehouse
         $hasWarehouseStock = WarehouseInventoryBalance::where('batch_id', $id)->exists();
-        
+
         if ($hasWarehouseStock) {
             Flash::error('Cannot delete batch because it has stock in warehouses.');
             return redirect(route('productBatches.index'));
@@ -312,6 +320,24 @@ class ProductBatchController extends AppBaseController
         // Check if batch has stock
         if ($productBatch->quantity > 0) {
             Flash::error('Cannot delete batch with existing stock. Please adjust stock first.');
+            return redirect(route('productBatches.index'));
+        }
+
+        // Check if batch has ever been sold on an invoice
+        $hasInvoiceUsage = InvoiceDetail::where('product_batch_id', $id)->exists();
+
+        if ($hasInvoiceUsage) {
+            Flash::error('Cannot delete batch because it has been used on one or more invoices.');
+            return redirect(route('productBatches.index'));
+        }
+
+        // Check if batch has a pending stock-in request awaiting approval
+        $hasPendingStockIn = StockInRequest::where('batch_id', $id)
+            ->where('status', StockInRequest::STATUS_PENDING)
+            ->exists();
+
+        if ($hasPendingStockIn) {
+            Flash::error('Cannot delete batch because it has a pending stock-in request. Reject or cancel it first.');
             return redirect(route('productBatches.index'));
         }
 
