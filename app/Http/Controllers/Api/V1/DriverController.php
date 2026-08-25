@@ -1789,9 +1789,16 @@ class DriverController extends Controller
             // Rendering this PDF (DomPDF + a credit calculation + a companies
             // lookup) is expensive and was being redone on every single call,
             // including once per invoice in list endpoints. An invoice's PDF
-            // never changes unless the invoice itself does, so cache it keyed
-            // on updated_at - any edit naturally invalidates the cached copy.
-            $cacheKey = 'invoice_pdf_' . $invoice->id . '_' . $invoice->updated_at->timestamp;
+            // never changes unless the invoice itself does, so cache it - but
+            // invoice_details has no $touches back to invoices, so adding/
+            // editing/removing a line item does NOT bump invoices.updated_at.
+            // Keying on that alone served a stale PDF (missing newly-added
+            // items) forever once cached. Fold in the detail rows' own count
+            // and latest updated_at too, so any change to the line items
+            // themselves also invalidates the cache.
+            $detailsSignature = $invoice->invoicedetail->count()
+                . '_' . optional($invoice->invoicedetail->max('updated_at'))->timestamp;
+            $cacheKey = 'invoice_pdf_' . $invoice->id . '_' . $invoice->updated_at->timestamp . '_' . $detailsSignature;
 
             $generatePdf = function () use ($invoice) {
                 $min = 450;
