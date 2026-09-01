@@ -4,10 +4,12 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Registers "Product Quantity Sold Report" in the Reports list, with the
- * same Date + Driver filter fields as "Daily Sales Report" (report_id 23) -
- * it reuses the same underlying data, just renders product+qty only, no
- * sales/payment figures. See ReportController::productQtySoldReportView().
+ * Registers "Product Quantity Sold Report" in the Reports list, with a
+ * Date From + Date To + Driver filter form (same datefrom/dateto naming
+ * convention as Stock Received Report, report_id 27) - it reuses Daily
+ * Sales Report's underlying data source, just over a range and rendering
+ * product+qty only, no sales/payment figures. See
+ * ReportController::productQtySoldReportView().
  */
 class AddProductQtySoldReport extends Migration
 {
@@ -41,8 +43,19 @@ class AddProductQtySoldReport extends Migration
             ],
             [
                 'report_id' => $reportId,
-                'name' => 'date',
-                'title' => 'Date',
+                'name' => 'datefrom',
+                'title' => 'Date From',
+                'type' => 'date',
+                'data' => null,
+                'sequence' => 10,
+                'status' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'report_id' => $reportId,
+                'name' => 'dateto',
+                'title' => 'Date To',
                 'type' => 'date',
                 'data' => null,
                 'sequence' => 10,

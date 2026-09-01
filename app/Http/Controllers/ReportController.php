@@ -383,14 +383,18 @@ class ReportController extends AppBaseController
         }
 
         if ($sp == 'PRODUCT_QTY_SOLD_REPORT') {
-            // Extract parameters - same shape as DAILY_SALES_REPORT above
-            $date = isset($data['date']) ? $data['date'] : date('Y-m-d');
+            // Date range (see datefrom/dateto handling elsewhere in this
+            // method, e.g. STOCK_RECEIVED_REPORT above) rather than a
+            // single date like DAILY_SALES_REPORT.
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
             $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
             $driver_id = isset($data['driver_id']) ? $data['driver_id'] : null;
             $trip_uuid = isset($data['trip_uuid']) ? $data['trip_uuid'] : null;
 
             return redirect()->route('product_qty_sold_report_view', [
-                'date' => $date,
+                'date_from' => $date_from,
+                'date_to' => $date_to,
                 'customer_id' => $customer_id,
                 'driver_id' => $driver_id,
                 'trip_uuid' => $trip_uuid,
@@ -635,12 +639,14 @@ class ReportController extends AppBaseController
     }
 
     /**
-     * Same data and filters as the Daily Sales Report, but the output only
-     * shows product and quantity sold - no sales/payment figures.
+     * Same filters/data source as the Daily Sales Report (over a date range
+     * rather than a single day), but the output only shows product and
+     * quantity sold - no sales/payment figures.
      */
     public function productQtySoldReportView(Request $request)
     {
-        $date = $request->date ?? date('Y-m-d');
+        $dateFrom = $request->date_from ?? date('Y-m-d');
+        $dateTo = $request->date_to ?? date('Y-m-d');
 
         $filters = [
             'customer_id' => $request->customer_id,
@@ -649,13 +655,14 @@ class ReportController extends AppBaseController
         ];
 
         $service = new \App\Services\DailySalesReportService();
-        $reportData = $service->generateReport($date, $filters);
+        $reportData = $service->generateReportByDateRange($dateFrom, $dateTo, $filters);
 
         try {
             $pdf = Pdf::loadView('reports.product_qty_sold', [
                 'reportData' => $reportData,
                 'filters' => $filters,
-                'selected_date' => $date
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
             ]);
 
             $pdf->setPaper('a4', 'portrait');
@@ -670,7 +677,7 @@ class ReportController extends AppBaseController
                 'chroot' => public_path(),
             ]);
 
-            return $pdf->stream('product_qty_sold_report_' . $date . '.pdf');
+            return $pdf->stream('product_qty_sold_report_' . $dateFrom . '_to_' . $dateTo . '.pdf');
 
         } catch(Exception $e) {
             \Log::error('Product Qty Sold PDF Error: ' . $e->getMessage());

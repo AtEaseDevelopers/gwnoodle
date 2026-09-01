@@ -273,7 +273,7 @@
                 <td class="detail-value">{{ $reportData['generated_at'] }}</td>
             </tr>
             <tr>
-                <td class="detail-label">Sales Date:</td>
+                <td class="detail-label">Date Range:</td>
                 <td class="detail-value">{{ $reportData['report_date'] }}</td>
                 <td class="detail-label" style="vertical-align: top;">Driver(s):</td>
                 <td class="detail-value driver-value">
@@ -331,7 +331,7 @@
         <!-- Product Summary Section (Overall) -->
         <div class="sub-section-title">PRODUCT QUANTITY SUMMARY (ALL TRIPS)</div>
         @if(empty($reportData['products']))
-            <div class="empty-message">No products sold on this date</div>
+            <div class="empty-message">No products sold in this date range</div>
         @else
             <table>
                 <thead>
@@ -364,12 +364,12 @@
         <!-- Trip Details Section -->
         <div class="sub-section-title">TRIP DETAILS</div>
         @if(empty($reportData['trips']))
-            <div class="empty-message">No trips found for this date</div>
+            <div class="empty-message">No trips found for this date range</div>
         @else
             @foreach($reportData['trips'] as $tripIndex => $trip)
                 <div class="trip-section">
                     <div class="trip-header">
-                        <div class="trip-title">TRIP #{{ $trip['trip_no'] }}</div>
+                        <div class="trip-title">TRIP #{{ $trip['trip_no'] }} - {{ $trip['trip_date'] ?? 'N/A' }}</div>
                         <div class="trip-info">
                             Total Invoices: {{ $trip['summary']['total_invoices'] }} |
                             Total Customers: {{ $trip['summary']['total_customers'] }} |
@@ -382,7 +382,7 @@
                         <table>
                             <thead>
                                 <tr style="background-color: #e0e0e0;">
-                                    <th colspan="3">Invoice: {{ $invoice['invoice_no'] }} | Customer: {{ $invoice['customer_name'] }} ({{ $invoice['customer_code'] }}) | Driver: {{ $invoice['driver'] }}</th>
+                                    <th colspan="3">Invoice: {{ $invoice['invoice_no'] }} | Date: {{ $invoice['date'] }} | Customer: {{ $invoice['customer_name'] }} ({{ $invoice['customer_code'] }}) | Driver: {{ $invoice['driver'] }}</th>
                                 </tr>
                                 <tr>
                                     <th width="10%">#</th>

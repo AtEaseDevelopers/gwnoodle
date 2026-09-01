@@ -237,6 +237,168 @@ class DailySalesReportService
     }
 
     /**
+     * Same shape as generateReport() (trips -> invoices -> items, plus the
+     * overall product summary), but over a date range instead of a single
+     * day - used by the Product Quantity Sold Report. Kept as its own
+     * method rather than adding a range branch to generateReport(), so
+     * Daily Sales Report's behavior can't be affected by this change.
+     */
+    public function generateReportByDateRange($dateFrom, $dateTo, $filters = [])
+    {
+        $reportData = [
+            'generated_at' => Carbon::now()->format('d/m/Y H:i:s'),
+            'report_date' => Carbon::parse($dateFrom)->format('d/m/Y') . ' - ' . Carbon::parse($dateTo)->format('d/m/Y'),
+            'report_no' => $this->generateReportNumber($dateFrom),
+            'trips' => [],
+            'summary' => [
+                'total_invoices' => 0,
+                'total_quantity' => 0,
+                'total_customers' => 0,
+                'total_trips' => 0
+            ],
+            'filters_applied' => [
+                'driver' => 'All Drivers',
+                'trip' => 'All Trips'
+            ]
+        ];
+
+        $query = Invoice::with(['customer', 'invoicedetail.product', 'driver'])
+            ->whereBetween('date', [
+                Carbon::parse($dateFrom)->startOfDay(),
+                Carbon::parse($dateTo)->endOfDay(),
+            ])
+            ->where('status', Invoice::STATUS_COMPLETED);
+
+        // Apply driver filter
+        if (isset($filters['driver_id']) && $filters['driver_id']) {
+            if (is_array($filters['driver_id'])) {
+                $query->whereIn('driver_id', $filters['driver_id']);
+
+                $driverNames = \App\Models\Driver::whereIn('id', $filters['driver_id'])
+                    ->pluck('name')
+                    ->toArray();
+                $reportData['filters_applied']['driver'] = implode(', ', $driverNames);
+                $reportData['driver_filter_display'] = $driverNames;
+                $reportData['driver_filter_ids'] = $filters['driver_id'];
+            } else {
+                $query->where('driver_id', $filters['driver_id']);
+
+                $driver = \App\Models\Driver::find($filters['driver_id']);
+                $driverName = $driver ? $driver->name : 'Unknown Driver';
+                $reportData['filters_applied']['driver'] = $driverName;
+                $reportData['driver_filter_display'] = [$driverName];
+                $reportData['driver_filter_ids'] = [$filters['driver_id']];
+            }
+        } else {
+            $reportData['driver_filter_display'] = [];
+            $reportData['driver_filter_ids'] = [];
+        }
+
+        // Apply trip_uuid filter
+        if (isset($filters['trip_uuid']) && $filters['trip_uuid']) {
+            if (is_array($filters['trip_uuid'])) {
+                $query->whereIn('trip_uuid', $filters['trip_uuid']);
+                $reportData['filters_applied']['trip'] = implode(', ', $filters['trip_uuid']);
+                $reportData['trip_filter_display'] = $filters['trip_uuid'];
+            } else {
+                $query->where('trip_uuid', $filters['trip_uuid']);
+                $reportData['filters_applied']['trip'] = $filters['trip_uuid'];
+                $reportData['trip_filter_display'] = [$filters['trip_uuid']];
+            }
+        }
+
+        // Order by date first - a trip_uuid can only belong to one day in
+        // practice, but ordering by date keeps a multi-day report readable
+        // top to bottom even if that ever isn't true.
+        $invoices = $query->orderBy('date')->orderBy('trip_uuid')->orderBy('invoiceno', 'asc')->get();
+
+        $groupedByTrip = $invoices->groupBy('trip_uuid');
+        $reportData['summary']['total_trips'] = $groupedByTrip->count();
+        $reportData['summary']['total_invoices'] = $invoices->count();
+
+        $allProducts = [];
+        $productCounter = 1;
+        $tripCounter = 1;
+
+        foreach ($groupedByTrip as $tripUuid => $tripInvoices) {
+            $tripData = [
+                'trip_no' => $tripCounter++,
+                'trip_uuid' => $tripUuid ?? 'N/A',
+                'trip_display' => $tripUuid ?? 'No Trip Assigned',
+                'trip_date' => optional($tripInvoices->first())->date
+                    ? Carbon::parse($tripInvoices->first()->date)->format('d/m/Y')
+                    : 'N/A',
+                'invoices' => [],
+                'summary' => [
+                    'total_invoices' => $tripInvoices->count(),
+                    'total_quantity' => 0,
+                    'total_customers' => 0
+                ]
+            ];
+
+            $invoiceItems = [];
+            $tripCustomers = [];
+
+            foreach ($tripInvoices as $invoice) {
+                $invoiceItemsList = [];
+
+                foreach ($invoice->invoicedetail as $detail) {
+                    $product = $detail->product;
+
+                    $invoiceItemsList[] = [
+                        'product_name' => $product ? $product->name : 'N/A',
+                        'product_code' => $product ? $product->unit_code : 'N/A',
+                        'quantity' => $detail->quantity,
+                    ];
+
+                    // Track for product summary (overall)
+                    $productKey = $product ? $product->id : 'unknown';
+                    if (!isset($allProducts[$productKey])) {
+                        $allProducts[$productKey] = [
+                            'no' => $productCounter++,
+                            'product_name' => $product ? $product->name : 'N/A',
+                            'product_code' => $product ? $product->unit_code : 'N/A',
+                            'quantity' => 0,
+                        ];
+                    }
+                    $allProducts[$productKey]['quantity'] += $detail->quantity;
+
+                    // Update trip summary
+                    $tripData['summary']['total_quantity'] += $detail->quantity;
+                }
+
+                $invoiceItems[] = [
+                    'invoice_no' => $invoice->invoiceno,
+                    'date' => Carbon::parse($invoice->date)->format('d/m/Y'),
+                    'customer_name' => $invoice->customer ? $invoice->customer->name : 'N/A',
+                    'customer_code' => $invoice->customer ? $invoice->customer->code : 'N/A',
+                    'customer_id' => $invoice->customer_id,
+                    'driver' => $invoice->driver ? $invoice->driver->name : 'N/A',
+                    'driver_id' => $invoice->driver_id,
+                    'items' => $invoiceItemsList,
+                ];
+
+                if ($invoice->customer_id && !in_array($invoice->customer_id, $tripCustomers)) {
+                    $tripCustomers[] = $invoice->customer_id;
+                }
+            }
+
+            $tripData['summary']['total_customers'] = count($tripCustomers);
+            $tripData['invoices'] = $invoiceItems;
+
+            $reportData['trips'][] = $tripData;
+        }
+
+        $uniqueCustomers = $invoices->pluck('customer_id')->unique()->count();
+        $reportData['summary']['total_customers'] = $uniqueCustomers;
+        $reportData['summary']['total_quantity'] = collect($allProducts)->sum('quantity');
+
+        $reportData['products'] = array_values($allProducts);
+
+        return $reportData;
+    }
+
+    /**
      * Generate report number based on date
      * Format: DSR{YYMMDD}-{sequence}
      */
