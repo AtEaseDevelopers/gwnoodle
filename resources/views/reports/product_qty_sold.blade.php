@@ -203,6 +203,10 @@
             text-align: center;
         }
 
+        .nowrap {
+            white-space: nowrap;
+        }
+
         .sub-section-title {
             font-size: 12px;
             font-weight: bold;
@@ -335,10 +339,10 @@
             <table>
                 <thead>
                     <tr>
-                        <th width="10%">#</th>
-                        <th width="55%">Product Description</th>
-                        <th width="15%">Product Code</th>
-                        <th width="20%">Quantity Sold</th>
+                        <th width="6%">#</th>
+                        <th width="38%">Product Description</th>
+                        <th width="42%" class="nowrap">Product Code</th>
+                        <th width="14%">Quantity Sold</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -346,7 +350,7 @@
                     <tr>
                         <td class="text-center">{{ $product['no'] }}</td>
                         <td>{{ $product['product_name'] }}</td>
-                        <td class="text-center">{{ $product['product_code'] }}</td>
+                        <td class="text-center nowrap">{{ $product['product_code'] }}</td>
                         <td class="text-right">{{ number_format($product['quantity']) }}</td>
                     </tr>
                     @endforeach
