@@ -34,11 +34,8 @@ class PaymentController extends Controller
     const MAX_BATCHES_PER_POLL = 20;
 
     // A batch stays pending while it waits for its invoice to be approved in
-    // AutoCount. If that never happens it would retry forever, so we give up
-    // and mark the batch 'failed' after this many hours. A human can still
-    // re-queue it later with a "Sync" click. 0 disables the timeout.
-    // Runtime override: .env AUTOCOUNT_PAYMENT_WAIT_GIVEUP_HOURS
-    const WAIT_GIVE_UP_HOURS = 72;
+    // AutoCount. It is never auto-failed: it keeps waiting until the invoice is
+    // approved and the batch syncs. Once synced its status no longer changes.
 
     // invoice_payments.type -> a human payment-method label. The plugin maps this
     // label to the company's AutoCount PaymentMethod code (configurable there).
@@ -89,29 +86,6 @@ class PaymentController extends Controller
 
             // Step 3: group rows by batch.
             $grouped = $rows->groupBy('payment_batch_id');
-
-            // Give-up sweep: a batch that has stayed pending past the timeout
-            // (its invoice was never approved in AutoCount) is marked 'failed'
-            // instead of being retried forever. It can still be re-queued by a
-            // manual "Sync" click. Skipped when the window is 0.
-            $giveUpHours = (int) env('AUTOCOUNT_PAYMENT_WAIT_GIVEUP_HOURS', self::WAIT_GIVE_UP_HOURS);
-            if ($giveUpHours > 0) {
-                $deadline = now()->subHours($giveUpHours);
-                $timedOut = $grouped->filter(function ($batch) use ($deadline) {
-                    $createdAt = optional($batch->first())->created_at;
-                    return $createdAt !== null && $createdAt->lt($deadline);
-                });
-                foreach ($timedOut as $batchId => $batch) {
-                    InvoicePayment::where('payment_batch_id', $batchId)
-                        ->where('status', 1)
-                        ->where('autocount_status', InvoicePayment::AC_PENDING)
-                        ->update([
-                            'autocount_status'  => InvoicePayment::AC_FAILED,
-                            'autocount_message' => 'FIX: approve the invoice in AutoCount then click Sync | WHERE: web give-up sweep | WHY: batch stayed pending ' . $giveUpHours . 'h without its invoice being approved | BATCH: ' . $batchId,
-                        ]);
-                }
-                $grouped = $grouped->diffKeys($timedOut);
-            }
 
             // Step 4: emit one AR Payment per eligible batch.
             $data = $grouped
