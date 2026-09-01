@@ -22,6 +22,7 @@ use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\StockInRequest;
+use App\Models\StockOutRequest;
 use App\Models\ProductCost;
 use App\Models\SpecialPrice;
 use App\Models\Customer;
@@ -8343,14 +8344,13 @@ class DriverController extends Controller
             ], 200);
         }
 
-        DB::beginTransaction();
-        
         try {
             $quantity = $request->quantity;
             $warehouseId = $request->warehouse_id;
             $warehouse = Warehouse::find($warehouseId);
 
-            // Check if warehouse has this batch with sufficient quantity
+            // Soft availability check for immediate feedback. The authoritative,
+            // locked check happens when an admin approves the queued request.
             $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
                 ->where('batch_id', $productBatch->id)
                 ->first();
@@ -8369,43 +8369,22 @@ class DriverController extends Controller
                 ], 200);
             }
 
-            // Store old values for response
-            $oldQuantity = $productBatch->quantity;
-            $oldWarehouseQuantity = $warehouseInventory->quantity;
-            
-            // Update batch quantity
-            $productBatch->decrement('quantity', $quantity);
-            
-            // Remove from warehouse inventory balance
-            $warehouseInventory->decreaseQuantity($quantity);
-            
-            // Update status based on remaining quantity
-            $statusChanged = false;
-            $oldStatus = $productBatch->status_text;
-            
-            if ($productBatch->quantity <= 0) {
-                $productBatch->status = ProductBatch::STATUS_INACTIVE;
-                $productBatch->save();
-                $statusChanged = true;
-            }
-
-            // Create inventory transaction
-            InventoryTransaction::create([
+            // Stock is not deducted here — queue an approval request instead.
+            StockOutRequest::create([
+                'source' => StockOutRequest::SOURCE_MOBILE_APP,
                 'warehouse_id' => $warehouseId,
                 'product_id' => $productBatch->product_id,
                 'batch_id' => $productBatch->id,
-                'quantity' => -$quantity,
-                'type' => InventoryTransaction::TYPE_STOCK_OUT,
+                'requested_quantity' => $quantity,
+                'quantity' => $quantity,
                 'remark' => ($request->remark ?? 'Stock out from mobile app') . ' - Warehouse: ' . $warehouse->name,
-                'date' => now(),
-                'user' => $user->name
+                'status' => StockOutRequest::STATUS_PENDING,
+                'requested_by' => $user->name,
             ]);
 
-            DB::commit();
-
-            $responseData = [
+            return response()->json([
                 'result' => true,
-                'message' => __LINE__ . $this->message_separator . $quantity . ' units removed from batch successfully',
+                'message' => __LINE__ . $this->message_separator . $quantity . ' units submitted for approval',
                 'data' => [
                     'batch' => [
                         'id' => $productBatch->id,
@@ -8413,32 +8392,18 @@ class DriverController extends Controller
                         'product_id' => $productBatch->product_id,
                         'product_name' => $productBatch->product->name ?? null,
                         'product_code' => $productBatch->product->unit_code ?? null,
-                        'status' => $productBatch->status_text,
                         'expiry_date' => $productBatch->formatted_expiry_date,
                         'days_to_expiry' => $productBatch->days_to_expiry,
                         'is_expiring_soon' => $productBatch->isExpiringSoon()
                     ],
+                    'requested_quantity' => $quantity,
                 ]
-            ];
-
-            // Add warning if batch is now depleted
-            if ($productBatch->quantity <= 0) {
-                $responseData['data']['warning'] = 'Batch is now depleted and has been marked as inactive.';
-            }
-            
-            // Add warning if batch is expiring soon
-            if ($productBatch->isExpiringSoon()) {
-                $responseData['data']['warning'] = 'Warning: This batch is expiring in ' . $productBatch->days_to_expiry . ' days.';
-            }
-
-            return response()->json($responseData, 200);
+            ], 200);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            
             \Log::error('API Stock Out Error: ' . $e->getMessage());
             \Log::error($e->getTraceAsString());
-            
+
             return response()->json([
                 'result' => false,
                 'message' => __LINE__ . $this->message_separator . 'Error processing stock out: ' . $e->getMessage(),

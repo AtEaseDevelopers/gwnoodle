@@ -38,6 +38,7 @@ return [
     'setup' => 'Setup',
     'special_prices' => 'Special Prices',
     'stock_in_approvals' => 'Stock-In Approvals',
+    'stock_out_approvals' => 'Stock-Out Approvals',
     'system_language_setting' => 'System Language Settings',
     'tasks' => 'Tasks',
     'transactions' => 'Transactions',

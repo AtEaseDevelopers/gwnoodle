@@ -659,6 +659,14 @@ Route::group(['middleware' => ['auth']], function() {
         Route::post('/stockInRequests/{id}/approve', [App\Http\Controllers\StockInRequestController::class, 'approve'])->name('stockInRequests.approve');
         Route::post('/stockInRequests/{id}/reject', [App\Http\Controllers\StockInRequestController::class, 'reject'])->name('stockInRequests.reject');
         Route::post('/stockInRequests/{id}/update-qty', [App\Http\Controllers\StockInRequestController::class, 'updateQty'])->name('stockInRequests.update-qty');
+
+        // Batch stock-out approval requests (view: anyone with warehouse access; actions gated by role in controller)
+        Route::get('/stockOutRequests', [App\Http\Controllers\StockOutRequestController::class, 'index'])->name('stockOutRequests.index');
+        Route::post('/stockOutRequests/bulk-approve', [App\Http\Controllers\StockOutRequestController::class, 'bulkApprove'])->name('stockOutRequests.bulk-approve');
+        Route::post('/stockOutRequests/bulk-reject', [App\Http\Controllers\StockOutRequestController::class, 'bulkReject'])->name('stockOutRequests.bulk-reject');
+        Route::post('/stockOutRequests/{id}/approve', [App\Http\Controllers\StockOutRequestController::class, 'approve'])->name('stockOutRequests.approve');
+        Route::post('/stockOutRequests/{id}/reject', [App\Http\Controllers\StockOutRequestController::class, 'reject'])->name('stockOutRequests.reject');
+        Route::post('/stockOutRequests/{id}/update-qty', [App\Http\Controllers\StockOutRequestController::class, 'updateQty'])->name('stockOutRequests.update-qty');
     });
 
     Route::group(['middleware' => ['permission:inventorybalance']], function() {

@@ -13,6 +13,7 @@ use App\Models\WarehouseInventoryBalance;
 use App\Models\InventoryTransaction;
 use App\Models\ProductBatch;
 use App\Models\StockInRequest;
+use App\Models\StockOutRequest;
 use App\Models\InvoiceDetail;
 use Flash;
 use App\Http\Controllers\AppBaseController;
@@ -633,67 +634,42 @@ class ProductBatchController extends AppBaseController
                 ], 422);
             }
 
-            DB::beginTransaction();
-            
-            try {
-                $quantity = $request->quantity;
-                $warehouseId = $request->warehouse_id;
-                $warehouse = Warehouse::find($warehouseId);
+            $quantity = $request->quantity;
+            $warehouseId = $request->warehouse_id;
+            $warehouse = Warehouse::find($warehouseId);
 
-                // Check if warehouse has this batch
-                $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
-                    ->where('batch_id', $productBatch->id)
-                    ->first();
+            // Soft availability check for immediate feedback. The authoritative,
+            // locked check happens when an admin approves the queued request.
+            $warehouseInventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+                ->where('batch_id', $productBatch->id)
+                ->first();
 
-                if (!$warehouseInventory || $warehouseInventory->quantity < $quantity) {
-                    $available = $warehouseInventory ? $warehouseInventory->quantity : 0;
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Insufficient quantity in ' . $warehouse->name . '. Available: ' . $available
-                    ], 422);
-                }
-
-                // Update batch quantity
-                $productBatch->decrement('quantity', $quantity);
-                
-                // Remove from warehouse inventory balance
-                $warehouseInventory->decreaseQuantity($quantity);
-                
-                // Update status based on remaining quantity
-                if ($productBatch->quantity <= 0) {
-                    $productBatch->status = 2; // Inactive
-                    $productBatch->save();
-                }
-
-                // Create inventory transaction
-                InventoryTransaction::create([
-                    'warehouse_id' => $warehouseId,
-                    'product_id' => $productBatch->product_id,
-                    'batch_id' => $productBatch->id,
-                    'quantity' => -$quantity,
-                    'type' => 2, // Stock Out
-                    'remark' => ('Stock out from barcode scan') . ' - Warehouse: ' . $warehouse->name,
-                    'date' => now(),
-                    'user' => Auth::user()->name ?? 'system'
-                ]);
-
-                DB::commit();
-
-                return response()->json([
-                    'success' => true,
-                    'message' => $quantity . ' units removed from batch in ' . $warehouse->name . ' successfully.',
-                    'new_quantity' => $productBatch->quantity,
-                    'batch_code' => $productBatch->batch_code
-                ]);
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-                
+            if (!$warehouseInventory || $warehouseInventory->quantity < $quantity) {
+                $available = $warehouseInventory ? $warehouseInventory->quantity : 0;
                 return response()->json([
                     'success' => false,
-                    'message' => 'Error processing stock out: ' . $e->getMessage()
-                ], 500);
+                    'message' => 'Insufficient quantity in ' . $warehouse->name . '. Available: ' . $available
+                ], 422);
             }
+
+            // Stock is not deducted here — queue an approval request instead.
+            StockOutRequest::create([
+                'source' => StockOutRequest::SOURCE_BARCODE_SCAN,
+                'warehouse_id' => $warehouseId,
+                'product_id' => $productBatch->product_id,
+                'batch_id' => $productBatch->id,
+                'requested_quantity' => $quantity,
+                'quantity' => $quantity,
+                'remark' => $request->remark ?? ('Stock out from barcode scan - Warehouse: ' . $warehouse->name),
+                'status' => StockOutRequest::STATUS_PENDING,
+                'requested_by' => Auth::user()->name ?? 'system',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $quantity . ' units from batch ' . $productBatch->batch_code . ' in ' . $warehouse->name . ' submitted for approval.',
+                'batch_code' => $productBatch->batch_code
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

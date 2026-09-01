@@ -8,6 +8,7 @@ use App\Models\WarehouseInventoryBalance;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\InventoryTransaction;
+use App\Models\StockOutRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -519,56 +520,41 @@ class WarehouseController extends Controller
                 ->withInput();
         }
 
-        DB::beginTransaction();
+        $warehouseId = $request->warehouse_id;
+        $batchId = $request->batch_id;
+        $quantity = $request->quantity;
+        $remarks = $request->remarks;
 
-        try {
-            $warehouseId = $request->warehouse_id;
-            $batchId = $request->batch_id;
-            $quantity = $request->quantity;
-            $remarks = $request->remarks;
+        // Soft availability check for immediate feedback. The authoritative,
+        // locked check happens when an admin approves the queued request.
+        $inventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
+            ->where('batch_id', $batchId)
+            ->first();
 
-            // Get current inventory
-            $inventory = WarehouseInventoryBalance::where('warehouse_id', $warehouseId)
-                ->where('batch_id', $batchId)
-                ->first();
-
-            if (!$inventory) {
-                throw new \Exception('Inventory record not found for this batch in the selected warehouse');
-            }
-
-            if ($inventory->quantity < $quantity) {
-                throw new \Exception('Insufficient stock. Available: ' . $inventory->quantity . ', Requested: ' . $quantity);
-            }
-
-            // Deduct from warehouse inventory
-            $inventory->decreaseQuantity($quantity);
-
-            // Deduct from product batch master quantity
-            $productBatch = ProductBatch::find($batchId);
-            if ($productBatch) {
-                $productBatch->decreaseQuantity($quantity, "Stock out from warehouse: {$remarks}");
-            }
-
-            // Create inventory transaction
-            InventoryTransaction::create([
-                'warehouse_id' => $warehouseId,
-                'product_id' => $request->product_id,
-                'batch_id' => $batchId,
-                'quantity' => -$quantity,
-                'type' => InventoryTransaction::TYPE_STOCK_OUT,
-                'remark' => $remarks,
-                'date' => now(),
-                'user' => Auth::user()->name ?? 'System',
-            ]);
-
-            DB::commit();
-
-            Flash::success("Stock successfully deducted by {$quantity} units.");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Flash::error('Error processing stock out: ' . $e->getMessage());
+        if (!$inventory) {
+            Flash::error('Inventory record not found for this batch in the selected warehouse');
+            return redirect()->route('warehouses.index');
         }
+
+        if ($inventory->quantity < $quantity) {
+            Flash::error('Insufficient stock. Available: ' . $inventory->quantity . ', Requested: ' . $quantity);
+            return redirect()->route('warehouses.index');
+        }
+
+        // Stock is not deducted here — queue an approval request instead.
+        StockOutRequest::create([
+            'source' => StockOutRequest::SOURCE_WAREHOUSE_MODAL,
+            'warehouse_id' => $warehouseId,
+            'product_id' => $request->product_id,
+            'batch_id' => $batchId,
+            'requested_quantity' => $quantity,
+            'quantity' => $quantity,
+            'remark' => $remarks,
+            'status' => StockOutRequest::STATUS_PENDING,
+            'requested_by' => Auth::user()->name ?? 'System',
+        ]);
+
+        Flash::success("Stock-out of {$quantity} units submitted for approval.");
 
         return redirect()->route('warehouses.index');
     }
