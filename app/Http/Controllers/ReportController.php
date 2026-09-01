@@ -596,15 +596,20 @@ class ReportController extends AppBaseController
 
     public function dailySalesReportView(Request $request)
     {
+        // DomPDF is memory-hungry and this can span many trips/invoices on a
+        // busy day - the same fatal-\Error-not-\Exception risk fixed for
+        // generateStockBalanceReport() applies here too.
+        ini_set('memory_limit', '512M');
+
         // Get parameters directly from request
         $date = $request->date ?? date('Y-m-d');
-        
+
         $filters = [
             'customer_id' => $request->customer_id,
             'driver_id' => $request->driver_id,
             'trip_uuid' => $request->trip_uuid,
         ];
-        
+
         $service = new \App\Services\DailySalesReportService();
         $reportData = $service->generateReport($date, $filters);
 
@@ -631,8 +636,8 @@ class ReportController extends AppBaseController
             
             // Stream to browser
             return $pdf->stream('daily_sales_report_' . $date . '.pdf');
-            
-        } catch(Exception $e) {
+
+        } catch(\Throwable $e) {
             \Log::error('Daily Sales PDF Error: ' . $e->getMessage());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
@@ -645,6 +650,12 @@ class ReportController extends AppBaseController
      */
     public function productQtySoldReportView(Request $request)
     {
+        // A date range can pull in far more invoices than a single day -
+        // DomPDF is memory-hungry and this must not exceed PHP's default
+        // 128MB limit (same fix as generateStockBalanceReport()/
+        // dailySalesReportView()).
+        ini_set('memory_limit', '512M');
+
         $dateFrom = $request->date_from ?? date('Y-m-d');
         $dateTo = $request->date_to ?? date('Y-m-d');
 
@@ -679,7 +690,7 @@ class ReportController extends AppBaseController
 
             return $pdf->stream('product_qty_sold_report_' . $dateFrom . '_to_' . $dateTo . '.pdf');
 
-        } catch(Exception $e) {
+        } catch(\Throwable $e) {
             \Log::error('Product Qty Sold PDF Error: ' . $e->getMessage());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
