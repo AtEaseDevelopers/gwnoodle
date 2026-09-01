@@ -318,7 +318,11 @@ class DailySalesReportService
         foreach ($invoices as $invoice) {
             foreach ($invoice->invoicedetail as $detail) {
                 $product = $detail->product;
-                $productKey = $product ? $product->id : 'unknown';
+                // Group by name, not product_id - the same product name can
+                // exist under multiple product records with different SKU
+                // codes (different pack sizes etc.), and those should combine
+                // into one line here rather than appearing as separate rows.
+                $productKey = $product ? trim($product->name) : 'unknown';
 
                 if (!isset($allProducts[$productKey])) {
                     $allProducts[$productKey] = [
