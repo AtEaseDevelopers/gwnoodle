@@ -83,11 +83,11 @@
 
                                     <!-- Expiry Date Selection -->
                                     <div class="form-group">
-                                        <label for="expiry_date">Expiry Date <span class="text-danger">*</span></label>
-                                        <input type="date" class="form-control" id="expiry_date" 
+                                        <label for="expiry_date">Expiry Date <span class="text-muted">(Optional)</span></label>
+                                        <input type="date" class="form-control" id="expiry_date"
                                                name="expiry_date"
-                                               value="{{ old('expiry_date') }}" required>
-                                        <small class="text-muted">Select expiry date (will be used for barcode generation)</small>
+                                               value="{{ old('expiry_date') }}">
+                                        <small class="text-muted">Used to auto-build the barcode below. Leave blank if this product doesn't expire - you can still type the batch code manually.</small>
                                     </div>
 
                                     <!-- Add-on Fields (Optional) -->
@@ -116,36 +116,34 @@
                                     <h6 class="mb-0">Barcode Format Builder</h6>
                                 </div>
                                 <div class="card-body">
-                                    <!-- Complete Barcode Preview -->
+                                    <!-- Complete Barcode Preview - auto-filled as you type above, but
+                                         editable directly if you need to override or type it manually
+                                         (e.g. no expiry date given) -->
                                     <div class="alert alert-info mt-3">
-                                        <div class="mt-2 p-2 bg-white border rounded text-center">
-                                            <span id="complete_barcode_preview" style="font-size: 1.5em; font-family: monospace; letter-spacing: 2px;">
-                                                @if(old('group') && old('user_id') && old('expiry_date') && old('product_id'))
-                                                    @php
-                                                        $product = App\Models\Product::find(old('product_id'));
-                                                        $unitCode = $product ? $product->unit_code : '';
-                                                        $expiryDate = old('expiry_date');
-                                                        $date = new DateTime($expiryDate);
-                                                        $year = $date->format('y');
-                                                        $month = $date->format('m');
-                                                        $day = $date->format('d');
-                                                        $barcodeText = old('group') . old('user_id') . $year . '8' . $day . $month . $unitCode;
-                                                        if(old('add_on_fields')) {
-                                                            $barcodeText .=  old('add_on_fields');
-                                                        }
-                                                        echo $barcodeText;
-                                                    @endphp
-                                                @else
-                                                    ---
-                                                @endif
-                                            </span>
+                                        <div class="mt-2 p-2 bg-white border rounded">
+                                            @php
+                                                $initialBatchCode = old('batch_code');
+                                                if (!$initialBatchCode && old('group') && old('user_id') && old('expiry_date') && old('product_id')) {
+                                                    $product = App\Models\Product::find(old('product_id'));
+                                                    $unitCode = $product ? $product->unit_code : '';
+                                                    $date = new DateTime(old('expiry_date'));
+                                                    $initialBatchCode = old('group') . old('user_id') . $date->format('y') . '8' . $date->format('d') . $date->format('m') . $unitCode;
+                                                    if (old('add_on_fields')) {
+                                                        $initialBatchCode .= old('add_on_fields');
+                                                    }
+                                                }
+                                            @endphp
+                                            <input type="text" id="complete_barcode_preview" name="batch_code"
+                                                   class="form-control text-center"
+                                                   style="font-size: 1.5em; font-family: monospace; letter-spacing: 2px; font-weight: bold; border: none; background: transparent;"
+                                                   placeholder="---"
+                                                   value="{{ $initialBatchCode }}"
+                                                   autocomplete="off">
                                         </div>
-                                        <small class="text-muted d-block mt-2">Format: Group(1) + UserID(2) + Year(2) + Fixed(1) + Day(2) + Month(2) + ProductCode + <span class="text-primary">[Optional: /AddOnFields]</span></small>
+                                        <small class="text-muted d-block mt-2">Format: Group(1) + UserID(2) + Year(2) + Fixed(1) + Day(2) + Month(2) + ProductCode + <span class="text-primary">[Optional: /AddOnFields]</span> - auto-filled above, or type/edit it directly.
+                                            <button type="button" id="resetBarcodeBtn" class="btn btn-link btn-sm p-0 align-baseline"><i class="fa fa-refresh"></i> Reset to auto-generated</button>
+                                        </small>
                                     </div>
-
-                                    <!-- Hidden field for batch_code -->
-                                    <input type="hidden" id="batch_code" name="batch_code" 
-                                           value="{{ old('batch_code') }}">
                                 </div>
                             </div>
                         </div>
@@ -294,8 +292,24 @@ $(function () {
         updateBarcodePreview();
     });
 
+    // Once the user directly types into the barcode field, stop
+    // auto-overwriting it - they've taken manual control (e.g. no expiry
+    // date, so there's nothing to auto-derive it from).
+    var barcodeManuallyEdited = false;
+    $('#complete_barcode_preview').on('input', function() {
+        barcodeManuallyEdited = true;
+    });
+    $('#resetBarcodeBtn').on('click', function() {
+        barcodeManuallyEdited = false;
+        updateBarcodePreview();
+    });
+
     // Update barcode preview
     function updateBarcodePreview() {
+        if (barcodeManuallyEdited) {
+            return;
+        }
+
         var group = $('#barcode_group').val() || '';
         var userId = $('#user_id_input').val() || '';
         var year = $('#year_display').val() || '';
@@ -305,20 +319,19 @@ $(function () {
         var productCode = $('#barcode_product_code').val() || '';
         var addOnFields = $('#add_on_fields').val() || '';
 
-        // Only show preview if all required fields are filled
+        // Only auto-fill once everything needed to derive it is present -
+        // expiry date (year/day/month) included, since it's optional.
         if (group && userId && userId.length === 2 && year && day && month && productCode) {
             var barcodeText = group + userId + year + fixed + day + month + productCode;
-            
+
             // Append add-on fields if provided
             if (addOnFields && addOnFields.trim() !== '') {
                 barcodeText += addOnFields;
             }
-            
-            $('#complete_barcode_preview').text(barcodeText);
-            $('#batch_code').val(barcodeText);
+
+            $('#complete_barcode_preview').val(barcodeText);
         } else {
-            $('#complete_barcode_preview').text('--- ---');
-            $('#batch_code').val('');
+            $('#complete_barcode_preview').val('');
         }
     }
 
@@ -326,13 +339,13 @@ $(function () {
     $('#productBatchForm').on('submit', function(e) {
         // Rebuild the barcode from the CURRENT expiry so a stale cached value
         // (e.g. expiry changed via autofill without firing 'change') can never
-        // be submitted out of sync with the expiry date.
+        // be submitted out of sync with the expiry date - unless the user has
+        // manually edited it, in which case their value stands.
         syncExpiryToBarcode();
 
         var group = $('#barcode_group').val();
         var userId = $('#user_id_input').val();
         var productId = $('#barcode_product_id').val();
-        var expiryDate = $('#expiry_date').val();
 
         if (!group || group.length !== 1) {
             e.preventDefault();
@@ -352,16 +365,11 @@ $(function () {
             return false;
         }
 
-        if (!expiryDate) {
+        // Ensure batch_code is set (either auto-generated or manually typed -
+        // expiry date is optional, so this is the only hard requirement left)
+        if (!$('#complete_barcode_preview').val()) {
             e.preventDefault();
-            alert('Please select an expiry date');
-            return false;
-        }
-
-        // Ensure batch_code is set
-        if (!$('#batch_code').val()) {
-            e.preventDefault();
-            alert('Please fill all fields to generate barcode');
+            alert('Please provide a batch code (select an expiry date to auto-generate one, or type it manually)');
             return false;
         }
 

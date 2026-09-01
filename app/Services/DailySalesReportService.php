@@ -167,10 +167,12 @@ class DailySalesReportService
                     $tripData['summary']['total_quantity'] += $detail->quantity;
                 }
                 
-                // Calculate payments for this invoice
+                // Calculate payments for this invoice - only count approved
+                // payments (status == 1); a pending/rejected row was never
+                // actually collected and must not inflate the totals.
                 $paidAmount = 0;
                 $paymentMethods = [];
-                foreach ($invoice->invoicepayment as $payment) {
+                foreach ($invoice->invoicepayment->where('status', 1) as $payment) {
                     $paidAmount += $payment->amount;
                     $method = $this->getPaymentMethodName($payment->type);
                     $paymentMethods[$method] = ($paymentMethods[$method] ?? 0) + $payment->amount;

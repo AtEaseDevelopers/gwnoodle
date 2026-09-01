@@ -113,6 +113,18 @@ class ActivityLogDataTable extends DataTable
      */
     public function html()
     {
+        $moduleOptions = ActivityLog::query()
+            ->select('module')
+            ->distinct()
+            ->whereNotNull('module')
+            ->orderBy('module')
+            ->pluck('module')
+            ->map(function ($module) {
+                return ['value' => $module, 'label' => ucwords(str_replace('_', ' ', $module))];
+            })
+            ->values();
+        $moduleOptionsJson = $moduleOptions->toJson();
+
         return $this->builder()
             ->columns($this->getColumns())
             ->minifiedAjax()
@@ -262,6 +274,7 @@ class ActivityLogDataTable extends DataTable
 
                 'initComplete' => 'function(){
                     var api = this.api();
+                    var moduleOptions = ' . $moduleOptionsJson . ';
 
                     // Add individual column filters
                     api.columns().every(function(index) {
@@ -270,8 +283,8 @@ class ActivityLogDataTable extends DataTable
                         var $header = $(column.header());
                         var title = $header.text().trim();
 
-                        // Skip checkbox, actions, module, and old/new data columns - no filter needed
-                        if(title === "" || title === "Actions" || title === "Module" || title === "Old Data" || title === "New Data") {
+                        // Skip checkbox, actions, and old/new data columns - no filter needed
+                        if(title === "" || title === "Actions" || title === "Old Data" || title === "New Data") {
                             return;
                         }
 
@@ -281,13 +294,20 @@ class ActivityLogDataTable extends DataTable
                         if(title === "Action") {
                             $filterInput = $(\'<select class="form-control form-control-sm"><option value="">All</option><option value="create">Create</option><option value="update">Update</option><option value="delete">Delete</option></select>\');
                         }
+                        else if(title === "Module") {
+                            var $select = $(\'<select class="form-control form-control-sm"><option value="">All</option></select>\');
+                            moduleOptions.forEach(function(opt) {
+                                $select.append($(\'<option></option>\').attr("value", opt.value).text(opt.label));
+                            });
+                            $filterInput = $select;
+                        }
                         else {
                             $filterInput = $(\'<input type="text" class="form-control form-control-sm" placeholder="Search \' + title + \'">\');
                         }
 
                         // Append to footer
                         $filterInput.appendTo($(column.footer()).empty());
-                        
+
                         // Apply filter on change
                         $filterInput.on(\'keyup change\', function() {
                             var val = $(this).val();
@@ -345,7 +365,7 @@ class ActivityLogDataTable extends DataTable
                 'title' => 'Module',
                 'data' => 'module',
                 'name' => 'module',
-                'searchable' => false,
+                'searchable' => true,
                 'orderable' => true
             ],
 

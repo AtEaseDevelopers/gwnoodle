@@ -381,19 +381,28 @@ Route::group(['middleware' => ['auth']], function() {
     Route::group(['middleware' => ['permission:product_batch']], function() {
         
         // Override resource parameter to use 'id' instead of 'productBatch'
-        // Product batches are immutable once created: no edit/update. Stock
-        // changes go through the stock-in/out/adjust actions below instead.
+        // Product batches are immutable once created: no edit/update. A wrong
+        // batch can't be silently changed, so any "why is this batch code
+        // missing" question can only ever be answered by "it was never
+        // actually created" or "an admin removed it before it was used" -
+        // never by a silent edit. Stock changes go through the stock-in/out
+        // /adjust actions below.
         Route::resource('productBatches', App\Http\Controllers\ProductBatchController::class)->parameters([
             'productBatches' => 'id'
-        ])->except(['edit', 'update']);
-        
+        ])->except(['edit', 'update', 'destroy']);
+
+        // Delete is admin-only and, even for an admin, only allowed while the
+        // batch has never been used (see destroy()'s safe-delete checks) -
+        // for correcting a wrongly-created batch before it's stocked in.
+        Route::delete('/productBatches/{id}', [App\Http\Controllers\ProductBatchController::class, 'destroy'])
+            ->middleware('role:admin')
+            ->name('productBatches.destroy');
+
         Route::post('/productBatches/stock-in/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockIn'])->name('productBatches.stock-in');
         Route::post('/productBatches/stock-in-bulk', [App\Http\Controllers\ProductBatchController::class, 'stockInBulk'])->name('productBatches.stock-in-bulk');
         Route::post('/productBatches/stock-out/{id}', [App\Http\Controllers\ProductBatchController::class, 'stockOut'])->name('productBatches.stock-out');
         Route::post('/productBatches/adjust-stock/{id}', [App\Http\Controllers\ProductBatchController::class, 'adjustStock'])->name('productBatches.adjust-stock');
-        // Mass actions
-        Route::post('/productBatches/massdestroy', [App\Http\Controllers\ProductBatchController::class, 'massdestroy'])->name('productBatches.massdestroy');
-        
+
         // Utility routes
         Route::get('/productBatches/check-expiry', [App\Http\Controllers\ProductBatchController::class, 'checkExpiry'])->name('productBatches.check-expiry');
         Route::get('/productBatches/{id}/print-label', [App\Http\Controllers\ProductBatchController::class, 'printLabel'])->name('productBatches.print-label');

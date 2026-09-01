@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Datetime;
@@ -1571,7 +1572,8 @@ class DriverController extends Controller
 
         try {
             // Start building the query
-            $query = Invoice::where('driver_id', $driver->id);
+            $query = Invoice::where('driver_id', $driver->id)
+                ->whereDate('date', '>=', now()->subDays(6)->startOfDay());
 
             // Apply customer filter if customer_id is provided
             if ($customer_id) {
@@ -1579,7 +1581,11 @@ class DriverController extends Controller
             }
 
             // Get sales invoices
-            $invoices = $query->with(['customer:id,company,phone,paymentterm', 'invoicedetail.product:id,name'])
+            $invoices = $query->with([
+                    'customer:id,company,phone,paymentterm',
+                    'invoicedetail.product:id,name',
+                    'invoicedetail.batch:id,batch_code',
+                ])
                 ->orderBy('created_at', 'desc')
                 ->get();
 
@@ -1779,39 +1785,64 @@ class DriverController extends Controller
                     'data' => null
                 ], 200);
             }
-            
-            $min = 450;
-            $each = 23;
-            $height = (count($invoice['invoicedetail']) * $each) + $min;
-            $creditData = $this->calculateCustomerCredit(
-                $invoice->customer_id, 
-                $invoice->updated_at
-            );
-            
-            $invoice->newcredit = round($creditData['credit'] ?? 0, 2);
 
-            $invoice->customer->groupcompany = DB::table('companies')
-            ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
-            ->select('companies.*')
-            ->first() ?? null;       
+            // Rendering this PDF (DomPDF + a credit calculation + a companies
+            // lookup) is expensive and was being redone on every single call,
+            // including once per invoice in list endpoints. An invoice's PDF
+            // never changes unless the invoice itself does, so cache it - but
+            // invoice_details has no $touches back to invoices, so adding/
+            // editing/removing a line item does NOT bump invoices.updated_at.
+            // Keying on that alone served a stale PDF (missing newly-added
+            // items) forever once cached. Fold in the detail rows' own count
+            // and latest updated_at too, so any change to the line items
+            // themselves also invalidates the cache.
+            $detailsSignature = $invoice->invoicedetail->count()
+                . '_' . optional($invoice->invoicedetail->max('updated_at'))->timestamp;
+            $cacheKey = 'invoice_pdf_' . $invoice->id . '_' . $invoice->updated_at->timestamp . '_' . $detailsSignature;
+
+            $generatePdf = function () use ($invoice) {
+                $min = 450;
+                $each = 23;
+                $height = (count($invoice['invoicedetail']) * $each) + $min;
+                $creditData = $this->calculateCustomerCredit(
+                    $invoice->customer_id,
+                    $invoice->updated_at
+                );
+
+                $invoice->newcredit = round($creditData['credit'] ?? 0, 2);
+
+                $invoice->customer->groupcompany = DB::table('companies')
+                ->where('companies.group_id', explode(',', $invoice->customer->group ?? '')[0] ?? null)
+                ->select('companies.*')
+                ->first() ?? null;
 
 
-            // DomPDF is memory-hungry rendering invoices with many detail rows,
-            // overrunning PHP's default 128MB limit and returning a bare 500
-            // (a memory FatalError is a \Error, not \Exception, so the catch
-            // below never sees it). Raise the ceiling for this request.
-            ini_set('memory_limit', '512M');
+                // DomPDF is memory-hungry rendering invoices with many detail rows,
+                // overrunning PHP's default 128MB limit and returning a bare 500
+                // (a memory FatalError is a \Error, not \Exception, so the catch
+                // below never sees it). Raise the ceiling for this request.
+                ini_set('memory_limit', '512M');
 
-            $pdf = Pdf::loadView('invoices.print', [
-                'invoice' => $invoice
-            ]);
+                $pdf = Pdf::loadView('invoices.print', [
+                    'invoice' => $invoice
+                ]);
 
-            $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
-                ->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
+                $pdf->setPaper(array(0, 0, 300, $height), 'portrait')
+                    ->setOptions(['isPhpEnabled' => true, 'isRemoteEnabled' => true]);
 
-            return base64_encode($pdf->output());
-            
-        } catch (Exception $e) {
+                return base64_encode($pdf->output());
+            };
+
+            try {
+                return Cache::remember($cacheKey, now()->addDays(30), $generatePdf);
+            } catch (\Throwable $cacheError) {
+                // Cache layer unavailable (e.g. storage/framework/cache not
+                // writable) - still return the PDF, just without caching it,
+                // instead of letting the whole request fail.
+                return $generatePdf();
+            }
+
+        } catch (\Throwable $e) {
             return response()->json([
                 'result' => false,
                 'message' => __LINE__ . $this->message_separator . $e->getMessage(),
@@ -4264,41 +4295,33 @@ class DriverController extends Controller
             if($driver->trip_id != null){
                 $invoices = Invoice::where('trip_uuid', $driver->trip_id)
                     ->where('status', Invoice::STATUS_COMPLETED)
-                    ->with(['invoicedetail.product'])
-                    ->get(); 
+                    ->with(['invoicedetail.product', 'invoicepayment'])
+                    ->get();
 
                 // Only calculate if invoices collection is not empty
                 if($invoices->isNotEmpty()) {
+                    // Bucket by the actual payment ledger (invoice_payments), not
+                    // invoices.paymentterm - that field is set once at invoice
+                    // creation and is never updated when a Credit invoice is later
+                    // settled in cash via addpayment(), which caused this dashboard
+                    // to disagree with the Daily Sales Report (which already sums
+                    // invoice_payments) by the amount of any such invoice.
+                    // Only approved payments (status == 1) count - a pending or
+                    // rejected row was never actually collected.
+                    $payments = $invoices->flatMap(function($invoice) {
+                        return $invoice->invoicepayment;
+                    })->where('status', 1);
+
+                    $sumByType = function($type) use ($payments) {
+                        return round($payments->where('type', $type)->sum('amount'), 2);
+                    };
+
                     $salesByPaymentTerm = [
-                        'cash' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CASH;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'credit' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CREDIT;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'online_payment' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_ONLINE;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'tng' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_TNG;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
-                        
-                        'cheque' => round($invoices->filter(function($invoice) {
-                            return $invoice->paymentterm == Invoice::PAYMENT_TERM_CHEQUE;
-                        })->sum(function($invoice) {
-                            return $invoice->invoicedetail->sum('totalprice');
-                        }), 2),
+                        'cash' => $sumByType(Invoice::PAYMENT_TERM_CASH),
+                        'credit' => $sumByType(Invoice::PAYMENT_TERM_CREDIT),
+                        'online_payment' => $sumByType(Invoice::PAYMENT_TERM_ONLINE),
+                        'tng' => $sumByType(Invoice::PAYMENT_TERM_TNG),
+                        'cheque' => $sumByType(Invoice::PAYMENT_TERM_CHEQUE),
                     ];
 
                     $productsSold = $invoices->flatMap(function($invoice) {
