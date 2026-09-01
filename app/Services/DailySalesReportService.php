@@ -237,11 +237,11 @@ class DailySalesReportService
     }
 
     /**
-     * Same shape as generateReport() (trips -> invoices -> items, plus the
-     * overall product summary), but over a date range instead of a single
-     * day - used by the Product Quantity Sold Report. Kept as its own
-     * method rather than adding a range branch to generateReport(), so
-     * Daily Sales Report's behavior can't be affected by this change.
+     * Flat product+quantity summary over a date range - no trip/invoice
+     * breakdown, just the aggregated totals. Used by the Product Quantity
+     * Sold Report. Kept as its own method rather than adding a range branch
+     * to generateReport(), so Daily Sales Report's behavior can't be
+     * affected by this change.
      */
     public function generateReportByDateRange($dateFrom, $dateTo, $filters = [])
     {
@@ -249,7 +249,6 @@ class DailySalesReportService
             'generated_at' => Carbon::now()->format('d/m/Y H:i:s'),
             'report_date' => Carbon::parse($dateFrom)->format('d/m/Y') . ' - ' . Carbon::parse($dateTo)->format('d/m/Y'),
             'report_no' => $this->generateReportNumber($dateFrom),
-            'trips' => [],
             'summary' => [
                 'total_invoices' => 0,
                 'total_quantity' => 0,
@@ -262,7 +261,7 @@ class DailySalesReportService
             ]
         ];
 
-        $query = Invoice::with(['customer', 'invoicedetail.product', 'driver'])
+        $query = Invoice::with(['invoicedetail.product'])
             ->whereBetween('date', [
                 Carbon::parse($dateFrom)->startOfDay(),
                 Carbon::parse($dateTo)->endOfDay(),
@@ -307,92 +306,39 @@ class DailySalesReportService
             }
         }
 
-        // Order by date first - a trip_uuid can only belong to one day in
-        // practice, but ordering by date keeps a multi-day report readable
-        // top to bottom even if that ever isn't true.
-        $invoices = $query->orderBy('date')->orderBy('trip_uuid')->orderBy('invoiceno', 'asc')->get();
+        $invoices = $query->get();
 
-        $groupedByTrip = $invoices->groupBy('trip_uuid');
-        $reportData['summary']['total_trips'] = $groupedByTrip->count();
+        $reportData['summary']['total_trips'] = $invoices->pluck('trip_uuid')->filter()->unique()->count();
         $reportData['summary']['total_invoices'] = $invoices->count();
+        $reportData['summary']['total_customers'] = $invoices->pluck('customer_id')->unique()->count();
 
         $allProducts = [];
         $productCounter = 1;
-        $tripCounter = 1;
 
-        foreach ($groupedByTrip as $tripUuid => $tripInvoices) {
-            $tripData = [
-                'trip_no' => $tripCounter++,
-                'trip_uuid' => $tripUuid ?? 'N/A',
-                'trip_display' => $tripUuid ?? 'No Trip Assigned',
-                'trip_date' => optional($tripInvoices->first())->date
-                    ? Carbon::parse($tripInvoices->first()->date)->format('d/m/Y')
-                    : 'N/A',
-                'invoices' => [],
-                'summary' => [
-                    'total_invoices' => $tripInvoices->count(),
-                    'total_quantity' => 0,
-                    'total_customers' => 0
-                ]
-            ];
+        foreach ($invoices as $invoice) {
+            foreach ($invoice->invoicedetail as $detail) {
+                $product = $detail->product;
+                $productKey = $product ? $product->id : 'unknown';
 
-            $invoiceItems = [];
-            $tripCustomers = [];
-
-            foreach ($tripInvoices as $invoice) {
-                $invoiceItemsList = [];
-
-                foreach ($invoice->invoicedetail as $detail) {
-                    $product = $detail->product;
-
-                    $invoiceItemsList[] = [
+                if (!isset($allProducts[$productKey])) {
+                    $allProducts[$productKey] = [
+                        'no' => $productCounter++,
                         'product_name' => $product ? $product->name : 'N/A',
                         'product_code' => $product ? $product->unit_code : 'N/A',
-                        'quantity' => $detail->quantity,
+                        'quantity' => 0,
                     ];
-
-                    // Track for product summary (overall)
-                    $productKey = $product ? $product->id : 'unknown';
-                    if (!isset($allProducts[$productKey])) {
-                        $allProducts[$productKey] = [
-                            'no' => $productCounter++,
-                            'product_name' => $product ? $product->name : 'N/A',
-                            'product_code' => $product ? $product->unit_code : 'N/A',
-                            'quantity' => 0,
-                        ];
-                    }
-                    $allProducts[$productKey]['quantity'] += $detail->quantity;
-
-                    // Update trip summary
-                    $tripData['summary']['total_quantity'] += $detail->quantity;
                 }
-
-                $invoiceItems[] = [
-                    'invoice_no' => $invoice->invoiceno,
-                    'date' => Carbon::parse($invoice->date)->format('d/m/Y'),
-                    'customer_name' => $invoice->customer ? $invoice->customer->name : 'N/A',
-                    'customer_code' => $invoice->customer ? $invoice->customer->code : 'N/A',
-                    'customer_id' => $invoice->customer_id,
-                    'driver' => $invoice->driver ? $invoice->driver->name : 'N/A',
-                    'driver_id' => $invoice->driver_id,
-                    'items' => $invoiceItemsList,
-                ];
-
-                if ($invoice->customer_id && !in_array($invoice->customer_id, $tripCustomers)) {
-                    $tripCustomers[] = $invoice->customer_id;
-                }
+                $allProducts[$productKey]['quantity'] += $detail->quantity;
             }
-
-            $tripData['summary']['total_customers'] = count($tripCustomers);
-            $tripData['invoices'] = $invoiceItems;
-
-            $reportData['trips'][] = $tripData;
         }
 
-        $uniqueCustomers = $invoices->pluck('customer_id')->unique()->count();
-        $reportData['summary']['total_customers'] = $uniqueCustomers;
-        $reportData['summary']['total_quantity'] = collect($allProducts)->sum('quantity');
+        // Sort by product name for a stable, readable report order
+        usort($allProducts, fn($a, $b) => strcmp($a['product_name'], $b['product_name']));
+        foreach ($allProducts as $i => $product) {
+            $allProducts[$i]['no'] = $i + 1;
+        }
 
+        $reportData['summary']['total_quantity'] = collect($allProducts)->sum('quantity');
         $reportData['products'] = array_values($allProducts);
 
         return $reportData;

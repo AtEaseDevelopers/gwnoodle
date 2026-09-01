@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Product Quantity Sold Report - Grouped by Trip</title>
+    <title>Product Quantity Sold Report</title>
     <style>
         body {
             font-family: 'DejaVu Sans', 'Helvetica', 'Arial', sans-serif;
@@ -260,7 +260,6 @@
                 </div>
                 <div class="title-section">
                     <div class="report-title">PRODUCT QUANTITY SOLD REPORT</div>
-                    <div class="report-title" style="font-size: 10px; color: #666;">GROUPED BY TRIP</div>
                 </div>
             </div>
         </div>
@@ -328,8 +327,8 @@
             </div>
         </div>
 
-        <!-- Product Summary Section (Overall) -->
-        <div class="sub-section-title">PRODUCT QUANTITY SUMMARY (ALL TRIPS)</div>
+        <!-- Product Summary -->
+        <div class="sub-section-title">PRODUCT QUANTITY SOLD</div>
         @if(empty($reportData['products']))
             <div class="empty-message">No products sold in this date range</div>
         @else
@@ -361,59 +360,10 @@
             </table>
         @endif
 
-        <!-- Trip Details Section -->
-        <div class="sub-section-title">TRIP DETAILS</div>
-        @if(empty($reportData['trips']))
-            <div class="empty-message">No trips found for this date range</div>
-        @else
-            @foreach($reportData['trips'] as $tripIndex => $trip)
-                <div class="trip-section">
-                    <div class="trip-header">
-                        <div class="trip-title">TRIP #{{ $trip['trip_no'] }} - {{ $trip['trip_date'] ?? 'N/A' }}</div>
-                        <div class="trip-info">
-                            Total Invoices: {{ $trip['summary']['total_invoices'] }} |
-                            Total Customers: {{ $trip['summary']['total_customers'] }} |
-                            Total Quantity: {{ number_format($trip['summary']['total_quantity']) }}
-                        </div>
-                    </div>
-
-                    <!-- Invoices for this Trip -->
-                    @foreach($trip['invoices'] as $invoice)
-                        <table>
-                            <thead>
-                                <tr style="background-color: #e0e0e0;">
-                                    <th colspan="3">Invoice: {{ $invoice['invoice_no'] }} | Date: {{ $invoice['date'] }} | Customer: {{ $invoice['customer_name'] }} ({{ $invoice['customer_code'] }}) | Driver: {{ $invoice['driver'] }}</th>
-                                </tr>
-                                <tr>
-                                    <th width="10%">#</th>
-                                    <th width="65%">Product</th>
-                                    <th width="25%">Quantity</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($invoice['items'] as $index => $item)
-                                <tr>
-                                    <td class="text-center">{{ $index + 1 }}</td>
-                                    <td>{{ $item['product_name'] }} ({{ $item['product_code'] }})</td>
-                                    <td class="text-right">{{ number_format($item['quantity']) }}</td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    @endforeach
-                </div>
-
-                <!-- Add page break between trips (optional) -->
-                @if(!$loop->last)
-                    <div class="page-break"></div>
-                @endif
-            @endforeach
-        @endif
-
     </div>
 
     <div class="footer">
-        GW NOODLES SDN BHD - Product Quantity Sold Report (Grouped by Trip) | Page 1
+        GW NOODLES SDN BHD - Product Quantity Sold Report | Page 1
     </div>
 </body>
 </html>
