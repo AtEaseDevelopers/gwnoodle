@@ -382,6 +382,21 @@ class ReportController extends AppBaseController
             ]);
         }
 
+        if ($sp == 'PRODUCT_QTY_SOLD_REPORT') {
+            // Extract parameters - same shape as DAILY_SALES_REPORT above
+            $date = isset($data['date']) ? $data['date'] : date('Y-m-d');
+            $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
+            $driver_id = isset($data['driver_id']) ? $data['driver_id'] : null;
+            $trip_uuid = isset($data['trip_uuid']) ? $data['trip_uuid'] : null;
+
+            return redirect()->route('product_qty_sold_report_view', [
+                'date' => $date,
+                'customer_id' => $customer_id,
+                'driver_id' => $driver_id,
+                'trip_uuid' => $trip_uuid,
+            ]);
+        }
+
         if ($sp == 'FINISHED_GOODS_TRACEABILITY') {
             // Extract parameters for traceability report
             $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
@@ -615,6 +630,50 @@ class ReportController extends AppBaseController
             
         } catch(Exception $e) {
             \Log::error('Daily Sales PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Same data and filters as the Daily Sales Report, but the output only
+     * shows product and quantity sold - no sales/payment figures.
+     */
+    public function productQtySoldReportView(Request $request)
+    {
+        $date = $request->date ?? date('Y-m-d');
+
+        $filters = [
+            'customer_id' => $request->customer_id,
+            'driver_id' => $request->driver_id,
+            'trip_uuid' => $request->trip_uuid,
+        ];
+
+        $service = new \App\Services\DailySalesReportService();
+        $reportData = $service->generateReport($date, $filters);
+
+        try {
+            $pdf = Pdf::loadView('reports.product_qty_sold', [
+                'reportData' => $reportData,
+                'filters' => $filters,
+                'selected_date' => $date
+            ]);
+
+            $pdf->setPaper('a4', 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+            ]);
+
+            return $pdf->stream('product_qty_sold_report_' . $date . '.pdf');
+
+        } catch(Exception $e) {
+            \Log::error('Product Qty Sold PDF Error: ' . $e->getMessage());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
     }
