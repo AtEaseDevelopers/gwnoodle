@@ -78,7 +78,7 @@
                                                 echo '<div class="form-group col-sm-6">
                                                         <label for="'.$reportdetail['name'].'">'.$reportdetail['title'].':</label>
                                                         '.($required ? '<span class="asterisk"> *</span>' : '').'
-                                                        <select '.$required.' class="form-control selectpicker" id="'.$reportdetail['name'].'" name="'.$reportdetail['name'].'[]" tabindex="null" data-live-search="true" multiple>
+                                                        <select '.$required.' class="form-control selectpicker" id="'.$reportdetail['name'].'" name="'.$reportdetail['name'].'[]" tabindex="null" data-live-search="true" data-actions-box="true" data-select-all-text="Select All" data-deselect-all-text="Deselect All" multiple>
                                                             '.$all_option.'
                                                             '.$option.'
                                                         </select>
