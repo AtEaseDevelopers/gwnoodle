@@ -237,13 +237,14 @@ class DailySalesReportService
     }
 
     /**
-     * Flat product+quantity summary over a date range - no trip/invoice
-     * breakdown, just the aggregated totals. Used by the Product Quantity
-     * Sold Report. Kept as its own method rather than adding a range branch
-     * to generateReport(), so Daily Sales Report's behavior can't be
-     * affected by this change.
+     * Flat product+quantity summary over a date range - every invoice in
+     * range, no driver/customer/trip filtering, no trip/invoice breakdown,
+     * just the aggregated totals. Used by the Product Quantity Sold Report.
+     * Kept as its own method rather than adding a range branch to
+     * generateReport(), so Daily Sales Report's behavior can't be affected
+     * by this change.
      */
-    public function generateReportByDateRange($dateFrom, $dateTo, $filters = [])
+    public function generateReportByDateRange($dateFrom, $dateTo)
     {
         $reportData = [
             'generated_at' => Carbon::now()->format('d/m/Y H:i:s'),
@@ -255,58 +256,15 @@ class DailySalesReportService
                 'total_customers' => 0,
                 'total_trips' => 0
             ],
-            'filters_applied' => [
-                'driver' => 'All Drivers',
-                'trip' => 'All Trips'
-            ]
         ];
 
-        $query = Invoice::with(['invoicedetail.product'])
+        $invoices = Invoice::with(['invoicedetail.product'])
             ->whereBetween('date', [
                 Carbon::parse($dateFrom)->startOfDay(),
                 Carbon::parse($dateTo)->endOfDay(),
             ])
-            ->where('status', Invoice::STATUS_COMPLETED);
-
-        // Apply driver filter
-        if (isset($filters['driver_id']) && $filters['driver_id']) {
-            if (is_array($filters['driver_id'])) {
-                $query->whereIn('driver_id', $filters['driver_id']);
-
-                $driverNames = \App\Models\Driver::whereIn('id', $filters['driver_id'])
-                    ->pluck('name')
-                    ->toArray();
-                $reportData['filters_applied']['driver'] = implode(', ', $driverNames);
-                $reportData['driver_filter_display'] = $driverNames;
-                $reportData['driver_filter_ids'] = $filters['driver_id'];
-            } else {
-                $query->where('driver_id', $filters['driver_id']);
-
-                $driver = \App\Models\Driver::find($filters['driver_id']);
-                $driverName = $driver ? $driver->name : 'Unknown Driver';
-                $reportData['filters_applied']['driver'] = $driverName;
-                $reportData['driver_filter_display'] = [$driverName];
-                $reportData['driver_filter_ids'] = [$filters['driver_id']];
-            }
-        } else {
-            $reportData['driver_filter_display'] = [];
-            $reportData['driver_filter_ids'] = [];
-        }
-
-        // Apply trip_uuid filter
-        if (isset($filters['trip_uuid']) && $filters['trip_uuid']) {
-            if (is_array($filters['trip_uuid'])) {
-                $query->whereIn('trip_uuid', $filters['trip_uuid']);
-                $reportData['filters_applied']['trip'] = implode(', ', $filters['trip_uuid']);
-                $reportData['trip_filter_display'] = $filters['trip_uuid'];
-            } else {
-                $query->where('trip_uuid', $filters['trip_uuid']);
-                $reportData['filters_applied']['trip'] = $filters['trip_uuid'];
-                $reportData['trip_filter_display'] = [$filters['trip_uuid']];
-            }
-        }
-
-        $invoices = $query->get();
+            ->where('status', Invoice::STATUS_COMPLETED)
+            ->get();
 
         $reportData['summary']['total_trips'] = $invoices->pluck('trip_uuid')->filter()->unique()->count();
         $reportData['summary']['total_invoices'] = $invoices->count();

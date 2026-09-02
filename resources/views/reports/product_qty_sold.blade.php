@@ -109,30 +109,6 @@
             color: #e2e8f0;
         }
 
-        /* Driver display styles */
-        .driver-value {
-            word-wrap: break-word;
-            word-break: break-word;
-            white-space: normal;
-            line-height: 1.4;
-        }
-
-        .driver-list {
-            display: inline-block;
-            max-width: 400px;
-        }
-
-        .driver-name {
-            display: inline-block;
-        }
-
-        .driver-count {
-            display: inline-block;
-            margin-left: 5px;
-            font-style: italic;
-            color: #666;
-        }
-
         .summary-section {
             margin: 15px 0;
             padding: 10px;
@@ -277,35 +253,7 @@
             </tr>
             <tr>
                 <td class="detail-label">Date Range:</td>
-                <td class="detail-value">{{ $reportData['report_date'] }}</td>
-                <td class="detail-label" style="vertical-align: top;">Driver(s):</td>
-                <td class="detail-value driver-value">
-                    @php
-                        $driverNames = [];
-                        if(is_array($reportData['driver_filter_display'] ?? null)) {
-                            $driverNames = $reportData['driver_filter_display'];
-                        } elseif(isset($reportData['driver_filter_display'])) {
-                            $driverNames = [$reportData['driver_filter_display']];
-                        }
-
-                        $driverCount = count($driverNames);
-                        $driversPerLine = 3;
-                        $chunks = array_chunk($driverNames, $driversPerLine);
-                    @endphp
-
-                    @if($driverCount > 0)
-                        <div class="driver-list">
-                            @foreach($chunks as $index => $chunk)
-                                {{ implode(', ', $chunk) }}@if(!$loop->last)<br>@endif
-                            @endforeach
-                            @if($driverCount > 1)
-                                <span class="driver-count">(Total: {{ $driverCount }} drivers)</span>
-                            @endif
-                        </div>
-                    @else
-                        All Drivers
-                    @endif
-                 </td>
+                <td class="detail-value" colspan="3">{{ $reportData['report_date'] }}</td>
             </tr>
         </table>
 

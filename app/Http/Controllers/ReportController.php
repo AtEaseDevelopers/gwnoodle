@@ -383,21 +383,15 @@ class ReportController extends AppBaseController
         }
 
         if ($sp == 'PRODUCT_QTY_SOLD_REPORT') {
-            // Date range (see datefrom/dateto handling elsewhere in this
-            // method, e.g. STOCK_RECEIVED_REPORT above) rather than a
-            // single date like DAILY_SALES_REPORT.
+            // Date range only (see datefrom/dateto handling elsewhere in
+            // this method, e.g. STOCK_RECEIVED_REPORT above) - every
+            // invoice in range, no driver/customer/trip filtering.
             $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
             $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
-            $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
-            $driver_id = isset($data['driver_id']) ? $data['driver_id'] : null;
-            $trip_uuid = isset($data['trip_uuid']) ? $data['trip_uuid'] : null;
 
             return redirect()->route('product_qty_sold_report_view', [
                 'date_from' => $date_from,
                 'date_to' => $date_to,
-                'customer_id' => $customer_id,
-                'driver_id' => $driver_id,
-                'trip_uuid' => $trip_uuid,
             ]);
         }
 
@@ -644,9 +638,8 @@ class ReportController extends AppBaseController
     }
 
     /**
-     * Same filters/data source as the Daily Sales Report (over a date range
-     * rather than a single day), but the output only shows product and
-     * quantity sold - no sales/payment figures.
+     * Every invoice in a date range, summarized down to product + quantity
+     * sold - no driver/customer/trip filtering, no sales/payment figures.
      */
     public function productQtySoldReportView(Request $request)
     {
@@ -659,19 +652,12 @@ class ReportController extends AppBaseController
         $dateFrom = $request->date_from ?? date('Y-m-d');
         $dateTo = $request->date_to ?? date('Y-m-d');
 
-        $filters = [
-            'customer_id' => $request->customer_id,
-            'driver_id' => $request->driver_id,
-            'trip_uuid' => $request->trip_uuid,
-        ];
-
         $service = new \App\Services\DailySalesReportService();
-        $reportData = $service->generateReportByDateRange($dateFrom, $dateTo, $filters);
+        $reportData = $service->generateReportByDateRange($dateFrom, $dateTo);
 
         try {
             $pdf = Pdf::loadView('reports.product_qty_sold', [
                 'reportData' => $reportData,
-                'filters' => $filters,
                 'date_from' => $dateFrom,
                 'date_to' => $dateTo,
             ]);
