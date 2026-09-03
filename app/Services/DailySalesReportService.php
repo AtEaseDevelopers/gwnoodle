@@ -293,8 +293,8 @@ class DailySalesReportService
             }
         }
 
-        // Sort by product name for a stable, readable report order
-        usort($allProducts, fn($a, $b) => strcmp($a['product_name'], $b['product_name']) ?: strcmp($a['product_code'], $b['product_code']));
+        // Sort by product code for a stable, readable report order
+        usort($allProducts, fn($a, $b) => strcmp($a['product_code'], $b['product_code']) ?: strcmp($a['product_name'], $b['product_name']));
         foreach ($allProducts as $i => $product) {
             $allProducts[$i]['no'] = $i + 1;
         }
