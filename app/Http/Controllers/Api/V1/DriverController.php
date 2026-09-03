@@ -6297,9 +6297,10 @@ class DriverController extends Controller
                             throw new \Exception('Product batch not found: ' . $batchData['batch_code']);
                         }
                         
-                        // Update batch quantity (add back to batch)
-                        $productBatch->quantity += $batchData['counted_quantity'];
-                        $productBatch->save();
+                        // Update batch quantity (add back to batch) - also
+                        // revives a batch that had been zeroed out to
+                        // STATUS_INACTIVE, so it's sellable again.
+                        $productBatch->increaseQuantity($batchData['counted_quantity']);
                         
                         // Create inventory transaction for stock return to warehouse
                         InventoryTransaction::create([
@@ -6728,10 +6729,10 @@ class DriverController extends Controller
             );
 
             $batch = ProductBatch::find($request->batch_id);
-            
-            // Update batch quantity
-            $batch->quantity += $request->quantity;
-            $batch->save();
+
+            // Update batch quantity - also revives a batch that had been
+            // zeroed out to STATUS_INACTIVE, so it's sellable again.
+            $batch->increaseQuantity($request->quantity);
 
             // Add to warehouse inventory
             $warehouseInventory = WarehouseInventoryBalance::firstOrCreate(

@@ -362,8 +362,17 @@ class ProductBatch extends Model
         // Treat an un-initialized (NULL) master quantity as 0 so batches seeded
         // straight into a warehouse balance don't break on the first stock-in.
         $this->quantity = ($this->quantity ?? 0) + $amount;
-        $this->save();
 
+        // Revive an expired-or-depleted batch now that it has stock again,
+        // mirroring ProductBatchController::adjustStock(). Without this, a
+        // batch zeroed out to STATUS_INACTIVE stays invisible to
+        // scopeActive() and every status=1 driver-app filter forever, even
+        // after being fully replenished.
+        if (in_array($this->status, [self::STATUS_EXPIRED, self::STATUS_INACTIVE]) && !$this->isExpired()) {
+            $this->status = self::STATUS_ACTIVE;
+        }
+
+        $this->save();
     }
 
     /**

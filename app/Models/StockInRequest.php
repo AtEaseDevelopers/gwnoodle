@@ -97,8 +97,13 @@ class StockInRequest extends Model
         // Increment the batch aggregate quantity
         $batch->increment('quantity', $quantity);
 
-        // Revive an inactive batch, mirroring the original stock-in behaviour
-        if ($batch->status == 2) {
+        // Revive an expired or inactive (depleted-to-zero) batch now that it
+        // has stock again - mirrors ProductBatchController::adjustStock().
+        // Missing status 3 (INACTIVE) here left a batch that was zeroed out
+        // by StockOutRequest::approveAndApply() permanently invisible to
+        // ProductBatch::scopeActive() and the driver app's status=1 filters
+        // even after being fully replenished.
+        if (in_array($batch->status, [2, 3]) && !$batch->isExpired()) {
             $batch->status = 1;
             $batch->save();
         }
