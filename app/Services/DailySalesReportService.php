@@ -276,11 +276,10 @@ class DailySalesReportService
         foreach ($invoices as $invoice) {
             foreach ($invoice->invoicedetail as $detail) {
                 $product = $detail->product;
-                // Group by name, not product_id - the same product name can
-                // exist under multiple product records with different SKU
-                // codes (different pack sizes etc.), and those should combine
-                // into one line here rather than appearing as separate rows.
-                $productKey = $product ? trim($product->name) : 'unknown';
+                // Group by product_id so every product record gets its own
+                // row - grouping by name merged same-name products and hid
+                // all but one of their codes from the report.
+                $productKey = $product ? $product->id : 'unknown-' . $detail->product_id;
 
                 if (!isset($allProducts[$productKey])) {
                     $allProducts[$productKey] = [
@@ -295,7 +294,7 @@ class DailySalesReportService
         }
 
         // Sort by product name for a stable, readable report order
-        usort($allProducts, fn($a, $b) => strcmp($a['product_name'], $b['product_name']));
+        usort($allProducts, fn($a, $b) => strcmp($a['product_name'], $b['product_name']) ?: strcmp($a['product_code'], $b['product_code']));
         foreach ($allProducts as $i => $product) {
             $allProducts[$i]['no'] = $i + 1;
         }
