@@ -737,14 +737,10 @@ class ProductBatchController extends AppBaseController
         DB::beginTransaction();
 
         try {
+            // Status is never derived from quantity here - it's purely
+            // manual/informational now (see
+            // ProductBatch::scopeAvailableForSale()).
             $productBatch->quantity = $newQuantity;
-
-            if ($newQuantity == 0) {
-                $productBatch->status = 3; // Inactive
-            } elseif (in_array($productBatch->status, [2, 3]) && !$productBatch->isExpired()) {
-                $productBatch->status = 1; // Active
-            }
-
             $productBatch->save();
 
             $remarkText = trim((string) $request->remark);

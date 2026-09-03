@@ -94,19 +94,10 @@ class StockInRequest extends Model
 
         $quantity = (int) $this->quantity;
 
-        // Increment the batch aggregate quantity
+        // Increment the batch aggregate quantity. Status is never touched
+        // here - it's purely manual/informational now, not derived from
+        // quantity (see ProductBatch::scopeAvailableForSale()).
         $batch->increment('quantity', $quantity);
-
-        // Revive an expired or inactive (depleted-to-zero) batch now that it
-        // has stock again - mirrors ProductBatchController::adjustStock().
-        // Missing status 3 (INACTIVE) here left a batch that was zeroed out
-        // by StockOutRequest::approveAndApply() permanently invisible to
-        // ProductBatch::scopeActive() and the driver app's status=1 filters
-        // even after being fully replenished.
-        if (in_array($batch->status, [2, 3]) && !$batch->isExpired()) {
-            $batch->status = 1;
-            $batch->save();
-        }
 
         // Increase the warehouse inventory balance (when a warehouse is set)
         if (!empty($this->warehouse_id)) {

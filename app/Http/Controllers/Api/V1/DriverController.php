@@ -600,7 +600,7 @@ class DriverController extends Controller
                     // Get products with special prices
                     $products = Product::where('status', 1)
                         ->with(['batches' => function($query) {
-                            $query->active()
+                            $query->availableForSale()
                                 ->fefo()
                                 ->select('id', 'product_id', 'batch_code', 'expiry_date', 'quantity');
                         }])
@@ -814,7 +814,7 @@ class DriverController extends Controller
                     // Get products with special prices and batch info
                     $products = Product::where('status', 1)
                         ->with(['batches' => function($query) {
-                            $query->active()
+                            $query->availableForSale()
                                 ->fefo()
                                 ->select('id', 'product_id', 'batch_code', 'expiry_date', 'quantity');
                         }])
@@ -4767,15 +4767,8 @@ class DriverController extends Controller
                     ], 200);
                 }
                 
-                // Check if batch is active and not expired
-                if ($batch->status !== ProductBatch::STATUS_ACTIVE) {
-                    return response()->json([
-                        'result' => false,
-                        'message' => "Batch {$batch->batch_code} is not active",
-                        'data' => null
-                    ], 200);
-                }
-                
+                // Status is informational only now - availability is
+                // governed by quantity (checked above) and expiry only.
                 if ($batch->expiry_date <= now()) {
                     return response()->json([
                         'result' => false,
@@ -5124,10 +5117,11 @@ class DriverController extends Controller
                 // Get all batch IDs from the inventory
                 $batchIds = array_keys($inventoryBalance->batches);
 
-                // Fetch batch details with product information
+                // Fetch batch details with product information. Status is
+                // informational only now - these are the batches physically
+                // in the lorry's inventory, regardless of status.
                 $batches = ProductBatch::with('product')
                     ->whereIn('id', $batchIds)
-                    ->where('status', ProductBatch::STATUS_ACTIVE)
                     ->get();
 
                 // Group by product
@@ -5502,11 +5496,11 @@ class DriverController extends Controller
                 // Get all batch IDs from the inventory
                 $batchIds = array_keys($inventoryBalance->batches);
 
-                // Fetch batch details with product information
+                // Fetch batch details with product information. Status is
+                // informational only now - availability is quantity-based.
                 $batches = ProductBatch::with('product')
                     ->whereIn('id', $batchIds)
                     ->where('quantity', '>', 0)
-                    ->where('status', ProductBatch::STATUS_ACTIVE)
                     ->orderBy('expiry_date', 'asc')
                     ->get();
 

@@ -121,14 +121,11 @@ class StockOutRequest extends Model
         }
 
         // Deduct from the warehouse balance and the batch master quantity.
+        // Status is never touched here - it's purely manual/informational
+        // now, not derived from quantity (see
+        // ProductBatch::scopeAvailableForSale()).
         $warehouseInventory->decreaseQuantity($quantity);
         $batch->decreaseQuantity($quantity);
-
-        // Mark a depleted batch inactive, mirroring the original stock-out behaviour.
-        if ((int) $batch->quantity <= 0) {
-            $batch->status = ProductBatch::STATUS_INACTIVE;
-            $batch->save();
-        }
 
         // Write the stock-out ledger entry (negative quantity).
         InventoryTransaction::create([
