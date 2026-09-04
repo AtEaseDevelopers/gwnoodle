@@ -20,6 +20,10 @@ class ProductDataTable extends DataTable
 
         return $dataTable
             ->addColumn('action', 'products.datatables_actions')
+            // price is stored as double(10,3); display at 2dp like the rest of the app
+            ->editColumn('price', function($product) {
+                return number_format($product->price, 2);
+            })
             // Add total quantity column
             ->addColumn('total_quantity', function($product) {
                 return $product->total_quantity;
