@@ -317,30 +317,17 @@ class ReportController extends AppBaseController
         $sp = Report::where('id', $report_id)->pluck('sqlvalue')->first();
         
         if ($sp == 'STOCK_BALANCE_REPORT') {
-            // Extract parameters for stock balance report
-            $filters = [];
-            foreach ($data as $key => $value) {
-                if ($key != '_token' && $key != '_report_id' && $value) {
-                    $filters[$key] = $value;
-                }
-            }
-            
-            // Generate the stock balance report
-            $service = new \App\Services\StockBalanceReportService();
-            $reportData = $service->generateReport($filters);
-            
-            // Check if PDF export is requested
-            if (isset($filters['export_pdf']) && $filters['export_pdf'] == 'true') {
-                $pdf = $service->generatePDF($reportData, $filters['paper_size'] ?? 'A4');
-                $filename = 'stock_balance_report_' . date('Y-m-d_H-i-s') . '.pdf';
-                return $pdf->download($filename);
-            }
-            
-            // Store report data in session and redirect to view
-            session()->put('stock_balance_report_data', $reportData);
-            session()->put('stock_balance_report_filters', $filters);
-            
-            return redirect()->route('stock_balance_report_view');
+            // generateStockBalanceReport() (the actual view route) reads
+            // its filters straight from the request query string, not
+            // session - redirect with them as params like every other
+            // report branch here does, instead of stashing them in a
+            // session key that route never reads.
+            return redirect()->route('stock_balance_report_view', [
+                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'product_id' => $data['product_id'] ?? null,
+                'batch_no' => $data['batch_no'] ?? null,
+                'show_zero_stock' => $data['show_zero_stock'] ?? null,
+            ]);
         }
 
         if ($sp == 'STOCK_RECEIVED_REPORT') {
