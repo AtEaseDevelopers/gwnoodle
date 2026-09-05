@@ -94,14 +94,10 @@ class StockInRequest extends Model
 
         $quantity = (int) $this->quantity;
 
-        // Increment the batch aggregate quantity
+        // Increment the batch aggregate quantity. Status is never touched
+        // here - it's purely manual/informational now, not derived from
+        // quantity (see ProductBatch::scopeAvailableForSale()).
         $batch->increment('quantity', $quantity);
-
-        // Revive an inactive batch, mirroring the original stock-in behaviour
-        if ($batch->status == 2) {
-            $batch->status = 1;
-            $batch->save();
-        }
 
         // Increase the warehouse inventory balance (when a warehouse is set)
         if (!empty($this->warehouse_id)) {

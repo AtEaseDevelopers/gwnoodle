@@ -188,12 +188,19 @@ class StockOutApprovalTest extends TestCase
         $this->assertSame(-6, (int) $ledger->quantity);
     }
 
-    public function test_approve_marks_batch_inactive_when_depleted(): void
+    public function test_approve_does_not_touch_status_when_depleted(): void
     {
+        // Status is manual/informational only now - depleting a batch to 0
+        // must never auto-flip it to inactive (that would make it
+        // impossible to tell a genuinely-depleted batch apart from one an
+        // admin deliberately deactivated, and driver-side availability is
+        // quantity-based, not status-based, precisely so this can't happen).
         $batch   = $this->makeBatch(5);
         $wh      = $this->makeWarehouse();
         $this->seedBalance($wh, $batch, 5);
         $request = $this->makeRequest($wh, $batch, 5);
+
+        $startingStatus = (int) $batch->status;
 
         $this->actingAs($this->makeAdmin())
             ->post(route('stockOutRequests.approve', $request->id))
@@ -201,7 +208,8 @@ class StockOutApprovalTest extends TestCase
 
         $fresh = $batch->fresh();
         $this->assertSame(0, (int) $fresh->quantity);
-        $this->assertSame(ProductBatch::STATUS_INACTIVE, (int) $fresh->status);
+        $this->assertSame($startingStatus, (int) $fresh->status);
+        $this->assertNotSame(ProductBatch::STATUS_INACTIVE, (int) $fresh->status);
     }
 
     // ---- Oversell guard (the HIGH fix) -----------------------------------

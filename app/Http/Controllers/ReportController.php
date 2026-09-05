@@ -317,30 +317,17 @@ class ReportController extends AppBaseController
         $sp = Report::where('id', $report_id)->pluck('sqlvalue')->first();
         
         if ($sp == 'STOCK_BALANCE_REPORT') {
-            // Extract parameters for stock balance report
-            $filters = [];
-            foreach ($data as $key => $value) {
-                if ($key != '_token' && $key != '_report_id' && $value) {
-                    $filters[$key] = $value;
-                }
-            }
-            
-            // Generate the stock balance report
-            $service = new \App\Services\StockBalanceReportService();
-            $reportData = $service->generateReport($filters);
-            
-            // Check if PDF export is requested
-            if (isset($filters['export_pdf']) && $filters['export_pdf'] == 'true') {
-                $pdf = $service->generatePDF($reportData, $filters['paper_size'] ?? 'A4');
-                $filename = 'stock_balance_report_' . date('Y-m-d_H-i-s') . '.pdf';
-                return $pdf->download($filename);
-            }
-            
-            // Store report data in session and redirect to view
-            session()->put('stock_balance_report_data', $reportData);
-            session()->put('stock_balance_report_filters', $filters);
-            
-            return redirect()->route('stock_balance_report_view');
+            // generateStockBalanceReport() (the actual view route) reads
+            // its filters straight from the request query string, not
+            // session - redirect with them as params like every other
+            // report branch here does, instead of stashing them in a
+            // session key that route never reads.
+            return redirect()->route('stock_balance_report_view', [
+                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'product_id' => $data['product_id'] ?? null,
+                'batch_no' => $data['batch_no'] ?? null,
+                'show_zero_stock' => $data['show_zero_stock'] ?? null,
+            ]);
         }
 
         if ($sp == 'STOCK_RECEIVED_REPORT') {
@@ -379,6 +366,19 @@ class ReportController extends AppBaseController
                 'customer_id' => $customer_id,
                 'driver_id' => $driver_id,
                 'trip_uuid' => $trip_uuid,
+            ]);
+        }
+
+        if ($sp == 'PRODUCT_QTY_SOLD_REPORT') {
+            // Date range only (see datefrom/dateto handling elsewhere in
+            // this method, e.g. STOCK_RECEIVED_REPORT above) - every
+            // invoice in range, no driver/customer/trip filtering.
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+
+            return redirect()->route('product_qty_sold_report_view', [
+                'date_from' => $date_from,
+                'date_to' => $date_to,
             ]);
         }
 
@@ -577,15 +577,20 @@ class ReportController extends AppBaseController
 
     public function dailySalesReportView(Request $request)
     {
+        // DomPDF is memory-hungry and this can span many trips/invoices on a
+        // busy day - the same fatal-\Error-not-\Exception risk fixed for
+        // generateStockBalanceReport() applies here too.
+        ini_set('memory_limit', '512M');
+
         // Get parameters directly from request
         $date = $request->date ?? date('Y-m-d');
-        
+
         $filters = [
             'customer_id' => $request->customer_id,
             'driver_id' => $request->driver_id,
             'trip_uuid' => $request->trip_uuid,
         ];
-        
+
         $service = new \App\Services\DailySalesReportService();
         $reportData = $service->generateReport($date, $filters);
 
@@ -612,9 +617,54 @@ class ReportController extends AppBaseController
             
             // Stream to browser
             return $pdf->stream('daily_sales_report_' . $date . '.pdf');
-            
-        } catch(Exception $e) {
+
+        } catch(\Throwable $e) {
             \Log::error('Daily Sales PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Every invoice in a date range, summarized down to product + quantity
+     * sold - no driver/customer/trip filtering, no sales/payment figures.
+     */
+    public function productQtySoldReportView(Request $request)
+    {
+        // A date range can pull in far more invoices than a single day -
+        // DomPDF is memory-hungry and this must not exceed PHP's default
+        // 128MB limit (same fix as generateStockBalanceReport()/
+        // dailySalesReportView()).
+        ini_set('memory_limit', '512M');
+
+        $dateFrom = $request->date_from ?? date('Y-m-d');
+        $dateTo = $request->date_to ?? date('Y-m-d');
+
+        $service = new \App\Services\DailySalesReportService();
+        $reportData = $service->generateReportByDateRange($dateFrom, $dateTo);
+
+        try {
+            $pdf = Pdf::loadView('reports.product_qty_sold', [
+                'reportData' => $reportData,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ]);
+
+            $pdf->setPaper('a4', 'portrait');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+            ]);
+
+            return $pdf->stream('product_qty_sold_report_' . $dateFrom . '_to_' . $dateTo . '.pdf');
+
+        } catch(\Throwable $e) {
+            \Log::error('Product Qty Sold PDF Error: ' . $e->getMessage());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
     }

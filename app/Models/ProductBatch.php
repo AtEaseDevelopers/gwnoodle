@@ -163,6 +163,20 @@ class ProductBatch extends Model
     }
 
     /**
+     * Scope a query to only include batches sellable to a driver: quantity
+     * in stock and not expired. Deliberately ignores `status` - status is
+     * purely informational/admin-facing now (set manually, never auto), so
+     * driver-facing availability must never depend on it.
+     */
+    public function scopeAvailableForSale($query)
+    {
+        return $query->where('quantity', '>', 0)
+                     ->where(function ($q) {
+                         $q->whereNull('expiry_date')->orWhere('expiry_date', '>', now());
+                     });
+    }
+
+    /**
      * Scope a query to only include expired batches
      */
     public function scopeExpired($query)
@@ -361,9 +375,10 @@ class ProductBatch extends Model
 
         // Treat an un-initialized (NULL) master quantity as 0 so batches seeded
         // straight into a warehouse balance don't break on the first stock-in.
+        // Quantity changes never touch status - status is purely manual/
+        // informational now (see scopeAvailableForSale()).
         $this->quantity = ($this->quantity ?? 0) + $amount;
         $this->save();
-
     }
 
     /**

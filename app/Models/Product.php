@@ -384,7 +384,11 @@ class Product extends Model
      */
     public function getProfitMarginAttribute()
     {
-        if (!$this->cost || $this->cost == 0) {
+        // Guards both operands that matter here: cost (for a meaningful
+        // margin to exist at all) and price (the actual divisor) - a
+        // product with cost set but price still 0 was throwing
+        // DivisionByZeroError on this line.
+        if (!$this->cost || $this->cost == 0 || !$this->price || $this->price == 0) {
             return null;
         }
         return (($this->price - $this->cost) / $this->price) * 100;

@@ -237,6 +237,75 @@ class DailySalesReportService
     }
 
     /**
+     * Flat product+quantity summary over a date range - every invoice in
+     * range, no driver/customer/trip filtering, no trip/invoice breakdown,
+     * just the aggregated totals. Used by the Product Quantity Sold Report.
+     * Kept as its own method rather than adding a range branch to
+     * generateReport(), so Daily Sales Report's behavior can't be affected
+     * by this change.
+     */
+    public function generateReportByDateRange($dateFrom, $dateTo)
+    {
+        $reportData = [
+            'generated_at' => Carbon::now()->format('d/m/Y H:i:s'),
+            'report_date' => Carbon::parse($dateFrom)->format('d/m/Y') . ' - ' . Carbon::parse($dateTo)->format('d/m/Y'),
+            'report_no' => $this->generateReportNumber($dateFrom),
+            'summary' => [
+                'total_invoices' => 0,
+                'total_quantity' => 0,
+                'total_customers' => 0,
+                'total_trips' => 0
+            ],
+        ];
+
+        $invoices = Invoice::with(['invoicedetail.product'])
+            ->whereBetween('date', [
+                Carbon::parse($dateFrom)->startOfDay(),
+                Carbon::parse($dateTo)->endOfDay(),
+            ])
+            ->where('status', Invoice::STATUS_COMPLETED)
+            ->get();
+
+        $reportData['summary']['total_trips'] = $invoices->pluck('trip_uuid')->filter()->unique()->count();
+        $reportData['summary']['total_invoices'] = $invoices->count();
+        $reportData['summary']['total_customers'] = $invoices->pluck('customer_id')->unique()->count();
+
+        $allProducts = [];
+        $productCounter = 1;
+
+        foreach ($invoices as $invoice) {
+            foreach ($invoice->invoicedetail as $detail) {
+                $product = $detail->product;
+                // Group by product_id so every product record gets its own
+                // row - grouping by name merged same-name products and hid
+                // all but one of their codes from the report.
+                $productKey = $product ? $product->id : 'unknown-' . $detail->product_id;
+
+                if (!isset($allProducts[$productKey])) {
+                    $allProducts[$productKey] = [
+                        'no' => $productCounter++,
+                        'product_name' => $product ? $product->name : 'N/A',
+                        'product_code' => $product ? $product->unit_code : 'N/A',
+                        'quantity' => 0,
+                    ];
+                }
+                $allProducts[$productKey]['quantity'] += $detail->quantity;
+            }
+        }
+
+        // Sort by product code for a stable, readable report order
+        usort($allProducts, fn($a, $b) => strcmp($a['product_code'], $b['product_code']) ?: strcmp($a['product_name'], $b['product_name']));
+        foreach ($allProducts as $i => $product) {
+            $allProducts[$i]['no'] = $i + 1;
+        }
+
+        $reportData['summary']['total_quantity'] = collect($allProducts)->sum('quantity');
+        $reportData['products'] = array_values($allProducts);
+
+        return $reportData;
+    }
+
+    /**
      * Generate report number based on date
      * Format: DSR{YYMMDD}-{sequence}
      */

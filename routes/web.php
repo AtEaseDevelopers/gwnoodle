@@ -296,6 +296,8 @@ Route::group(['middleware' => ['auth']], function() {
 
         Route::get('/daily-sales-report', [App\Http\Controllers\ReportController::class, 'dailySalesReportView'])->name('daily_sales_report_view');
 
+        Route::get('/product-qty-sold-report', [App\Http\Controllers\ReportController::class, 'productQtySoldReportView'])->name('product_qty_sold_report_view');
+
         Route::get('/finished-goods-traceability', [App\Http\Controllers\ReportController::class, 'finishedGoodsTraceabilityView'])->name('finished_goods_traceability_view');
 
         Route::get('/stock-card-report', [App\Http\Controllers\ReportController::class, 'stockCardReportView'])->name('stock_card_report_view');

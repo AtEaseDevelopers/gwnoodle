@@ -220,7 +220,6 @@
                                         <th>Batch Code</th>
                                         <th>Expiry Date</th>
                                         <th>Current Qty</th>
-                                        <th>Usage</th>
                                         <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
@@ -276,7 +275,7 @@
                                     <tr>
                                         <th colspan="2" class="text-right">Totals:</th>
                                         <th class="text-right">{{ number_format($product->total_quantity) }}</th>
-                                        <th colspan="4"></th>
+                                        <th colspan="2"></th>
                                     </tr>
                                 </tfoot>
                             </table>

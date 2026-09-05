@@ -13,7 +13,6 @@
                          <div class="card-header">
                              <i class="fa fa-align-justify"></i>
                              {{ __('report.reports') }}
-                             <a class="pull-right" href="{{ route('reports.create') }}"><i class="fa fa-plus-square fa-lg"></i></a>
                          </div>
                          <div class="card-body">
                              @include('reports.table')
@@ -28,12 +27,3 @@
     </div>
 @endsection
 
-@push('scripts')
-    <script>
-        $(document).keyup(function(e) {
-            if(e.altKey && e.keyCode == 78){
-                $('.card .card-header a')[0].click();
-            } 
-        });
-    </script>
-@endpush

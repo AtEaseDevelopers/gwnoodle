@@ -293,11 +293,17 @@ class StockBalanceReportService
             ->where('pb.quantity', '>=', 0)
             ->where(function ($q) {
                 $q->whereNull('pb.expiry_date')->orWhere('pb.expiry_date', '>', now());
-            })
-            // Include zero-balance batches (>= 0). Depleted batches keep their
-            // warehouse_inventory_balances row at quantity 0, so relaxing this
-            // filter surfaces them in the report instead of hiding them.
-            ->where('wib.quantity', '>=', 0);
+            });
+
+        // Zero-balance rows are hidden by default - a depleted batch keeps
+        // its warehouse_inventory_balances row at quantity 0, and there's
+        // no need to clutter the report with stock nobody has. Pass
+        // show_zero_stock to include them anyway.
+        if (!isset($filters['show_zero_stock']) || !$filters['show_zero_stock']) {
+            $query->where('wib.quantity', '>', 0);
+        } else {
+            $query->where('wib.quantity', '>=', 0);
+        }
 
         // Apply filters
         if (isset($filters['product_id']) && $filters['product_id']) {

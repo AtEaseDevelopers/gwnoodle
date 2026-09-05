@@ -9,10 +9,11 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * The stock balance report must list zero-balance batches (warehouse balance
- * exactly 0), not only batches that still hold stock. Depleted batches keep
- * their warehouse_inventory_balances row at quantity 0 (rows are decremented in
- * place, never deleted), so the report should surface them.
+ * Zero-balance batches (warehouse balance exactly 0) are hidden from the
+ * stock balance report by default - nobody needs to see stock nobody has.
+ * Depleted batches keep their warehouse_inventory_balances row at quantity 0
+ * (rows are decremented in place, never deleted), so they'd otherwise
+ * clutter the report unless explicitly requested via show_zero_stock.
  *
  * Runs against the shared dev database (DatabaseTransactions); rows roll back.
  */
@@ -20,7 +21,7 @@ class StockBalanceReportZeroQtyTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_report_includes_zero_balance_batches(): void
+    public function test_report_hides_zero_balance_batches_by_default(): void
     {
         $suffix = strtoupper(substr(uniqid(), -6));
 
@@ -86,6 +87,9 @@ class StockBalanceReportZeroQtyTest extends TestCase
         ]);
 
         $service = new StockBalanceReportService();
+
+        // Default call (no show_zero_stock) - the zero-balance batch must
+        // not appear at all.
         $report = $service->generateReportOptimized([
             'warehouse_id' => $warehouseId,
             'product_id'   => $productId,
@@ -104,12 +108,27 @@ class StockBalanceReportZeroQtyTest extends TestCase
         $batchCodes = collect($product['batches'])->pluck('batch_no')->all();
 
         $this->assertContains('SB-STOCK-' . $suffix, $batchCodes, 'Stocked batch must be listed');
-        $this->assertContains('SB-ZERO-' . $suffix, $batchCodes, 'Zero-balance batch must be listed');
-
-        $zeroBatch = collect($product['batches'])->firstWhere('batch_no', 'SB-ZERO-' . $suffix);
-        $this->assertSame(0, (int) $zeroBatch['quantity'], 'Zero-balance batch quantity must be 0');
-
-        // Totals only count real stock, so the zero batch does not inflate them.
+        $this->assertNotContains('SB-ZERO-' . $suffix, $batchCodes, 'Zero-balance batch must be hidden by default');
         $this->assertSame(10, (int) $product['total_quantity']);
+
+        // With show_zero_stock explicitly requested, the zero-balance batch
+        // reappears - the capability isn't removed, just opt-in now.
+        $reportWithZero = $service->generateReportOptimized([
+            'warehouse_id'    => $warehouseId,
+            'product_id'      => $productId,
+            'show_zero_stock' => true,
+        ]);
+
+        $productWithZero = collect($reportWithZero['warehouses'])
+            ->firstWhere('warehouse.id', $warehouseId)['products'] ?? [];
+        $productWithZero = collect($productWithZero)->firstWhere('product_id', $productId);
+
+        $this->assertNotNull($productWithZero, 'Product should be present when show_zero_stock is set');
+
+        $batchCodesWithZero = collect($productWithZero['batches'])->pluck('batch_no')->all();
+        $this->assertContains('SB-ZERO-' . $suffix, $batchCodesWithZero, 'Zero-balance batch must be listed when show_zero_stock is set');
+
+        $zeroBatch = collect($productWithZero['batches'])->firstWhere('batch_no', 'SB-ZERO-' . $suffix);
+        $this->assertSame(0, (int) $zeroBatch['quantity'], 'Zero-balance batch quantity must be 0');
     }
 }
