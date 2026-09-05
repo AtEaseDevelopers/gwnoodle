@@ -28,10 +28,22 @@ class InvoiceController extends Controller
                 ->leftJoin('supervisors',  'invoices.supervisor_id',  '=', 'supervisors.id')
                 ->where('invoices.status', 1)
                 ->where('invoices.autocount_status', 'pending')
+                // Skip invoices with no line items. AutoCount cannot save an invoice
+                // without at least one detail row, and the plugin used to revert such
+                // invoices back to 'pending' every cycle - which head-of-line blocked
+                // the whole queue (the plugin only processes data[0] per tick). Never
+                // hand a 0-item invoice to the plugin in the first place.
+                ->whereExists(function ($q) {
+                    $q->select(\DB::raw(1))
+                        ->from('invoice_details')
+                        ->whereColumn('invoice_details.invoice_id', 'invoices.id');
+                })
                 // Check if the cut_off_date is NOT empty
                 ->when(!empty(self::cut_off_date), function ($query) {
                     $query->where('invoices.created_at', '>=', self::cut_off_date);
                 })
+                // Stable oldest-first ordering so the plugin's data[0] is deterministic.
+                ->orderBy('invoices.id')
                 ->select([
                     'invoices.*',
                     'drivers.employeeid     as driver_employeeid',
