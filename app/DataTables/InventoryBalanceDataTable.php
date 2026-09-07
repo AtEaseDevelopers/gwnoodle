@@ -78,7 +78,12 @@ class InventoryBalanceDataTable extends DataTable
     {
         return $model->newQuery()
             ->with('lorry:id,lorryno')
-            ->select('inventory_balances.*');
+            ->select('inventory_balances.*')
+            // A van with no batches at all (stock fully returned/depleted)
+            // has no stock to show here. JSON_LENGTH covers both `[]` and
+            // `{}` encodings of an empty batches map.
+            ->whereNotNull('batches')
+            ->whereRaw('JSON_LENGTH(batches) > 0');
     }
 
     /**
