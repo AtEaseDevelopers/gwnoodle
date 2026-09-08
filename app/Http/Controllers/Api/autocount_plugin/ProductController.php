@@ -17,10 +17,8 @@ class ProductController extends Controller
     // Define allowed prefixes
     const ALLOWED_PREFIXES = ['N', 'OEM', 'GW', 'BK', 'S', 'TD', 'AD'];
 
-    // Define excluded formats: [prefix, suffix]. e.g. starts with 'S' AND ends with 'SM'
-    const EXCLUDED_FORMATS = [
-        ['S', 'SM'],
-    ];
+    // Define excluded prefixes: any ItemCode starting with one of these is dropped. e.g. 'SM'
+    const EXCLUDED_PREFIXES = ['SM'];
 
     public function update(Request $request)
     {
@@ -108,7 +106,7 @@ class ProductController extends Controller
     /**
      * Check if ItemCode starts with an allowed prefix AND contains a dash.
      * e.g. OEM123-2wqeq-112 ✅ | OEM123 ❌ | RANDOM-123 ❌
-     * Excluded formats (e.g. starts with 'S' AND ends with 'SM') are rejected.
+     * Excluded prefixes (e.g. starting with 'SM') are rejected.
      */
     protected function isAllowedItemCode(string $itemCode): bool
     {
@@ -116,8 +114,8 @@ class ProductController extends Controller
             return false;
         }
 
-        foreach (self::EXCLUDED_FORMATS as [$prefix, $suffix]) {
-            if (str_starts_with($itemCode, $prefix) && str_ends_with($itemCode, $suffix)) {
+        foreach (self::EXCLUDED_PREFIXES as $prefix) {
+            if (str_starts_with($itemCode, $prefix)) {
                 return false;
             }
         }
