@@ -22,6 +22,12 @@
     <p>{!! $user->invoice_code ?: '-' !!}</p>
 </div>
 
+<!-- Current Password (display copy) -->
+<div class="form-group">
+    {!! Form::label('password_display', __('Current Password')) !!}
+    <p>{{ $user->password_display ?: '-' }}</p>
+</div>
+
 <!-- Role Id Field -->
 <div class="form-group">
     {!! Form::label('role_id', __('user.role')) !!}

@@ -26,6 +26,13 @@
 @if(Route::currentRouteName() == 'Managerusers.edit' || Route::currentRouteName() == 'Managerusers.update')
     <!-- EDIT MODE: Show checkbox to update password -->
     
+    <!-- Current Password (display only copy; editing it does NOT change the login password) -->
+    <div class="form-group col-sm-12">
+        {!! Form::label('password_display', __('Current Password')) !!}
+        {!! Form::text('password_display', null, ['class' => 'form-control', 'autocomplete' => 'off', 'id' => 'password_display', 'placeholder' => 'Not recorded']) !!}
+        <small class="form-text text-muted">{{ __('For reference only. Typing here does not change the login password - tick "Update Password" to do that. Leave empty if unknown.') }}</small>
+    </div>
+
     <!-- Update Password Checkbox (Only for edit) -->
     <div class="form-group col-sm-6">
         <div class="form-check">
@@ -89,6 +96,8 @@
             
             // Only run password toggle logic if we're in edit mode and checkbox exists
             if ($('#update_password').length > 0) {
+                var originalDisplay = $('#password_display').val();
+
                 // Toggle password fields based on checkbox (only for edit)
                 $('#update_password').change(function() {
                     if ($(this).is(':checked')) {
@@ -101,9 +110,16 @@
                         // Remove required attribute and clear values
                         $('input[name="password"]').removeAttr('required').val('');
                         $('input[name="password_confirmation"]').removeAttr('required').val('');
+                        // Password not being changed: restore the displayed value
+                        $('#password_display').val(originalDisplay);
                     }
                 });
                 
+                // Keep the displayed current password in step with the new password being typed
+                $('input[name="password"]').on('input', function() {
+                    $('#password_display').val($(this).val());
+                });
+
                 // Trigger change on page load if checkbox is already checked
                 $('#update_password').trigger('change');
             }
