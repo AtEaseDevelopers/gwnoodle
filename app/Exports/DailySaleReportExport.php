@@ -35,7 +35,7 @@ class DailySaleReportExport implements FromCollection, WithHeadings, ShouldAutoS
                 'No' => $invoice->invoiceno,
                 'Customer' => $invoice->customer->company,
                 'Payment Term' => $invoice->paymentterm == 1 ? 'Cash' : 'Credit',
-                'Product' => $invoiceDetail->product->name,
+                'Product' => $invoiceDetail->product_name ?? $invoiceDetail->product->name,
                 'Qty' => $invoiceDetail->quantity,
                 'Foc' => "0",
                 'Foc Qty' => "0",

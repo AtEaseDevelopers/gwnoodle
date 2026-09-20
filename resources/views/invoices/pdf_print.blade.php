@@ -391,9 +391,9 @@
             @foreach($invoice->invoicedetail as $detail)
             <tr>
                 <td class="col-item">{{ $counter++ }}.</td>
-                <td class="col-description">{{ $detail->product->name ?? '-' }}({{ $detail->batch->batch_code }})</td>
+                <td class="col-description">{{ $detail->product_name ?? $detail->product->name ?? '-' }}({{ $detail->batch->batch_code }})</td>
                 <td class="col-qty">{{ number_format($detail->quantity) }}</td>
-                <td class="col-uom">{{ $detail->product->uom ?? 'PCS' }}</td>
+                <td class="col-uom">{{ $detail->uom ?? $detail->product->uom ?? 'PCS' }}</td>
                 @if($mode !== 'do')
                 {{-- Discounted lines show the gross unit price + the discount so
                      gross x qty - disc = Total. Un-discounted lines keep the

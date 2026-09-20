@@ -64,10 +64,10 @@ class InvoiceController extends Controller
                 ->whereIn('invoice_details.invoice_id', $invoiceIds)
                 ->select([
                     'invoice_details.*',
-                    'products.name as product_name',
-                    'products.unit_code',
-                    'products.uom',
-                    'products.cost as cost',
+                    \DB::raw('COALESCE(invoice_details.product_name, products.name) as product_name'),
+                    \DB::raw('COALESCE(invoice_details.product_code, products.unit_code) as unit_code'),
+                    \DB::raw('COALESCE(invoice_details.uom, products.uom) as uom'),
+                    \DB::raw('COALESCE(invoice_details.cost, products.cost) as cost'),
                 ])->get()->groupBy('invoice_id'); // 🔥 important
 
             // Step 4: Payment mapping
