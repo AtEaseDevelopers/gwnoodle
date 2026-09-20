@@ -40,13 +40,13 @@
     <!-- Password Field (Hidden by default for edit) -->
     <div class="form-group col-sm-6 password-fields" style="display: none;">
         {!! Form::label('password', __('user.password')) !!}
-        {!! Form::password('password', ['class' => 'form-control']) !!}
+        {!! Form::text('password', null, ['class' => 'form-control', 'autocomplete' => 'off']) !!}
     </div>
 
     <!-- Confirmation Password Field (Hidden by default for edit) -->
     <div class="form-group col-sm-6 password-fields" style="display: none;">
         {!! Form::label('password_confirmation', __('user.password_confirmation')) !!}
-        {!! Form::password('password_confirmation', ['class' => 'form-control']) !!}
+        {!! Form::text('password_confirmation', null, ['class' => 'form-control', 'autocomplete' => 'off']) !!}
     </div>
 @else
     <!-- CREATE MODE: Always show password fields -->
@@ -54,13 +54,13 @@
     <!-- Password Field (Always show for create) -->
     <div class="form-group col-sm-6">
         {!! Form::label('password', __('user.password')) !!}<span class="asterisk"> *</span>
-        {!! Form::password('password', ['class' => 'form-control']) !!}
+        {!! Form::text('password', null, ['class' => 'form-control', 'autocomplete' => 'off']) !!}
     </div>
 
     <!-- Confirmation Password Field (Always show for create) -->
     <div class="form-group col-sm-6">
         {!! Form::label('password_confirmation', __('user.password_confirmation')) !!}<span class="asterisk"> *</span>
-        {!! Form::password('password_confirmation', ['class' => 'form-control']) !!}
+        {!! Form::text('password_confirmation', null, ['class' => 'form-control', 'autocomplete' => 'off']) !!}
     </div>
 @endif
 
