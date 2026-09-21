@@ -1852,6 +1852,53 @@ class DriverController extends Controller
         }
     }
 
+    /**
+     * Find an invoice this driver already created today for the same customer
+     * with exactly the same products and quantities.
+     *
+     * Guards against the mobile app double-submitting one sale (the online
+     * invoice call is treated as timed out, the sale is queued offline and
+     * replayed through bulk-add-invoice, but the first call had in fact
+     * succeeded). The two endpoints don't share an invoice-number format, so
+     * the match is on content: same driver + customer + trip, created today,
+     * same set of (product_id, quantity) lines.
+     *
+     * @param  \App\Models\Driver  $driver
+     * @param  int|string          $customerId
+     * @param  array               $details   request invoicedetail rows
+     * @return \App\Models\Invoice|null
+     */
+    private function findDuplicateInvoice($driver, $customerId, array $details)
+    {
+        $signature = function ($rows) {
+            $keys = [];
+            foreach ($rows as $row) {
+                $keys[] = (int) $row['product_id'] . 'x' . (int) $row['quantity'];
+            }
+            sort($keys);
+            return $keys;
+        };
+
+        $wanted = $signature($details);
+
+        $candidates = Invoice::where('driver_id', $driver->id)
+            ->where('customer_id', $customerId)
+            ->where('trip_uuid', $driver->trip_id)
+            ->where('status', Invoice::STATUS_COMPLETED)
+            ->whereDate('created_at', now()->toDateString())
+            ->with('invoicedetail')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if ($signature($candidate->invoicedetail->toArray()) === $wanted) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     public function addinvoice(Request $request)
     {
         try {
@@ -2019,13 +2066,35 @@ class DriverController extends Controller
                 ], 400);
             }
             
+            // Duplicate guard: same sale already saved today (see findDuplicateInvoice)
+            $duplicate = $this->findDuplicateInvoice($driver, $data['customer_id'], $data['invoicedetail']);
+            if ($duplicate) {
+                \Log::info('addinvoice: duplicate submission blocked, returning existing invoice', [
+                    'driver_id' => $driver->id,
+                    'invoice_id' => $duplicate->id,
+                    'invoiceno' => $duplicate->invoiceno,
+                ]);
+
+                $iv = Invoice::where('id', $duplicate->id)
+                    ->with(['customer', 'driver', 'invoicedetail.product', 'invoicedetail.batch'])
+                    ->first();
+                $creditData = $this->calculateCustomerCredit($iv->customer_id, $iv->updated_at);
+                $iv->newcredit = round($creditData['credit'] ?? 0, 2);
+
+                return response()->json([
+                    'result' => true,
+                    'message' => __LINE__ . $this->message_separator . 'Invoice created successfully',
+                    'data' => $iv
+                ], 200);
+            }
+
             // Process invoice
             $runningno = Code::where('code', 'invoicerunningnumber')->first();
             if ($runningno) {
                 $runningno->value = intval($runningno->value) + 1;
                 $runningno->save();
             }
-            
+
             DB::beginTransaction();
 
             // Create invoice - retry with a freshly generated number if the
@@ -8560,6 +8629,36 @@ class DriverController extends Controller
                         'error'          => 'Invalid product batches found',
                         'invalid_batches'=> $invalidBatches,
                         'input'          => $invoiceInput
+                    ];
+                    continue;
+                }
+
+                // Duplicate guard: the online invoice call may already have saved
+                // this sale (see findDuplicateInvoice). Report it as a success so
+                // the app clears its offline queue, but create nothing.
+                $duplicate = $this->findDuplicateInvoice($driver, $customer->id, $invoiceInput['invoicedetail']);
+                if ($duplicate) {
+                    \Log::info('bulkCreateInvoice: duplicate submission blocked, returning existing invoice', [
+                        'driver_id'  => $driver->id,
+                        'invoice_id' => $duplicate->id,
+                        'invoiceno'  => $duplicate->invoiceno,
+                    ]);
+
+                    $results[] = [
+                        'index'           => $index,
+                        'success'         => true,
+                        'duplicate'       => true,
+                        'invoiceno'       => $duplicate->invoiceno,
+                        'invoice_id'      => $duplicate->id,
+                        'date'            => $duplicate->date,
+                        'customer_id'     => $duplicate->customer_id,
+                        'customer_name'   => $customer->company,
+                        'total'           => $duplicate->invoicedetail->sum('totalprice'),
+                        'paymentterm'     => $duplicate->paymentterm,
+                        'status'          => $duplicate->status,
+                        'payment_created' => $duplicate->paymentterm == 1,
+                        'items_count'     => $duplicate->invoicedetail->count(),
+                        'created_at'      => $duplicate->created_at->format('Y-m-d H:i:s'),
                     ];
                     continue;
                 }
