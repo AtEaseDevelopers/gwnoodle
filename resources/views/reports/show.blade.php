@@ -27,7 +27,9 @@
                                         foreach($reportdetails as $reportdetail){
                                             // Check if the field should be optional based on title
                                             $isProductBatch = isset($reportdetail['title']) && $reportdetail['title'] == 'Product Batch';
-                                            $required = $reportdetail['name'] === 'p_agent' ? '' : 'required';
+                                            // p_agent and expiry_before are optional: leaving the expiry date
+                                            // blank means "no expiry filter" (show all stock).
+                                            $required = in_array($reportdetail['name'], ['p_agent', 'expiry_before']) ? '' : 'required';
 
                                             // Override required for Product Batch multiselect
                                             if($isProductBatch && $reportdetail['type'] == 'multiselect') {

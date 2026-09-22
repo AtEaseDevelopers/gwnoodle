@@ -313,6 +313,16 @@ class StockBalanceReportService
             $query->where('pb.batch_code', 'like', '%' . $filters['batch_no'] . '%');
         }
 
+        // "Expiring before" filter: restrict to dated batches expiring on or
+        // before the chosen date. Combined with the not-yet-expired guard
+        // above (expiry_date > now), this surfaces stock nearing expiry within
+        // a window. Never-expiring batches (NULL expiry_date) are excluded here
+        // since they can't be "expiring".
+        if (!empty($filters['expiry_before'])) {
+            $query->whereNotNull('pb.expiry_date')
+                  ->whereDate('pb.expiry_date', '<=', $filters['expiry_before']);
+        }
+
         $results = $query->groupBy('wib.warehouse_id', 'p.id', 'p.unit_code', 'p.name', 'p.carton_enabled', 'p.units_per_carton', 'p.cost', 'pc.cost', 'pb.batch_code', 'pb.expiry_date', 'wib.quantity')
             ->orderBy('p.name')
             ->orderBy('pb.expiry_date')

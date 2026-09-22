@@ -213,7 +213,7 @@
         <div class="report-title">STOCK BALANCE REPORT</div>
     </div>
 
-    @if(!empty($filters) && (isset($filters['warehouse_id']) || isset($filters['product_id']) || isset($filters['batch_no'])))
+    @if(!empty($filters) && (isset($filters['warehouse_id']) || isset($filters['product_id']) || isset($filters['batch_no']) || !empty($filters['expiry_before'])))
     <div class="filters-info">
         <strong>Applied Filters:</strong><br>
         @if(isset($filters['warehouse_id']) && $filters['warehouse_id'])
@@ -224,6 +224,9 @@
         @endif
         @if(isset($filters['batch_no']) && $filters['batch_no'])
             Batch No: {{ $filters['batch_no'] }}<br>
+        @endif
+        @if(!empty($filters['expiry_before']))
+            Expiring on or before: {{ \Carbon\Carbon::parse($filters['expiry_before'])->format('d-m-Y') }}<br>
         @endif
         @if(isset($filters['show_zero_stock']) && $filters['show_zero_stock'])
             Showing zero stock items: Yes
@@ -271,6 +274,7 @@
                         <th>Item Description</th>
                         <th>Location</th>
                         <th>Product Batch Code</th>
+                        <th>Expiry Date</th>
                         <th>Qty</th>
                         <th>Avg. Cost</th>
                         <th>Total Cost</th>
@@ -297,6 +301,7 @@
                                 <td>{{ $product['product_name'] }}</td>
                                 <td>{{ $warehouseData['warehouse']['location'] ?? 'HQ' }}</td>
                                 <td>{{ $batch['batch_no'] }}</td>
+                                <td>{{ $batch['expiry_date'] }}</td>
                                 <td class="text-right">{{ number_format($batch['quantity']) }}</td>
                                 <td class="text-right">RM {{ number_format($product['average_cost'], 2) }}</td>
                                 <td class="text-right">RM {{ number_format($batch['quantity'] * $product['average_cost'], 2) }}</td>
@@ -309,6 +314,7 @@
                                 <td>{{ $product['product_name'] }}</td>
                                 <td>{{ $warehouseData['warehouse']['location'] ?? 'HQ' }}</td>
                                 <td>N/A</td>
+                                <td>N/A</td>
                                 <td class="text-right">0</td>
                                 <td class="text-right">RM {{ number_format($product['average_cost'], 2) }}</td>
                                 <td class="text-right">RM 0.00</td>
@@ -318,14 +324,14 @@
                     
                     @if(empty($warehouseData['products']))
                         <tr>
-                            <td colspan="7" class="text-center">No products found with stock in this warehouse</td>
+                            <td colspan="8" class="text-center">No products found with stock in this warehouse</td>
                         </tr>
                     @endif
                 </tbody>
                 @if(!empty($warehouseData['products']))
                 <tfoot>
                     <tr style="background-color: #f0f0f0; font-weight: bold;">
-                        <td colspan="4" class="text-right"><strong>Warehouse Total:</strong></td>
+                        <td colspan="5" class="text-right"><strong>Warehouse Total:</strong></td>
                         <td class="text-right"><strong>{{ number_format($warehouseData['total_quantity']) }}</strong></td>
                         <td></td>
                         <td class="text-right"><strong>RM {{ number_format($warehouseData['total_value'], 2) }}</strong></td>

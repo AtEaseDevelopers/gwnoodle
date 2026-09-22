@@ -327,6 +327,7 @@ class ReportController extends AppBaseController
                 'product_id' => $data['product_id'] ?? null,
                 'batch_no' => $data['batch_no'] ?? null,
                 'show_zero_stock' => $data['show_zero_stock'] ?? null,
+                'expiry_before' => $data['expiry_before'] ?? null,
             ]);
         }
 
@@ -485,7 +486,8 @@ class ReportController extends AppBaseController
                 'warehouse_id' => $request->warehouse_id,
                 'product_id' => $request->product_id,
                 'batch_no' => $request->batch_no,
-                'show_zero_stock' => $request->show_zero_stock
+                'show_zero_stock' => $request->show_zero_stock,
+                'expiry_before' => $request->expiry_before
             ];
 
             // Generate report data
