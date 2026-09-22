@@ -183,10 +183,10 @@ class ReportController extends AppBaseController
         }
         
         try {
-            // Include every active batch regardless of remaining quantity so that
-            // historical transactions of now-depleted batches can still be reported.
+            // Only list batches with remaining stock; zero-quantity batches are hidden.
             $batches = ProductBatch::where('product_id', $productId)
                 ->where('status', 1) // Active batches only
+                ->where('quantity', '>', 0) // Exclude depleted batches
                 ->orderBy('expiry_date', 'asc') // FEFO order
                 ->get()
                 ->map(function($batch) {
