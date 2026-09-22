@@ -140,8 +140,8 @@ class DailySalesReportService
                     $invoiceTotal += $totalPrice;
                     
                     $invoiceItemsList[] = [
-                        'product_name' => $product ? $product->name : 'N/A',
-                        'product_code' => $product ? $product->unit_code : 'N/A',
+                        'product_name' => $detail->product_name ?? ($product ? $product->name : 'N/A'),
+                        'product_code' => $detail->product_code ?? ($product ? $product->unit_code : 'N/A'),
                         'quantity' => $detail->quantity,
                         'price' => $detail->price,
                         'total' => $totalPrice,
@@ -152,8 +152,8 @@ class DailySalesReportService
                     if (!isset($allProducts[$productKey])) {
                         $allProducts[$productKey] = [
                             'no' => $productCounter++,
-                            'product_name' => $product ? $product->name : 'N/A',
-                            'product_code' => $product ? $product->unit_code : 'N/A',
+                            'product_name' => $detail->product_name ?? ($product ? $product->name : 'N/A'),
+                            'product_code' => $detail->product_code ?? ($product ? $product->unit_code : 'N/A'),
                             'quantity' => 0,
                             'total_sales' => 0,
                             'invoices' => []
@@ -284,8 +284,8 @@ class DailySalesReportService
                 if (!isset($allProducts[$productKey])) {
                     $allProducts[$productKey] = [
                         'no' => $productCounter++,
-                        'product_name' => $product ? $product->name : 'N/A',
-                        'product_code' => $product ? $product->unit_code : 'N/A',
+                        'product_name' => $detail->product_name ?? ($product ? $product->name : 'N/A'),
+                        'product_code' => $detail->product_code ?? ($product ? $product->unit_code : 'N/A'),
                         'quantity' => 0,
                     ];
                 }

@@ -28,7 +28,14 @@ class InvoiceDetail extends Model
         'discount',
         'totalprice',
         'remark',
-        'deducted_from_inventory'
+        'deducted_from_inventory',
+        // Product snapshot - frozen at creation so later product edits
+        // don't rewrite historical invoices.
+        'product_name',
+        'product_code',
+        'uom',
+        'classification_code',
+        'cost'
     ];
 
     /**
@@ -46,7 +53,8 @@ class InvoiceDetail extends Model
         'discount' => 'float',
         'totalprice' => 'float',
         'remark' => 'string',
-        'deducted_from_inventory' => 'boolean'
+        'deducted_from_inventory' => 'boolean',
+        'cost' => 'float'
     ];
 
     /**
@@ -127,6 +135,19 @@ class InvoiceDetail extends Model
         parent::boot();
 
         static::creating(function ($model) {
+            // Freeze the product's current details onto the line. Only fills
+            // fields the caller didn't set, so explicit values still win.
+            if ($model->product_id) {
+                $product = Product::find($model->product_id);
+                if ($product) {
+                    $model->product_name = $model->product_name ?? $product->name;
+                    $model->product_code = $model->product_code ?? $product->unit_code;
+                    $model->uom = $model->uom ?? $product->uom;
+                    $model->classification_code = $model->classification_code ?? $product->classification_code;
+                    $model->cost = $model->cost ?? $product->cost;
+                }
+            }
+
             // Line total is always authoritative here: (quantity x price) minus
             // the optional fixed-amount, whole-line discount. Callers may still
             // set totalprice, but this keeps the discount applied even if they

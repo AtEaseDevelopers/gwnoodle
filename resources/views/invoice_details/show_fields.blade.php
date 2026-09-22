@@ -7,7 +7,7 @@
 <!-- Product Id Field -->
 <div class="form-group">
     {!! Form::label('product_id', __('invoice_details.product')) !!}
-    <p>{{ $invoiceDetail->product->name }}</p>
+    <p>{{ $invoiceDetail->product_name ?? $invoiceDetail->product->name }}</p>
 </div>
 
 <!-- Quantity Field -->

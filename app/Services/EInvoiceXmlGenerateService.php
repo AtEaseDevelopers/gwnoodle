@@ -316,7 +316,7 @@ class EInvoiceXmlGenerateService
                 : ($detail->price ?? 0);
 
             $codes = [];
-            $classificationCode = $detail->product->classification_code ?? '003';
+            $classificationCode = $detail->classification_code ?? $detail->product->classification_code ?? '003';
             
             if ($classificationCode === '004') {
                 Log::warning('E-Invoice - Product using Consolidated classification code', [
@@ -350,7 +350,7 @@ class EInvoiceXmlGenerateService
                 'taxAmount' => (string) $taxAmount,
                 'taxableAmount' => (string) $lineTotal,
                 'taxExemptionReason' => 'exemption',
-                'description' => $detail->product->name ?? ($detail->remark ?? 'Item'),
+                'description' => $detail->product_name ?? $detail->product->name ?? ($detail->remark ?? 'Item'),
                 'originCountryCode' => 'MYS',
                 'itemClassificationCodes' => $codes,
                 'priceAmount' => (string) $unitPrice,
@@ -552,7 +552,7 @@ class EInvoiceXmlGenerateService
                     'taxAmount' => (string) $taxAmount,
                     'taxableAmount' => (string) $lineTotal,
                     'taxExemptionReason' => 'exemption',
-                    'description' => $detail->product->name ?? ($detail->remark ?? 'Item'),
+                    'description' => $detail->product_name ?? $detail->product->name ?? ($detail->remark ?? 'Item'),
                     'originCountryCode' => 'MYS',
                     'itemClassificationCodes' => $codes,
                     'priceAmount' => (string) $unitPrice,

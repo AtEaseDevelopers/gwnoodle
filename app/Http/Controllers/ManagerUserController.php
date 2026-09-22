@@ -61,8 +61,10 @@ class ManagerUserController extends AppBaseController
     {
         $input = $request->all();
 
+        // Keep a readable copy so admins can look the password up later
+        $input['password_display'] = $input['password'];
         $input['password'] = Hash::make($input['password']);
-        $user = $this->userRepository->create($input);  
+        $user = $this->userRepository->create($input);
 
 
         $userRole = [
@@ -173,10 +175,14 @@ class ManagerUserController extends AppBaseController
         
         // Only hash and update password if update_password is checked
         if (isset($input['update_password']) && $input['update_password'] == 1) {
+            // A new password overwrites the displayed copy too
+            $input['password_display'] = $input['password'];
             $input['password'] = Hash::make($input['password']);
         } else {
-            // Remove password from input to prevent updating with empty value
+            // Remove password from input to prevent updating with empty value.
+            // password_display stays as typed by the admin (blank = not known).
             unset($input['password']);
+            $input['password_display'] = ($input['password_display'] ?? '') !== '' ? $input['password_display'] : null;
         }
         
         // Remove the update_password checkbox value from input
