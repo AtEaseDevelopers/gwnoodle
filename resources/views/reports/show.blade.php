@@ -157,6 +157,26 @@
                     $(this).prop('disabled', true);
                 }
             });
+
+            @if(($report->sqlvalue ?? null) === 'SALES_ANALYSIS_REPORT')
+            // Customer/Item can have hundreds of options (this business has
+            // 900+ customers). "Select All" was submitting every single id
+            // as its own form field - 1000+ fields in one POST, which trips
+            // the server's request limits before Laravel even runs, and
+            // fails with no error logged anywhere. When literally every
+            // option is selected, send one compact "%" marker instead
+            // (SalesAnalysisReportService already treats "%" as "no
+            // filter, everything").
+            $('select[name="customer_id[]"], select[name="product_id[]"]').each(function() {
+                var $sel = $(this);
+                var totalOptions = $sel.find('option').length;
+                var selectedCount = ($sel.val() || []).length;
+                if (totalOptions > 0 && selectedCount === totalOptions) {
+                    $sel.prop('disabled', true);
+                    $sel.after('<input type="hidden" name="' + $sel.attr('name') + '" value="%">');
+                }
+            });
+            @endif
         });
         
         $('.form-control.reportdate').datetimepicker({
