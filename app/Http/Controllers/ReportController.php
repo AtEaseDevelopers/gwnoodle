@@ -735,25 +735,26 @@ class ReportController extends AppBaseController
             $service = new \App\Services\SalesAnalysisReportService();
             $reportData = $service->generateReport($dateFrom, $dateTo, $filters);
 
-            $pdf = Pdf::loadView('reports.sales_analysis', [
+            // wkhtmltopdf (WebKit) renders large tables far faster and with far
+            // less memory than DomPDF (see stockCardReportView()) - with every
+            // customer/item selected across a month this can be a document with
+            // thousands of rows, which was exceeding the 180s execution limit
+            // under DomPDF.
+            $pdf = \Barryvdh\Snappy\Facades\SnappyPdf::loadView('reports.sales_analysis', [
                 'reportData' => $reportData,
                 'date_from' => $dateFrom,
                 'date_to' => $dateTo,
             ]);
 
-            $pdf->setPaper('a4', 'landscape');
-            $pdf->setOptions([
-                'isPhpEnabled' => true,
-                'isRemoteEnabled' => true,
-                'defaultFont' => 'sans-serif',
-                'margin_left' => 10,
-                'margin_right' => 10,
-                'margin_top' => 10,
-                'margin_bottom' => 10,
-                'chroot' => public_path(),
-            ]);
+            $pdf->setPaper('a4')
+                ->setOrientation('landscape')
+                ->setOption('enable-local-file-access', true)
+                ->setOption('margin-top', 10)
+                ->setOption('margin-bottom', 10)
+                ->setOption('margin-left', 8)
+                ->setOption('margin-right', 8);
 
-            return $pdf->stream('sales_analysis_report_' . $dateFrom . '_to_' . $dateTo . '.pdf');
+            return $pdf->inline('sales_analysis_report_' . $dateFrom . '_to_' . $dateTo . '.pdf');
 
         } catch (\Throwable $e) {
             \Log::error('Sales Analysis Report PDF Error: ' . $e->getMessage());
