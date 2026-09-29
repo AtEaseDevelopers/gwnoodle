@@ -383,6 +383,27 @@ class ReportController extends AppBaseController
             ]);
         }
 
+        if ($sp == 'SALES_ANALYSIS_REPORT') {
+            $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
+            $date_to = isset($data['dateto']) ? $data['dateto'] : date('Y-m-d');
+            $customer_id = isset($data['customer_id']) ? $data['customer_id'] : null;
+            $product_id = isset($data['product_id']) ? $data['product_id'] : null;
+
+            if ($customer_id && !is_array($customer_id)) {
+                $customer_id = [$customer_id];
+            }
+            if ($product_id && !is_array($product_id)) {
+                $product_id = [$product_id];
+            }
+
+            return redirect()->route('sales_analysis_report_view', [
+                'date_from' => $date_from,
+                'date_to' => $date_to,
+                'customer_id' => $customer_id,
+                'product_id' => $product_id,
+            ]);
+        }
+
         if ($sp == 'FINISHED_GOODS_TRACEABILITY') {
             // Extract parameters for traceability report
             $date_from = isset($data['datefrom']) ? $data['datefrom'] : date('Y-m-d');
@@ -667,6 +688,52 @@ class ReportController extends AppBaseController
 
         } catch(\Throwable $e) {
             \Log::error('Product Qty Sold PDF Error: ' . $e->getMessage());
+            return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+        }
+    }
+
+    public function salesAnalysisReportView(Request $request)
+    {
+        // Same rationale as productQtySoldReportView(): a date range across
+        // many customers/items can be a large PDF.
+        ini_set('memory_limit', '512M');
+
+        $dateFrom = $request->date_from ?? date('Y-m-d');
+        $dateTo = $request->date_to ?? date('Y-m-d');
+        $customerId = $request->customer_id;
+        $productId = $request->product_id;
+
+        $filters = [
+            'customer_id' => $customerId,
+            'product_id' => $productId,
+        ];
+
+        $service = new \App\Services\SalesAnalysisReportService();
+        $reportData = $service->generateReport($dateFrom, $dateTo, $filters);
+
+        try {
+            $pdf = Pdf::loadView('reports.sales_analysis', [
+                'reportData' => $reportData,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ]);
+
+            $pdf->setPaper('a4', 'landscape');
+            $pdf->setOptions([
+                'isPhpEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'sans-serif',
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+                'chroot' => public_path(),
+            ]);
+
+            return $pdf->stream('sales_analysis_report_' . $dateFrom . '_to_' . $dateTo . '.pdf');
+
+        } catch (\Throwable $e) {
+            \Log::error('Sales Analysis Report PDF Error: ' . $e->getMessage());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
     }
