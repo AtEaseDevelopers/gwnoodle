@@ -307,6 +307,27 @@ class ReportController extends AppBaseController
     
     public function run(Request $request)
     {
+        // Nothing in this method previously caught exceptions - any failure
+        // (including the legacy "call <sqlvalue>(...)" stored-procedure
+        // fallback below erroring on a sqlvalue with no matching branch and
+        // no such procedure) surfaced as a raw, unlogged 500. Wrap the whole
+        // dispatch so every report type at least gets a friendly message and
+        // a log entry instead of a blank page.
+        try {
+            return $this->runReport($request);
+        } catch (\Throwable $e) {
+            \Log::error('ReportController::run failed', [
+                'report_id' => $request->input('_report_id'),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return back()->with('error', 'Failed to run report: ' . $e->getMessage());
+        }
+    }
+
+    private function runReport(Request $request)
+    {
         // Report generation (large PDFs/Excel exports) can peak well above PHP's
         // default 128MB limit and return a blank 500. Raise the ceiling for every
         // report type dispatched through this entry point.
@@ -315,7 +336,7 @@ class ReportController extends AppBaseController
         $data = $request->all();
         $report_id = $data['_report_id'];
         $sp = Report::where('id', $report_id)->pluck('sqlvalue')->first();
-        
+
         if ($sp == 'STOCK_BALANCE_REPORT') {
             // generateStockBalanceReport() (the actual view route) reads
             // its filters straight from the request query string, not
