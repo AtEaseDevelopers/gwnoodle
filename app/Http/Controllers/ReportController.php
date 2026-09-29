@@ -694,9 +694,11 @@ class ReportController extends AppBaseController
 
     public function salesAnalysisReportView(Request $request)
     {
-        // Same rationale as productQtySoldReportView(): a date range across
-        // many customers/items can be a large PDF.
-        ini_set('memory_limit', '512M');
+        // A date range with every customer/item selected can pull in a lot
+        // of invoice lines - same rationale as productQtySoldReportView(),
+        // raised further since this report also carries price columns.
+        ini_set('memory_limit', '1024M');
+        set_time_limit(180);
 
         $dateFrom = $request->date_from ?? date('Y-m-d');
         $dateTo = $request->date_to ?? date('Y-m-d');
@@ -708,10 +710,10 @@ class ReportController extends AppBaseController
             'product_id' => $productId,
         ];
 
-        $service = new \App\Services\SalesAnalysisReportService();
-        $reportData = $service->generateReport($dateFrom, $dateTo, $filters);
-
         try {
+            $service = new \App\Services\SalesAnalysisReportService();
+            $reportData = $service->generateReport($dateFrom, $dateTo, $filters);
+
             $pdf = Pdf::loadView('reports.sales_analysis', [
                 'reportData' => $reportData,
                 'date_from' => $dateFrom,

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Invoice;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class SalesAnalysisReportService
@@ -11,6 +12,12 @@ class SalesAnalysisReportService
      * Build the Sales Analysis Report: every invoice line in the date range,
      * optionally restricted to given customers and/or products, grouped by
      * customer with a subtotal per customer and an overall grand total.
+     *
+     * Reads via a single joined query builder call (not Eloquent models with
+     * relations) - a month across every customer/product can be many
+     * thousands of lines, and hydrating full Invoice/Customer/Product
+     * models plus their relations for each one is far heavier than this
+     * report needs and was blowing past the memory limit.
      *
      * @param  string     $dateFrom
      * @param  string     $dateTo
@@ -36,71 +43,72 @@ class SalesAnalysisReportService
             'customers' => [],
         ];
 
-        $query = Invoice::with(['customer', 'invoicedetail.product'])
-            ->whereBetween('date', [
+        $rows = DB::table('invoice_details as d')
+            ->join('invoices as i', 'i.id', '=', 'd.invoice_id')
+            ->leftJoin('customers as c', 'c.id', '=', 'i.customer_id')
+            ->leftJoin('products as p', 'p.id', '=', 'd.product_id')
+            ->where('i.status', Invoice::STATUS_COMPLETED)
+            ->whereBetween('i.date', [
                 Carbon::parse($dateFrom)->startOfDay(),
                 Carbon::parse($dateTo)->endOfDay(),
             ])
-            ->where('status', Invoice::STATUS_COMPLETED);
-
-        if ($customerIds !== null) {
-            $query->whereIn('customer_id', $customerIds);
-        }
-
-        $invoices = $query->get();
+            ->when($customerIds, fn($q) => $q->whereIn('i.customer_id', $customerIds))
+            ->when($productIds, fn($q) => $q->whereIn('d.product_id', $productIds))
+            ->select([
+                'i.id as invoice_id',
+                'i.date as invoice_date',
+                'i.invoiceno',
+                'i.customer_id',
+                DB::raw('COALESCE(c.company, "N/A") as customer_name'),
+                DB::raw('COALESCE(d.product_code, p.unit_code, "N/A") as product_code'),
+                DB::raw('COALESCE(d.product_name, p.name, "N/A") as product_name'),
+                DB::raw('COALESCE(d.uom, p.uom, "") as uom'),
+                'd.quantity',
+                'd.price as unit_price',
+                'd.totalprice as total_price',
+            ])
+            ->orderBy('c.company')
+            ->orderBy('i.date')
+            ->orderBy('i.invoiceno')
+            ->get();
 
         $groups = [];
         $invoiceIdsWithLines = [];
 
-        foreach ($invoices as $invoice) {
-            foreach ($invoice->invoicedetail as $detail) {
-                if ($productIds !== null && !in_array($detail->product_id, $productIds)) {
-                    continue;
-                }
+        foreach ($rows as $row) {
+            $customerKey = $row->customer_id ?? 'unknown';
 
-                $product = $detail->product;
-                $customerKey = $invoice->customer_id ?? 'unknown';
-
-                if (!isset($groups[$customerKey])) {
-                    $groups[$customerKey] = [
-                        'customer_name' => $invoice->customer->company ?? 'N/A',
-                        'lines' => [],
-                        'subtotal_quantity' => 0,
-                        'subtotal_amount' => 0,
-                    ];
-                }
-
-                $groups[$customerKey]['lines'][] = [
-                    'date' => Carbon::parse($invoice->date)->format('d/m/Y'),
-                    'sort_date' => $invoice->date,
-                    'invoiceno' => $invoice->invoiceno,
-                    'product_code' => $detail->product_code ?? ($product->unit_code ?? 'N/A'),
-                    'product_name' => $detail->product_name ?? ($product->name ?? 'N/A'),
-                    'uom' => $detail->uom ?? ($product->uom ?? ''),
-                    'quantity' => $detail->quantity,
-                    'unit_price' => $detail->price,
-                    'total_price' => $detail->totalprice,
+            if (!isset($groups[$customerKey])) {
+                $groups[$customerKey] = [
+                    'customer_name' => $row->customer_name,
+                    'lines' => [],
+                    'subtotal_quantity' => 0,
+                    'subtotal_amount' => 0,
                 ];
-
-                $groups[$customerKey]['subtotal_quantity'] += $detail->quantity;
-                $groups[$customerKey]['subtotal_amount'] += $detail->totalprice;
-
-                $invoiceIdsWithLines[$invoice->id] = true;
-                $reportData['summary']['total_lines']++;
-                $reportData['summary']['total_quantity'] += $detail->quantity;
-                $reportData['summary']['total_amount'] += $detail->totalprice;
             }
+
+            $groups[$customerKey]['lines'][] = [
+                'date' => Carbon::parse($row->invoice_date)->format('d/m/Y'),
+                'invoiceno' => $row->invoiceno,
+                'product_code' => $row->product_code,
+                'product_name' => $row->product_name,
+                'uom' => $row->uom,
+                'quantity' => $row->quantity,
+                'unit_price' => $row->unit_price,
+                'total_price' => $row->total_price,
+            ];
+
+            $groups[$customerKey]['subtotal_quantity'] += $row->quantity;
+            $groups[$customerKey]['subtotal_amount'] += $row->total_price;
+
+            $invoiceIdsWithLines[$row->invoice_id] = true;
+            $reportData['summary']['total_lines']++;
+            $reportData['summary']['total_quantity'] += $row->quantity;
+            $reportData['summary']['total_amount'] += $row->total_price;
         }
 
-        // Sort each customer's lines by date then invoice number
-        foreach ($groups as $key => $group) {
-            usort($groups[$key]['lines'], function ($a, $b) {
-                return [$a['sort_date'], $a['invoiceno']] <=> [$b['sort_date'], $b['invoiceno']];
-            });
-        }
-
-        // Sort customers alphabetically
-        uasort($groups, fn($a, $b) => strcmp($a['customer_name'], $b['customer_name']));
+        // Rows already arrive sorted by customer/date/invoiceno via the query,
+        // so no further in-PHP sort is needed here.
 
         $reportData['customers'] = array_values($groups);
         $reportData['summary']['total_invoices'] = count($invoiceIdsWithLines);
@@ -111,7 +119,7 @@ class SalesAnalysisReportService
 
     /**
      * Turn a request filter value into a plain array of ids, or null when it
-     * means "no filter" (empty / missing / the "ALL" option value "%").
+     * means "no filter" (empty / missing / the legacy "ALL" option value "%").
      */
     private function normalizeFilter($value)
     {
