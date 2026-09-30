@@ -91,9 +91,10 @@ class ProductBatchController extends AppBaseController
             'expiry_date' => 'nullable|date',
             'quantity' => 'nullable|integer|min:1',
             'status' => 'sometimes|integer',
-            // Lets the batch record be backdated to when it was actually
-            // created. Not part of the barcode - that still uses expiry_date.
-            'created_at' => 'nullable|date|before_or_equal:now',
+            // Lets the batch record be back-dated or forward-dated from when
+            // it's actually saved. Not part of the barcode - that still
+            // uses expiry_date.
+            'created_at' => 'nullable|date',
         ]);
 
         // Guard: the expiry date must match the date encoded in the batch code.
@@ -137,9 +138,10 @@ class ProductBatchController extends AppBaseController
             // Create product batch (with no stock yet)
             $productBatch = $this->productBatchRepository->create($input);
 
-            // Backdate the record if the form's Created At was changed from
-            // "now" - a plain save() here only touches updated_at, since
-            // Eloquent only auto-stamps created_at on the initial insert.
+            // Override the record's created_at if the form's Created At was
+            // changed from "now" - a plain save() here only touches
+            // updated_at, since Eloquent only auto-stamps created_at on the
+            // initial insert.
             if ($requestedCreatedAt) {
                 $productBatch->created_at = $requestedCreatedAt;
                 $productBatch->save();
