@@ -93,11 +93,21 @@
                                     <!-- Add-on Fields (Optional) -->
                                     <div class="form-group">
                                         <label for="add_on_fields">Add-on Fields <span class="text-muted">(Optional)</span></label>
-                                        <input type="text" class="form-control" id="add_on_fields" 
-                                               name="add_on_fields" 
-                                               placeholder="Enter add-on value (e.g., 001, ABC, EXTRA)" 
+                                        <input type="text" class="form-control" id="add_on_fields"
+                                               name="add_on_fields"
+                                               placeholder="Enter add-on value (e.g., 001, ABC, EXTRA)"
                                                value="{{ old('add_on_fields') }}">
                                         <small class="text-muted">Optional: If provided, will append "/value" to the barcode</small>
+                                    </div>
+
+                                    <!-- Created At (Optional - backdate the record) -->
+                                    <div class="form-group">
+                                        <label for="created_at">Created At <span class="text-muted">(Optional)</span></label>
+                                        <input type="datetime-local" class="form-control" id="created_at"
+                                               name="created_at"
+                                               max="{{ now()->format('Y-m-d\TH:i') }}"
+                                               value="{{ old('created_at', now()->format('Y-m-d\TH:i')) }}">
+                                        <small class="text-muted">Defaults to now - change this only to backdate the batch record to when it was actually created. It does not affect the barcode, which is still built from Expiry Date.</small>
                                     </div>
 
                                     <!-- Hidden display fields for JS (not shown to user) -->

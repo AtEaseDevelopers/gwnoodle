@@ -90,7 +90,10 @@ class ProductBatchController extends AppBaseController
             'batch_code' => 'required|string|unique:product_batches,batch_code',
             'expiry_date' => 'nullable|date',
             'quantity' => 'nullable|integer|min:1',
-            'status' => 'sometimes|integer'
+            'status' => 'sometimes|integer',
+            // Lets the batch record be backdated to when it was actually
+            // created. Not part of the barcode - that still uses expiry_date.
+            'created_at' => 'nullable|date|before_or_equal:now',
         ]);
 
         // Guard: the expiry date must match the date encoded in the batch code.
@@ -122,11 +125,25 @@ class ProductBatchController extends AppBaseController
             : 0;
         $input['quantity'] = 0;
 
+        // created_at isn't mass-assignable (it's not part of normal batch
+        // data), so it's applied separately below after the insert rather
+        // than through the repository's create().
+        $requestedCreatedAt = $request->filled('created_at') ? \Carbon\Carbon::parse($request->created_at) : null;
+        unset($input['created_at']);
+
         DB::beginTransaction();
 
         try {
             // Create product batch (with no stock yet)
             $productBatch = $this->productBatchRepository->create($input);
+
+            // Backdate the record if the form's Created At was changed from
+            // "now" - a plain save() here only touches updated_at, since
+            // Eloquent only auto-stamps created_at on the initial insert.
+            if ($requestedCreatedAt) {
+                $productBatch->created_at = $requestedCreatedAt;
+                $productBatch->save();
+            }
 
             // If an initial quantity was requested, queue it for approval
             if ($requestedQuantity > 0) {
