@@ -106,7 +106,6 @@
                                         <input type="datetime-local" class="form-control" id="created_at"
                                                name="created_at"
                                                value="{{ old('created_at', now()->format('Y-m-d\TH:i')) }}">
-                                        <small class="text-muted">Defaults to now - change this to back-date or forward-date the batch record. It does not affect the barcode, which is still built from Expiry Date.</small>
                                     </div>
 
                                     <!-- Hidden display fields for JS (not shown to user) -->
