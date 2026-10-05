@@ -1963,7 +1963,8 @@ class InvoiceController extends AppBaseController
         $companyInfo = [
             'name' => 'GW NOODLES SDN BHD',
             'ssm' => 'TIN: C24694011050',
-            'address1' => '23 JLN SETIA PERNIAGAAN 9,81100 JOHOR BAHRU, MALAYSIA',
+            'address1' => 'NO. 18 & 20, JALAN EKOPERNIAGAAN 3/4, TAMAN EKOPERNIAGAAN, 81100 JOHOR BAHRU, JOHOR.',
+            'address2' => '23 JLN SETIA PERNIAGAAN 9,81100 JOHOR BAHRU, MALAYSIA',
             'phone' => '016-723-7931',
             'msic_code' => '10799'
         ];

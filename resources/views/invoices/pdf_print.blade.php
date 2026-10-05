@@ -288,6 +288,9 @@
     <div class="company-header">
         <div class="company-name">{{ strtoupper($companyInfo['name']) }}</div>
         <div class="company-address">{{ $companyInfo['address1'] }}</div>
+        @if (!empty($companyInfo['address2']))
+            <div class="company-address">{{ $companyInfo['address2'] }}</div>
+        @endif
         <div class="company-address">Tel: {{ $companyInfo['phone'] }}</div>
         <div class="company-tin">{{ $companyInfo['ssm'] }} | MSIC CODE:{{ $companyInfo['msic_code'] }}</div>
     </div>

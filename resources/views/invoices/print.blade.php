@@ -181,9 +181,12 @@ p{
         <!-- Company Header -->
         <div class="company">{{ config('invoice.name') }}</div>
         <div class="address">{{  config('invoice.ssm') }}</div>
+        <div class="address">{{ config('invoice.new_address1') }}</div>
+        <div class="address">{{ config('invoice.new_address2') }}</div>
+        <div class="address">{{ config('invoice.new_address3') }}</div>
         <div class="address">{{  config('invoice.address1') }}</div>
         <div class="address">{{ config('invoice.address2') }}</div>
-        <div class="address">{{ env('INVOICE_ADDRESS3') }}</div>
+        <div class="address">{{ config('invoice.address3') }}</div>
         <div class="address">(TEL){{ config('invoice.phone') ?? '+60167237931' }}</div>
 
         <div class="divider"></div>

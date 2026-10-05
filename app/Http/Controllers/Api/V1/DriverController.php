@@ -9115,6 +9115,9 @@ class DriverController extends Controller
                 <!-- Company Header -->
                 <div class="company">GW NOODLES SDN BHD</div>
                 <div class="address">(201601033587)</div>
+                <div class="address">NO. 18 & 20, JALAN EKOPERNIAGAAN 3/4,</div>
+                <div class="address">TAMAN EKOPERNIAGAAN,</div>
+                <div class="address">81100 JOHOR BAHRU, JOHOR.</div>
                 <div class="address">23, JALAN SETIA PERNIAGAAN 9,</div>
                 <div class="address">TAMAN SETIA PERNIAGAAN,</div>
                 <div class="address">(TEL)+60167237931</div>
