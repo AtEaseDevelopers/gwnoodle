@@ -43,7 +43,9 @@ table td, table th{
 }
 .address{
     text-align: center;
-    font-size: 18px;
+    /* 17px (not 18) so the longest line, "NO. 18 & 20, JALAN EKOPERNIAGAAN
+       3/4,", fits the 300pt receipt width without wrapping. */
+    font-size: 17px;
     margin: 1px 0;
     white-space: normal;
     word-break: break-word;
