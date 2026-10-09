@@ -4569,10 +4569,18 @@ class DriverController extends Controller
         }
 
         try {
-            // Get special prices
-            $specialPrices = SpecialPrice::where('status', 1)
-                    ->pluck('price', 'product_id')
-                    ->toArray();
+            // Special prices belong to a specific customer. Only apply them
+            // when the app says which customer it's selling to - loading every
+            // customer's special prices into one product-keyed list made one
+            // customer's price show up for all of them. Without a customer_id
+            // everyone gets the normal product price.
+            $specialPrices = [];
+            if ($request->filled('customer_id')) {
+                $specialPrices = SpecialPrice::where('status', 1)
+                        ->where('customer_id', $request->customer_id)
+                        ->pluck('price', 'product_id')
+                        ->toArray();
+            }
 
             // Get the driver's currently active trip (trip_id is only set
             // while a trip is genuinely active, cleared on end)
