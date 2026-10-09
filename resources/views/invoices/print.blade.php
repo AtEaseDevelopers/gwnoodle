@@ -255,7 +255,12 @@ p{
         <!-- Items Detail -->
         <div class="itemize-header">Items :</div>
         
-        <table style="margin-bottom: 5px;">
+        <table style="margin-bottom: 5px; table-layout: fixed; width: 100%;">
+            <colgroup>
+                <col style="width: 24%;">
+                <col style="width: 38%;">
+                <col style="width: 38%;">
+            </colgroup>
             <thead>
                 <tr style="font-weight: bold;">
                     <td class="ta-l">Price</td>
@@ -271,9 +276,9 @@ p{
                          discount on its own line below so gross x qty - discount = Amount.
                          Un-discounted lines keep the net-derived unit price (handles
                          fractional-sen rounding, same as the AutoCount sync). --}}
-                    <td class="ta-l" style="width: 25%;">{{ number_format(($invoicedetail['discount'] ?? 0) > 0 ? $invoicedetail['price'] : ($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price']), 3) }}</td>
-                    <td class="ta-r" style="width: 30%;">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
-                    <td class="ta-r" style="width: 20%;">{{ number_format($invoicedetail['totalprice'], 3) }}</td>
+                    <td class="ta-l">{{ number_format(($invoicedetail['discount'] ?? 0) > 0 ? $invoicedetail['price'] : ($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price']), 3) }}</td>
+                    <td class="ta-r">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
+                    <td class="ta-r">{{ number_format($invoicedetail['totalprice'], 3) }}</td>
                 </tr>
                 <tr class="item-row">
                     <td colspan="3" class="item-name">{{ $invoicedetail['product']['name'] }} <br>({{$invoicedetail->batch->batch_code }})</td>
@@ -287,12 +292,20 @@ p{
             </tbody>
         </table>
         <div class="divider"></div>
-        <table>
-            </tbody>
+        <table style="table-layout: fixed; width: 100%;">
+            <colgroup>
+                <col style="width: 24%;">
+                <col style="width: 38%;">
+                <col style="width: 38%;">
+            </colgroup>
+            <tbody>
                 <tr class="item-row">
-                    <td class="ta-l" style="width: 25%;"></td>
-                    <td class="ta-r" style="width: 30%;">{{ $totalquantity }}</td>
-                    <td class="ta-r" style="width: 20%;">{{ number_format($totalamount, 3) }}</td>
+                    <td class="ta-l"></td>
+                    {{-- Same column widths as the item rows above; the hidden " UNIT"
+                         pads the number so it sits where the item quantities do
+                         instead of crowding the amount. --}}
+                    <td class="ta-r">{{ $totalquantity }}<span style="visibility: hidden;">&nbsp;UNIT</span></td>
+                    <td class="ta-r">{{ number_format($totalamount, 3) }}</td>
                 </tr>
             </tbody>
         </table>
