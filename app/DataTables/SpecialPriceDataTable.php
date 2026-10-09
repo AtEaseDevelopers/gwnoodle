@@ -30,7 +30,7 @@ class SpecialPriceDataTable extends DataTable
     public function query(SpecialPrice $model)
     {
         return $model->newQuery()
-        ->with('product:id,name')
+        ->with('product:id,name,unit_code')
         ->with('customer:id,company')
         ->select('special_prices.*');
     }
@@ -114,7 +114,8 @@ class SpecialPriceDataTable extends DataTable
                         'render' => 'function(data, type){return "<input type=\'checkbox\' class=\'checkboxselect\' checkboxid=\'"+data+"\'/>";}'
                     ],
                     [
-                    'targets' => 4,
+                    // Status column (index 5 now that Unit Code sits at 2)
+                    'targets' => 5,
                     'render' => 'function(data, type){return data == 1 ? "Active" : "Unactive";}'],
                 ],
                 'initComplete' => 'function(){
@@ -160,6 +161,10 @@ class SpecialPriceDataTable extends DataTable
             'product_id'=> new \Yajra\DataTables\Html\Column(['title' => trans('special_prices.product'),
             'data' => 'product.name',
             'name' => 'product.name']),
+
+            'unit_code'=> new \Yajra\DataTables\Html\Column(['title' => 'Unit Code',
+            'data' => 'product.unit_code',
+            'name' => 'product.unit_code']),
 
             'customer_id'=> new \Yajra\DataTables\Html\Column(['title' =>  trans('special_prices.customer'),
             'data' => 'customer.company',
