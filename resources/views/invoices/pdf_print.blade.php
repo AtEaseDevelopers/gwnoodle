@@ -401,9 +401,14 @@
                 {{-- Discounted lines show the gross unit price + the discount so
                      gross x qty - disc = Total. Un-discounted lines keep the
                      net-derived unit price (fractional-sen safe). --}}
-                <td class="col-price">{{ number_format(($detail->discount ?? 0) > 0 ? $detail->price : ($detail->quantity > 0 ? $detail->totalprice / $detail->quantity : $detail->price), 3) }}</td>
-                <td class="col-disc">{{ ($detail->discount ?? 0) > 0 ? number_format($detail->discount, 3) : '-' }}</td>
-                <td class="col-total">{{ number_format($detail->totalprice, 3) }}</td>
+                @php
+                    // Amounts always show 2dp; the unit price keeps a 3rd
+                    // decimal only when it's significant (e.g. RM0.125).
+                    $unitPrice = ($detail->discount ?? 0) > 0 ? $detail->price : ($detail->quantity > 0 ? $detail->totalprice / $detail->quantity : $detail->price);
+                @endphp
+                <td class="col-price">{{ number_format($unitPrice, round($unitPrice * 1000) % 10 ? 3 : 2) }}</td>
+                <td class="col-disc">{{ ($detail->discount ?? 0) > 0 ? number_format($detail->discount, 2) : '-' }}</td>
+                <td class="col-total">{{ number_format($detail->totalprice, 2) }}</td>
                 @endif
             </tr>
             @if(!empty($detail->remark))
@@ -439,7 +444,7 @@
             <td style="width: 35%; text-align: right;">
                 <div style="border: 1px solid #000; padding: 5px 10px; text-align: center;">
                     <div style="font-size: 14px; font-weight: bold;">TOTAL (RM)</div>
-                    <div style="font-size: 25px; font-weight: bold;">{{ number_format($totalAmount, 3) }}</div>
+                    <div style="font-size: 25px; font-weight: bold;">{{ number_format($totalAmount, 2) }}</div>
                 </div>
             </td>
         </tr>

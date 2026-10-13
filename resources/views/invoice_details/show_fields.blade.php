@@ -25,7 +25,7 @@
 <!-- TotalPrice Field -->
 <div class="form-group">
     {!! Form::label('totalprice', __('invoice_details.total_price')) !!}
-    <p>{{ number_format($invoiceDetail->totalprice, 3) }}</p>
+    <p>{{ number_format($invoiceDetail->totalprice, 2) }}</p>
 </div>
 
 <!-- Remark Field -->

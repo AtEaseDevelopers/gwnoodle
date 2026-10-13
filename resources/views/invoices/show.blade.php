@@ -66,8 +66,8 @@
                                                     <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
                                                     <td>{{ number_format($invoicedetail['price'], 3) }}</td>
-                                                    <td>{{ number_format($invoicedetail['discount'] ?? 0, 3) }}</td>
-                                                    <td>{{ number_format($invoicedetail['totalprice'], 3) }}</td>
+                                                    <td>{{ number_format($invoicedetail['discount'] ?? 0, 2) }}</td>
+                                                    <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
                                                         <div class='btn-group'>
@@ -95,8 +95,8 @@
                                                     <td>{{ $invoicedetail['batch']['batch_code'] }}</td>
                                                     <td>{{ $invoicedetail['quantity'] }}</td>
                                                     <td>{{ number_format($invoicedetail['price'], 3) }}</td>
-                                                    <td>{{ number_format($invoicedetail['discount'] ?? 0, 3) }}</td>
-                                                    <td>{{ number_format($invoicedetail['totalprice'], 3) }}</td>
+                                                    <td>{{ number_format($invoicedetail['discount'] ?? 0, 2) }}</td>
+                                                    <td>{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                                                     <td>{{ $invoicedetail['remark'] ?? '-' }}</td>
                                                     <td>
                                                         <div class='btn-group'>

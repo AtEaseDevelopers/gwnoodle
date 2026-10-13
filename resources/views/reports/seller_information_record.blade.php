@@ -143,7 +143,7 @@
                                                 <td class="ta-l">BAG</td>
                                                 {{-- Net-effective unit price when the line is discounted so Unit Price x Qty == Amount; un-discounted lines keep the stored price. --}}
                                                 <td class="ta-r">{{ number_format(($id['discount'] ?? 0) > 0 ? ($id['quantity'] > 0 ? $id['totalprice'] / $id['quantity'] : $id['price']) : $id['price'],4) }}</td>
-                                                <td class="ta-r">{{ number_format($id['totalprice'],3) }}</td>
+                                                <td class="ta-r">{{ number_format($id['totalprice'],2) }}</td>
                                             </tr>
                                             {{-- second for each --}}
                                         @endforeach

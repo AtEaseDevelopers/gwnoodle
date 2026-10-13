@@ -246,7 +246,7 @@ p{
         <table class="items-summary">
             <tr>
                 <td class="ta-l">total {{ count($invoice['invoicedetail']) }} items :</td>
-                <td class="ta-r" style="font-weight: bold;">{{ number_format($totalamount, 3) }}</td>
+                <td class="ta-r" style="font-weight: bold;">{{ number_format($totalamount, 2) }}</td>
             </tr>
         </table>
 
@@ -276,16 +276,21 @@ p{
                          discount on its own line below so gross x qty - discount = Amount.
                          Un-discounted lines keep the net-derived unit price (handles
                          fractional-sen rounding, same as the AutoCount sync). --}}
-                    <td class="ta-l">{{ number_format(($invoicedetail['discount'] ?? 0) > 0 ? $invoicedetail['price'] : ($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price']), 3) }}</td>
+                    @php
+                        // Amounts always show 2dp; the unit price keeps a 3rd
+                        // decimal only when it's significant (e.g. RM0.125).
+                        $unitPrice = ($invoicedetail['discount'] ?? 0) > 0 ? $invoicedetail['price'] : ($invoicedetail['quantity'] > 0 ? $invoicedetail['totalprice'] / $invoicedetail['quantity'] : $invoicedetail['price']);
+                    @endphp
+                    <td class="ta-l">{{ number_format($unitPrice, round($unitPrice * 1000) % 10 ? 3 : 2) }}</td>
                     <td class="ta-r">{{ $invoicedetail['quantity'] }} {{ $invoicedetail['uom'] ?? 'UNIT' }}</td>
-                    <td class="ta-r">{{ number_format($invoicedetail['totalprice'], 3) }}</td>
+                    <td class="ta-r">{{ number_format($invoicedetail['totalprice'], 2) }}</td>
                 </tr>
                 <tr class="item-row">
                     <td colspan="3" class="item-name">{{ $invoicedetail['product']['name'] }} <br>({{$invoicedetail->batch->batch_code }})</td>
                 </tr>
                 @if(($invoicedetail['discount'] ?? 0) > 0)
                 <tr class="item-row">
-                    <td colspan="3" class="ta-r" style="font-size: 11px;">Less Discount: -{{ number_format($invoicedetail['discount'], 3) }}</td>
+                    <td colspan="3" class="ta-r" style="font-size: 11px;">Less Discount: -{{ number_format($invoicedetail['discount'], 2) }}</td>
                 </tr>
                 @endif
                 @endforeach
@@ -305,7 +310,7 @@ p{
                          pads the number so it sits where the item quantities do
                          instead of crowding the amount. --}}
                     <td class="ta-r">{{ $totalquantity }}<span style="visibility: hidden;">&nbsp;UNIT</span></td>
-                    <td class="ta-r">{{ number_format($totalamount, 3) }}</td>
+                    <td class="ta-r">{{ number_format($totalamount, 2) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -315,7 +320,7 @@ p{
         <table class="totals totals-section-bold">
             <tr>
                 <td class="ta-r">Total :</td>
-                <td class="ta-r" style="font-size: 20px; font-weight: bold;">RM {{ number_format($totalamount, 3) }}</td>
+                <td class="ta-r" style="font-size: 20px; font-weight: bold;">RM {{ number_format($totalamount, 2) }}</td>
             </tr>
         </table>
 
@@ -326,7 +331,7 @@ p{
         <table class="payment-section">
             <tr>
                 <td class="ta-l">Payments :</td>
-                <td class="ta-r">Cash {{ number_format($totalamount, 3) }}</td>
+                <td class="ta-r">Cash {{ number_format($totalamount, 2) }}</td>
             </tr>
         </table>
         @endif

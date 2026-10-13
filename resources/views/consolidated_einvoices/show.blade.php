@@ -75,7 +75,7 @@
                                                                          }
                                                                      }
                                                                  @endphp
-                                                                 MYR {{ number_format($total, 3) }}
+                                                                 MYR {{ number_format($total, 2) }}
                                                              </td>
                                                          </tr>
                                                      @endforeach
