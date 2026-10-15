@@ -448,6 +448,18 @@ class InvoiceDataTable extends DataTable
                 'searchable' => true
             ]),
 
+            // Placed after the columnDefs-indexed columns above (targets 4-7)
+            // so adding it doesn't shift their render rules. Blank for
+            // back-office invoices, which have no driver.
+            'driver' => new \Yajra\DataTables\Html\Column([
+                'title' => trans('invoices.driver'),
+                'data' => 'driver.name',
+                'name' => 'driver.name',
+                'defaultContent' => '',
+                'orderable' => false,
+                'searchable' => true
+            ]),
+
             'created_by' => new \Yajra\DataTables\Html\Column([
                 'title' => 'Created By',
                 'data' => 'created_by',
