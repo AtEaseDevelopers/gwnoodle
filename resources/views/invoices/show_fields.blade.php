@@ -22,6 +22,13 @@
     <p>{{ $invoice->driver->name ?? '' }}</p>
 </div>
 
+<!-- Created By Field (same rule as the invoice list: a trip invoice was
+     created by its driver, anything else by the back-office user) -->
+<div class="form-group">
+    {!! Form::label('created_by', 'Created By') !!}:
+    <p>{{ $invoice->trip_uuid ? ($invoice->driver->name ?? 'Driver') : ($invoice->creator->name ?? 'Admin') }}</p>
+</div>
+
 <!-- Paymentterm Field -->
 <div class="form-group">
     {!! Form::label('paymentterm', __('invoices.payment_term')) !!}:
