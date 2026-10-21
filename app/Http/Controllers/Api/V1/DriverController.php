@@ -2362,6 +2362,17 @@ class DriverController extends Controller
             // (Only for items that were originally in inventory)
             // ============================================
             $oldDetails = InvoiceDetail::where('invoice_id', $invoice->id)->get();
+
+            // Line prices are immutable through this endpoint: an edit keeps
+            // each existing line's stored price regardless of what the app
+            // sends (the app rebuilds lines from its current price list on
+            // edit, which must not silently re-price the original sale).
+            // Price corrections are admin-only (invoices.updatedetail).
+            $lockedPrices = [];
+            foreach ($oldDetails as $od) {
+                $lockedPrices[$od->product_id . '|' . $od->product_batch_id] = (float) $od->price;
+            }
+
             $inventoryBalance = null;
             
             if ($trip) {
@@ -2515,15 +2526,19 @@ class DriverController extends Controller
                 $item = $validItem['item'];
                 $productBatch = $validItem['productBatch'];
                 
+                // Keep the original sale price for lines that already existed
+                // on this invoice; only genuinely new lines use the app's price.
+                $price = $lockedPrices[$item['product_id'] . '|' . $item['product_batch_id']] ?? $item['price'];
+
                 // Create invoice detail
                 $invoicedetail = new InvoiceDetail();
                 $invoicedetail->invoice_id = $invoice->id;
                 $invoicedetail->product_id = $item['product_id'];
                 $invoicedetail->product_batch_id = $item['product_batch_id'];
                 $invoicedetail->quantity = $item['quantity'];
-                $invoicedetail->price = $item['price'];
+                $invoicedetail->price = $price;
                 $invoicedetail->discount = $item['discount'] ?? 0;
-                $invoicedetail->totalprice = ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
+                $invoicedetail->totalprice = ($item['quantity'] * $price) - ($item['discount'] ?? 0);
                 $invoicedetail->remark = $item['remark'] ?? null;
                 $invoicedetail->deducted_from_inventory = true;
                 $invoicedetail->save();
@@ -2554,15 +2569,19 @@ class DriverController extends Controller
             
             // Process items not in inventory (create invoice details but NO stock deduction)
             foreach ($itemsToIgnore as $ignoredItem) {
+                // Keep the original sale price for lines that already existed
+                // on this invoice; only genuinely new lines use the app's price.
+                $price = $lockedPrices[$ignoredItem['product_id'] . '|' . $ignoredItem['product_batch_id']] ?? $ignoredItem['price'];
+
                 // Create invoice detail WITHOUT deducting stock
                 $invoicedetail = new InvoiceDetail();
                 $invoicedetail->invoice_id = $invoice->id;
                 $invoicedetail->product_id = $ignoredItem['product_id'];
                 $invoicedetail->product_batch_id = $ignoredItem['product_batch_id'];
                 $invoicedetail->quantity = $ignoredItem['quantity'];
-                $invoicedetail->price = $ignoredItem['price'];
+                $invoicedetail->price = $price;
                 $invoicedetail->discount = $ignoredItem['discount'] ?? 0;
-                $invoicedetail->totalprice = ($ignoredItem['quantity'] * $ignoredItem['price']) - ($ignoredItem['discount'] ?? 0);
+                $invoicedetail->totalprice = ($ignoredItem['quantity'] * $price) - ($ignoredItem['discount'] ?? 0);
                 $invoicedetail->remark = $ignoredItem['remark'] ?? null;
                 $invoicedetail->deducted_from_inventory = false;
                 $invoicedetail->save();
