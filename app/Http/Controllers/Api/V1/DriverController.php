@@ -1853,15 +1853,16 @@ class DriverController extends Controller
     }
 
     /**
-     * Find an invoice this driver already created today for the same customer
-     * with exactly the same products and quantities.
+     * Find an invoice this driver created in the last 10 minutes for the same
+     * customer with exactly the same products and quantities.
      *
      * Guards against the mobile app double-submitting one sale (the online
      * invoice call is treated as timed out, the sale is queued offline and
      * replayed through bulk-add-invoice, but the first call had in fact
      * succeeded). The two endpoints don't share an invoice-number format, so
-     * the match is on content: same driver + customer + trip, created today,
-     * same set of (product_id, quantity) lines.
+     * the match is on content: same driver + customer + trip, created within
+     * the window, same set of (product_id, quantity) lines. The window is
+     * short so a genuine repeat sale later in the day is not swallowed.
      *
      * @param  \App\Models\Driver  $driver
      * @param  int|string          $customerId
@@ -1885,7 +1886,7 @@ class DriverController extends Controller
             ->where('customer_id', $customerId)
             ->where('trip_uuid', $driver->trip_id)
             ->where('status', Invoice::STATUS_COMPLETED)
-            ->whereDate('created_at', now()->toDateString())
+            ->where('created_at', '>=', now()->subMinutes(10))
             ->with('invoicedetail')
             ->orderBy('id')
             ->get();
