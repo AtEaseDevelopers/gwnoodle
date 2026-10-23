@@ -258,6 +258,15 @@ class StockOutRequestDataTable extends DataTable
                 'className' => 'text-center'
             ]),
 
+            'remark' => new \Yajra\DataTables\Html\Column([
+                'title' => 'Remarks',
+                'data' => 'remark',
+                'name' => 'remark',
+                'defaultContent' => '-',
+                'width' => '200px',
+                'className' => 'text-left'
+            ]),
+
             'status' => new \Yajra\DataTables\Html\Column([
                 'title' => 'Status',
                 'data' => 'status',
