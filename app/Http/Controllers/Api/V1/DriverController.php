@@ -1871,13 +1871,16 @@ class DriverController extends Controller
      */
     private function findDuplicateInvoice($driver, $customerId, array $details)
     {
+        // Total quantity per product, so a sale stored as several batch lines
+        // (see allocateLorryStock) still matches a resubmission of one line.
         $signature = function ($rows) {
-            $keys = [];
+            $totals = [];
             foreach ($rows as $row) {
-                $keys[] = (int) $row['product_id'] . 'x' . (int) $row['quantity'];
+                $productId = (int) $row['product_id'];
+                $totals[$productId] = ($totals[$productId] ?? 0) + (int) $row['quantity'];
             }
-            sort($keys);
-            return $keys;
+            ksort($totals);
+            return $totals;
         };
 
         $wanted = $signature($details);
@@ -1898,6 +1901,73 @@ class DriverController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Split an invoice line across the lorry's stock of its product.
+     *
+     * The driver app bills a whole line to one batch even when that batch has
+     * less on the lorry than the line's quantity (or none at all). Take what
+     * the requested batch has, then the rest from the lorry's other batches
+     * of the same product, earliest expiry first. Whatever the lorry can't
+     * cover stays on the requested batch without a stock deduction.
+     *
+     * $reserved carries quantities already allocated earlier in the same
+     * request, so two lines of one product can't both claim the same stock.
+     *
+     * @return array ['deduct' => lines to deduct, 'ignore' => lines not deducted]
+     */
+    private function allocateLorryStock($inventoryBalance, array $item, array &$reserved)
+    {
+        $remaining = (int) $item['quantity'];
+        $batchIds = [(int) $item['product_batch_id']];
+
+        if ($inventoryBalance && !empty($inventoryBalance->batches)) {
+            // No status filter: a batch the warehouse has run out of is
+            // marked inactive but can still be sitting on a lorry.
+            $otherBatchIds = ProductBatch::whereIn('id', array_keys($inventoryBalance->batches))
+                ->where('product_id', $item['product_id'])
+                ->where('id', '!=', $item['product_batch_id'])
+                ->orderByRaw('expiry_date IS NULL, expiry_date ASC')
+                ->orderBy('id')
+                ->pluck('id')
+                ->all();
+            $batchIds = array_merge($batchIds, $otherBatchIds);
+        }
+
+        $deduct = [];
+        foreach ($batchIds as $batchId) {
+            if ($remaining <= 0) {
+                break;
+            }
+            $available = ($inventoryBalance ? $inventoryBalance->getBatchQuantity($batchId) : 0) - ($reserved[$batchId] ?? 0);
+            if ($available <= 0) {
+                continue;
+            }
+            $quantity = min($available, $remaining);
+            $reserved[$batchId] = ($reserved[$batchId] ?? 0) + $quantity;
+            $deduct[] = array_merge($item, ['product_batch_id' => $batchId, 'quantity' => $quantity]);
+            $remaining -= $quantity;
+        }
+
+        $ignore = $remaining > 0 ? [array_merge($item, ['quantity' => $remaining])] : [];
+
+        // Discount and remark belong to the whole line: keep them on the
+        // first resulting line only, so a split doesn't multiply them.
+        $keepOnFirstOnly = function (array $lines, bool $keepFirst) {
+            foreach ($lines as $i => $line) {
+                if (!$keepFirst || $i > 0) {
+                    $lines[$i]['discount'] = 0;
+                    $lines[$i]['remark'] = null;
+                }
+            }
+            return $lines;
+        };
+
+        return [
+            'deduct' => $keepOnFirstOnly($deduct, true),
+            'ignore' => $keepOnFirstOnly($ignore, empty($deduct)),
+        ];
     }
 
     public function addinvoice(Request $request)
@@ -1993,7 +2063,8 @@ class DriverController extends Controller
             $itemsToProcess = [];     // Items that exist in inventory (will deduct stock)
             $itemsToIgnore = [];       // Items not in inventory (will not deduct stock)
             $invalidBatches = [];      // Invalid product batches (product_id mismatch)
-            
+            $reserved = [];            // Lorry stock already allocated in this request
+
             foreach ($data['invoicedetail'] as $index => $item) {
                 // Check if product batch exists and matches product_id
                 $productBatch = ProductBatch::where('id', $item['product_batch_id'])
@@ -2012,40 +2083,18 @@ class DriverController extends Controller
                     continue;
                 }
                 
-                // Check if batch exists in driver's inventory
-                $availableQuantity = 0;
-                $hasInventory = false;
-                
-                if ($inventoryBalance) {
-                    $availableQuantity = $inventoryBalance->getBatchQuantity($item['product_batch_id']);
-                    if ($availableQuantity > 0) {
-                        $hasInventory = true;
-                    }
+                $allocation = $this->allocateLorryStock($inventoryBalance, $item, $reserved);
+                foreach ($allocation['deduct'] as $line) {
+                    $itemsToProcess[] = ['index' => $index, 'item' => $line, 'productBatch' => $productBatch];
                 }
-                
-                if ($hasInventory) {
-                    // Item exists in inventory - will deduct stock
-                    $itemsToProcess[] = [
-                        'index' => $index,
-                        'item' => $item,
-                        'productBatch' => $productBatch,
-                        'availableQuantity' => $availableQuantity
-                    ];
-                } else {
-                    // Item not in inventory - will be ignored (no stock deduction)
-                    $itemsToIgnore[] = [
-                        'product_id' => $item['product_id'],
-                        'product_batch_id' => $item['product_batch_id'],
+                foreach ($allocation['ignore'] as $line) {
+                    $itemsToIgnore[] = $line + [
                         'batch_code' => $productBatch->batch_code,
-                        'quantity' => $item['quantity'],
-                        'price' => $item['price'],
-                        'discount' => $item['discount'] ?? 0,
-                        'available_quantity' => $availableQuantity,
-                        'reason' => 'Product not found in driver inventory'
+                        'reason' => 'Not enough stock in driver inventory',
                     ];
                 }
             }
-            
+
             // If there are invalid batches, return error
             if (!empty($invalidBatches)) {
                 return response()->json([
@@ -2369,9 +2418,12 @@ class DriverController extends Controller
             // sends (the app rebuilds lines from its current price list on
             // edit, which must not silently re-price the original sale).
             // Price corrections are admin-only (invoices.updatedetail).
+            // Keyed by product+batch, with a per-product fallback for when the
+            // edit lands the product on a different batch (allocateLorryStock).
             $lockedPrices = [];
             foreach ($oldDetails as $od) {
                 $lockedPrices[$od->product_id . '|' . $od->product_batch_id] = (float) $od->price;
+                $lockedPrices[(int) $od->product_id] = (float) $od->price;
             }
 
             $inventoryBalance = null;
@@ -2422,13 +2474,14 @@ class DriverController extends Controller
             $itemsToProcess = [];     // Items that exist in inventory (will deduct stock)
             $itemsToIgnore = [];       // Items not in inventory (will not deduct stock)
             $invalidBatches = [];      // Invalid product batches
-            
+            $reserved = [];            // Lorry stock already allocated in this request
+
             foreach ($data['invoicedetail'] as $index => $item) {
                 // Check if product batch exists and matches product_id
                 $productBatch = ProductBatch::where('id', $item['product_batch_id'])
                     ->where('product_id', $item['product_id'])
                     ->first();
-                
+
                 if (empty($productBatch)) {
                     $invalidBatches[] = [
                         'product_id' => $item['product_id'],
@@ -2437,37 +2490,15 @@ class DriverController extends Controller
                     ];
                     continue;
                 }
-                
-                // Check if batch exists in driver's inventory
-                $hasInventory = false;
-                $availableQuantity = 0;
-                
-                if ($inventoryBalance) {
-                    $availableQuantity = $inventoryBalance->getBatchQuantity($item['product_batch_id']);
-                    if ($availableQuantity >= $item['quantity']) {
-                        $hasInventory = true;
-                    }
+
+                $allocation = $this->allocateLorryStock($inventoryBalance, $item, $reserved);
+                foreach ($allocation['deduct'] as $line) {
+                    $itemsToProcess[] = ['index' => $index, 'item' => $line, 'productBatch' => $productBatch];
                 }
-                
-                if ($hasInventory) {
-                    // Item exists in inventory with sufficient stock
-                    $itemsToProcess[] = [
-                        'index' => $index,
-                        'item' => $item,
-                        'productBatch' => $productBatch,
-                        'availableQuantity' => $availableQuantity
-                    ];
-                } else {
-                    // Item not in inventory or insufficient stock - will be added without deduction
-                    $itemsToIgnore[] = [
-                        'product_id' => $item['product_id'],
-                        'product_batch_id' => $item['product_batch_id'],
+                foreach ($allocation['ignore'] as $line) {
+                    $itemsToIgnore[] = $line + [
                         'batch_code' => $productBatch->batch_code,
-                        'quantity' => $item['quantity'],
-                        'price' => $item['price'],
-                        'discount' => $item['discount'] ?? 0,
-                        'available_quantity' => $availableQuantity,
-                        'reason' => $availableQuantity > 0 ? 'Insufficient stock' : 'Product not found in driver inventory'
+                        'reason' => 'Not enough stock in driver inventory',
                     ];
                 }
             }
@@ -2529,7 +2560,9 @@ class DriverController extends Controller
                 
                 // Keep the original sale price for lines that already existed
                 // on this invoice; only genuinely new lines use the app's price.
-                $price = $lockedPrices[$item['product_id'] . '|' . $item['product_batch_id']] ?? $item['price'];
+                $price = $lockedPrices[$item['product_id'] . '|' . $item['product_batch_id']]
+                    ?? $lockedPrices[(int) $item['product_id']]
+                    ?? $item['price'];
 
                 // Create invoice detail
                 $invoicedetail = new InvoiceDetail();
@@ -2572,7 +2605,9 @@ class DriverController extends Controller
             foreach ($itemsToIgnore as $ignoredItem) {
                 // Keep the original sale price for lines that already existed
                 // on this invoice; only genuinely new lines use the app's price.
-                $price = $lockedPrices[$ignoredItem['product_id'] . '|' . $ignoredItem['product_batch_id']] ?? $ignoredItem['price'];
+                $price = $lockedPrices[$ignoredItem['product_id'] . '|' . $ignoredItem['product_batch_id']]
+                    ?? $lockedPrices[(int) $ignoredItem['product_id']]
+                    ?? $ignoredItem['price'];
 
                 // Create invoice detail WITHOUT deducting stock
                 $invoicedetail = new InvoiceDetail();
@@ -8619,6 +8654,7 @@ class DriverController extends Controller
 
                 $itemsToProcess = [];
                 $itemsToIgnore  = [];
+                $reserved       = []; // Lorry stock already allocated for this invoice
                 $invalidBatches = [];
 
                 foreach ($invoiceInput['invoicedetail'] as $item) {
@@ -8635,18 +8671,12 @@ class DriverController extends Controller
                         continue;
                     }
 
-                    $availableQuantity = $inventoryBalance ? $inventoryBalance->getBatchQuantity($item['product_batch_id']) : 0;
-
-                    if ($availableQuantity > 0) {
-                        $itemsToProcess[] = [
-                            'item'         => $item,
-                            'productBatch' => $productBatch,
-                        ];
-                    } else {
-                        $itemsToIgnore[] = [
-                            'item'         => $item,
-                            'productBatch' => $productBatch,
-                        ];
+                    $allocation = $this->allocateLorryStock($inventoryBalance, $item, $reserved);
+                    foreach ($allocation['deduct'] as $line) {
+                        $itemsToProcess[] = ['item' => $line, 'productBatch' => $productBatch];
+                    }
+                    foreach ($allocation['ignore'] as $line) {
+                        $itemsToIgnore[] = ['item' => $line, 'productBatch' => $productBatch];
                     }
                 }
 
