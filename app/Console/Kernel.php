@@ -27,6 +27,10 @@ class Kernel extends ConsoleKernel
         ->everyFifteenMinutes()
         ->timezone('Asia/Kuala_Lumpur')
         ->withoutOverlapping();
+
+        $schedule->command('CronJob:pruneapilogs')
+        ->lastDayOfMonth('23:00')
+        ->withoutOverlapping();
     }
 
     /**
