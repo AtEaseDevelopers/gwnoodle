@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use App\Models\Invoice;
 
 class CreateInvoiceRequest extends FormRequest
@@ -24,6 +25,20 @@ class CreateInvoiceRequest extends FormRequest
      */
     public function rules()
     {
-        return Invoice::$rules;
+        $rules = Invoice::$rules;
+
+        $rules['invoiceno'] = [
+            'nullable', 'string', 'max:255',
+            Rule::unique('invoices', 'invoiceno'),
+        ];
+
+        return $rules;
+    }
+
+    public function messages()
+    {
+        return [
+            'invoiceno.unique' => 'Invoice No :input already exists.',
+        ];
     }
 }
