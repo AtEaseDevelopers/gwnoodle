@@ -1970,7 +1970,64 @@ class DriverController extends Controller
         ];
     }
 
+    /**
+     * Run an invoice-creating request while holding a per-driver database
+     * lock, so two requests from the same driver can't run side by side.
+     *
+     * findDuplicateInvoice() and the requested-invoiceno check both look for
+     * an already-saved invoice before saving. When the app fires the same sale
+     * twice at the same moment (e.g. its offline sync triggering twice), both
+     * requests ran those checks before either had committed, so both saved -
+     * a duplicate invoice and a double lorry stock deduction. With the lock,
+     * the second request only starts once the first has committed, finds its
+     * invoice and returns it instead.
+     *
+     * GET_LOCK is a named MySQL/MariaDB session lock - independent of the
+     * transactions inside the callback, held until RELEASE_LOCK (or until the
+     * connection closes).
+     */
+    private function withDriverInvoiceLock(Request $request, callable $callback)
+    {
+        $driver = Driver::where('session', $request->header('session'))->first();
+
+        // No valid session (the callback answers that with its own 401), or a
+        // non-MySQL connection (GET_LOCK is MySQL/MariaDB-only).
+        if (empty($driver) || DB::getDriverName() !== 'mysql') {
+            return $callback();
+        }
+
+        $lockName = 'driver_invoice_' . $driver->id;
+        $timeout = (int) config('app.driver_invoice_lock_timeout', 30);
+        $acquired = (int) (DB::selectOne('SELECT GET_LOCK(?, ?) AS acquired', [$lockName, $timeout])->acquired ?? 0);
+
+        if ($acquired !== 1) {
+            \Log::warning('Driver invoice lock not acquired within ' . $timeout . 's', [
+                'driver_id' => $driver->id,
+                'url' => $request->fullUrl(),
+            ]);
+
+            return response()->json([
+                'result'  => false,
+                'message' => __LINE__ . $this->message_separator . 'Another invoice for this driver is still being saved. Please try again.',
+                'data'    => null
+            ], 409);
+        }
+
+        try {
+            return $callback();
+        } finally {
+            DB::select('SELECT RELEASE_LOCK(?)', [$lockName]);
+        }
+    }
+
     public function addinvoice(Request $request)
+    {
+        return $this->withDriverInvoiceLock($request, function () use ($request) {
+            return $this->processAddInvoice($request);
+        });
+    }
+
+    private function processAddInvoice(Request $request)
     {
         try {
             $data = $request->all();
@@ -8540,6 +8597,13 @@ class DriverController extends Controller
     }
 
     public function bulkCreateInvoice(Request $request)
+    {
+        return $this->withDriverInvoiceLock($request, function () use ($request) {
+            return $this->processBulkCreateInvoice($request);
+        });
+    }
+
+    private function processBulkCreateInvoice(Request $request)
     {
         $driver = Driver::where('session', $request->header('session'))->first();
         if (empty($driver)) {
