@@ -280,6 +280,9 @@ class InvoiceController extends AppBaseController
 
                     $invoicepayment_new = New InvoicePayment();
                     $invoicepayment_new->invoice_id = $id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment_new->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment_new->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
@@ -303,6 +306,9 @@ class InvoiceController extends AppBaseController
                 {
                     $invoicepayment_new = New InvoicePayment();
                     $invoicepayment_new->invoice_id = $id;
+                    // Cash (non-credit) -> auto-sync as its own single-invoice AR Payment.
+                    $invoicepayment_new->payment_batch_id = (string) \Illuminate\Support\Str::uuid();
+                    $invoicepayment_new->autocount_status = InvoicePayment::AC_PENDING;
                     $invoicepayment_new->type = 1;
                     $invoicepayment_new->customer_id = $invoice->customer_id;
                     $invoicepayment_new->amount = $totalAmount;
