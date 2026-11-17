@@ -22,10 +22,6 @@
         .text-center { text-align: center; }
         .total-row { background-color: #f0f0f0; font-weight: bold; }
         .empty-message { text-align: center; padding: 30px; color: #999; font-size: 11px; }
-        .signature-wrapper { text-align: right; margin-top: 30px; }
-        .signature-box { display: inline-block; width: 200px; text-align: center; margin-left: 20px; }
-        .signature-line { border-bottom: 1px solid #000; margin-top: 30px; }
-        .signature-label { font-size: 9px; }
         .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; border-top: 1px solid #ddd; padding-top: 5px; }
         @page { margin: 1cm; }
     </style>
@@ -112,13 +108,6 @@
             </tfoot>
         </table>
     @endif
-
-    <div class="signature-wrapper">
-        <div class="signature-box">
-            <div class="signature-line"></div>
-            <div class="signature-label">Checked By</div>
-        </div>
-    </div>
 
     <div class="footer">GW NOODLES SDN BHD - Stock Transfer Report</div>
 </body>
