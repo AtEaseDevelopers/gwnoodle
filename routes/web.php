@@ -300,6 +300,8 @@ Route::group(['middleware' => ['auth']], function() {
 
         Route::get('/finished-goods-traceability', [App\Http\Controllers\ReportController::class, 'finishedGoodsTraceabilityView'])->name('finished_goods_traceability_view');
 
+        Route::get('/stock-transfer-report', [App\Http\Controllers\ReportController::class, 'stockTransferReportView'])->name('stock_transfer_report_view');
+
         Route::get('/sales-analysis-report', [App\Http\Controllers\ReportController::class, 'salesAnalysisReportView'])->name('sales_analysis_report_view');
 
         Route::get('/stock-card-report', [App\Http\Controllers\ReportController::class, 'stockCardReportView'])->name('stock_card_report_view');

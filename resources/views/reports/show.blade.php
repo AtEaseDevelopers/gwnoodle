@@ -158,7 +158,7 @@
                 }
             });
 
-            @if(($report->sqlvalue ?? null) === 'SALES_ANALYSIS_REPORT')
+            @if(in_array($report->sqlvalue ?? null, ['SALES_ANALYSIS_REPORT', 'STOCK_TRANSFER_REPORT']))
             // Customer/Item can have hundreds of options (this business has
             // 900+ customers). "Select All" was submitting every single id
             // as its own form field - 1000+ fields in one POST, which trips
@@ -167,7 +167,7 @@
             // option is selected, send one compact "%" marker instead
             // (SalesAnalysisReportService already treats "%" as "no
             // filter, everything").
-            $('select[name="customer_id[]"], select[name="product_id[]"]').each(function() {
+            $('select[name="customer_id[]"], select[name="product_id[]"], select[name="batch_id[]"]').each(function() {
                 var $sel = $(this);
                 var totalOptions = $sel.find('option').length;
                 var selectedCount = ($sel.val() || []).length;

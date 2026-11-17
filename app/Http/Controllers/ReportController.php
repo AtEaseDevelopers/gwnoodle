@@ -445,6 +445,17 @@ class ReportController extends AppBaseController
             ]);
         }
 
+        if ($sp == 'STOCK_TRANSFER_REPORT') {
+            return redirect()->route('stock_transfer_report_view', [
+                'date_from' => $data['datefrom'] ?? date('Y-m-d'),
+                'date_to' => $data['dateto'] ?? date('Y-m-d'),
+                'from_warehouse_id' => $data['from_warehouse_id'] ?? null,
+                'to_warehouse_id' => $data['to_warehouse_id'] ?? null,
+                'product_id' => $data['product_id'] ?? null,
+                'batch_id' => $data['batch_id'] ?? null,
+            ]);
+        }
+
         if ($sp == 'STOCK_CARD_REPORT') {
             // Extract parameters for stock card report
             $product_id = isset($data['product_id']) ? $data['product_id'] : null;
@@ -822,6 +833,24 @@ class ReportController extends AppBaseController
             \Log::error('Traceability PDF Error: ' . $e->getMessage());
             return back()->with('error', 'Failed to generate PDF: ' . $e->getMessage());
         }
+    }
+
+    public function stockTransferReportView(Request $request)
+    {
+        $date_from = $request->date_from ?? date('Y-m-d');
+        $date_to = $request->date_to ?? date('Y-m-d');
+
+        $reportData = (new \App\Services\StockTransferReportService())->generateReport($date_from, $date_to, [
+            'from_warehouse_id' => $request->from_warehouse_id,
+            'to_warehouse_id' => $request->to_warehouse_id,
+            'product_id' => $request->product_id,
+            'batch_id' => $request->batch_id,
+        ]);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.stock_transfer', ['reportData' => $reportData]);
+        $pdf->setPaper('A4', 'landscape');
+
+        return $pdf->stream('stock_transfer_' . $date_from . '_to_' . $date_to . '.pdf');
     }
 
     public function stockCardReportView(Request $request)
